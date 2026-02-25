@@ -19,6 +19,8 @@ P4.0 extends Alchimista with auditable AI decision trails linked to document con
 - `ai_decisions`
 - `ai_decision_context_docs`
 - `ai_decision_context_chunks`
+- Canonical migration source remains `sql/schema.sql`.
+- Runtime safety net: ingestion service ensures these tables exist on first decision operation (`CREATE TABLE IF NOT EXISTS`).
 
 ## Security and tenancy
 - Same JWT/OIDC tenant authorization model used by ingestion/query endpoints.

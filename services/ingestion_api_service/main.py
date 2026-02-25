@@ -3,6 +3,7 @@ from __future__ import annotations
 import hmac
 import json
 import os
+import threading
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -45,6 +46,8 @@ app = FastAPI(title="ingestion-api-service", version="0.1.0")
 storage_client = StorageClient(config.project_id)
 publisher = PubSubPublisher(config.project_id)
 subscriber = PubSubSubscriber(config.project_id)
+_ai_schema_lock = threading.Lock()
+_ai_schema_initialized = False
 
 
 class IngestSignedUrlRequest(BaseModel):
@@ -234,6 +237,7 @@ def ingest_decision(payload: AIDecisionIngestRequest, request: Request) -> AIDec
 
     with get_connection(config.database_url) as conn:
         with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
             missing_doc_ids = _missing_document_ids(cur, tenant=payload.tenant, doc_ids=payload.context_docs)
             if missing_doc_ids:
                 raise HTTPException(
@@ -308,6 +312,8 @@ def query_decisions(payload: AIDecisionQueryRequest, request: Request) -> AIDeci
 
     with get_connection(config.database_url) as conn:
         with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            conn.commit()
             rows = _query_ai_decisions(cur, payload=payload)
 
     decisions = [_map_ai_decision_row(row) for row in rows]
@@ -331,6 +337,8 @@ def get_decision_report(request: Request, decision_id: str, tenant: str = config
 
     with get_connection(config.database_url) as conn:
         with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            conn.commit()
             row = _fetch_ai_decision(cur, tenant=tenant, decision_id=decision_id)
             if not row:
                 raise HTTPException(status_code=404, detail="Decision not found")
@@ -599,6 +607,70 @@ async def _ingest_multipart(request: Request) -> IngestResponse:
         published=True,
         pubsub_message_id=message_id,
     )
+
+
+def _ensure_ai_decision_schema(cur: Any) -> None:
+    global _ai_schema_initialized
+    if _ai_schema_initialized:
+        return
+    with _ai_schema_lock:
+        if _ai_schema_initialized:
+            return
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ai_decisions (
+              id BIGSERIAL PRIMARY KEY,
+              decision_id TEXT NOT NULL,
+              tenant TEXT NOT NULL,
+              model TEXT NOT NULL,
+              model_version TEXT,
+              input_text TEXT NOT NULL,
+              output_text TEXT NOT NULL,
+              confidence DOUBLE PRECISION,
+              trace_id TEXT NOT NULL,
+              metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              CONSTRAINT chk_ai_decisions_confidence_range CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+              UNIQUE (tenant, decision_id)
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ai_decision_context_docs (
+              id BIGSERIAL PRIMARY KEY,
+              decision_ref_id BIGINT NOT NULL REFERENCES ai_decisions(id) ON DELETE CASCADE,
+              tenant TEXT NOT NULL,
+              doc_id TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE RESTRICT,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              UNIQUE (decision_ref_id, doc_id)
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ai_decision_context_chunks (
+              id BIGSERIAL PRIMARY KEY,
+              decision_ref_id BIGINT NOT NULL REFERENCES ai_decisions(id) ON DELETE CASCADE,
+              tenant TEXT NOT NULL,
+              chunk_id TEXT NOT NULL REFERENCES chunks(chunk_id) ON DELETE RESTRICT,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              UNIQUE (decision_ref_id, chunk_id)
+            )
+            """
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_model_created_at ON ai_decisions (tenant, model, created_at DESC)"
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_decisions_trace_id ON ai_decisions (trace_id)")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ai_decision_context_docs_tenant_doc ON ai_decision_context_docs (tenant, doc_id, decision_ref_id)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ai_decision_context_chunks_tenant_chunk ON ai_decision_context_chunks (tenant, chunk_id, decision_ref_id)"
+        )
+        _ai_schema_initialized = True
 
 
 def _missing_document_ids(cur: Any, *, tenant: str, doc_ids: list[str]) -> list[str]:
