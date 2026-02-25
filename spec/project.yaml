@@ -278,10 +278,10 @@ p0_p1_progress:
   p4_1_audit_query_export_signing: done
   p4_2_audit_export_gcs_and_advanced_filters: done
   p4_3_regulator_bundle_and_admin_cross_tenant: done
-  p4_4_crypto_verify_and_regulator_package: in_progress
+  p4_4_crypto_verify_and_regulator_package: done
 
 p4_audit_trail_engine:
-  status: p4_4_in_progress
+  status: p4_4_done
   write_endpoint: POST /v1/decisions
   query_endpoint: POST /v1/decisions/query
   export_endpoint: POST /v1/decisions/export
