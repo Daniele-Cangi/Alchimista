@@ -110,7 +110,7 @@ runtime_services:
   ingestion_api_service:
     target_name: ingestion-api-service
     deployed_url: https://ingestion-api-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: ingestion-api-service-00001-hkn
+    latest_ready_revision: ingestion-api-service-00002-4kc
     expected_endpoints:
       - POST /v1/ingest
       - POST /v1/ingest/complete
@@ -120,7 +120,7 @@ runtime_services:
   document_processor_service:
     target_name: document-processor-service
     deployed_url: https://document-processor-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: document-processor-service-00001-mgq
+    latest_ready_revision: document-processor-service-00002-72b
     expected_endpoints:
       - POST /v1/process
       - POST /v1/process/pubsub
@@ -129,7 +129,7 @@ runtime_services:
   rag_query_service:
     target_name: rag-query-service
     deployed_url: https://rag-query-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: rag-query-service-00001-n67
+    latest_ready_revision: rag-query-service-00002-wfh
     expected_endpoints:
       - POST /v1/query
       - GET /v1/healthz
@@ -138,20 +138,22 @@ runtime_services:
 service_accounts:
   current_runtime_default: 994021588311-compute@developer.gserviceaccount.com
   target_dedicated:
-    ingestion_api_service: "TODO-create"
-    document_processor_service: "TODO-create"
-    rag_query_service: "TODO-create"
+    ingestion_api_service: ingestion-api-sa@secure-electron-474908-k9.iam.gserviceaccount.com
+    document_processor_service: document-processor-sa@secure-electron-474908-k9.iam.gserviceaccount.com
+    rag_query_service: rag-query-sa@secure-electron-474908-k9.iam.gserviceaccount.com
   least_privilege_target_roles:
     ingestion_api_service:
-      - roles/storage.objectCreator
+      - roles/storage.objectAdmin
       - roles/storage.objectViewer
+      - roles/storage.bucketViewer
       - roles/pubsub.publisher
       - roles/cloudsql.client
       - roles/secretmanager.secretAccessor
+      - roles/iam.serviceAccountTokenCreator (self-binding for signed URLs)
     document_processor_service:
       - roles/storage.objectViewer
-      - roles/storage.objectCreator
-      - roles/pubsub.subscriber
+      - roles/storage.objectAdmin
+      - roles/storage.bucketViewer
       - roles/pubsub.publisher
       - roles/cloudsql.client
       - roles/secretmanager.secretAccessor
@@ -194,11 +196,17 @@ contracts:
 p0_p1_progress:
   p0_direction_lock: done
   p1_vertical_slice: done
-  p2_hardening: pending
+  p2_hardening: in_progress
+
+security_hardening:
+  dedicated_service_accounts_enabled: true
+  core_services_using_default_compute_sa: false
+  db_credentials_in_secret_manager: true
+  buckets_cmek_ubla_enforced: true
 
 validation:
-  last_smoke_test_at: "2026-02-25T11:30:18Z"
+  last_smoke_test_at: "2026-02-25T11:39:48Z"
   smoke_test_result: passed
-  sample_doc_id: d4f5b676-e92d-4def-9d75-82e1f454f922
-  sample_trace_id: 108af780-951b-440c-acdc-abf28e4bf0c6
+  sample_doc_id: 552cc1a5-25dd-4b5e-8a88-c9134a04ec6f
+  sample_trace_id: 56bfb790-9e9b-4ccb-a99b-43ba77d5c5d2
   ingest_subscription_push_endpoint: https://document-processor-service-pe7qslbcvq-ez.a.run.app/v1/process/pubsub

@@ -49,3 +49,16 @@ uvicorn services.rag_query_service.main:app --reload --port 8013
 - Processor marks job as `SUCCEEDED`
 - `chunks` populated in SQL
 - `/v1/query` returns `answers[]` with non-empty `citations[]`
+
+## Runtime hardening operations
+- Cut over Cloud Run services to dedicated service accounts:
+```bash
+./scripts/cutover_service_accounts.sh secure-electron-474908-k9 europe-west4
+```
+- Run end-to-end smoke test against deployed services:
+```bash
+INGEST_URL='https://ingestion-api-service-pe7qslbcvq-ez.a.run.app' \
+PROCESSOR_URL='https://document-processor-service-pe7qslbcvq-ez.a.run.app' \
+RAG_URL='https://rag-query-service-pe7qslbcvq-ez.a.run.app' \
+./scripts/smoke_p1.sh
+```
