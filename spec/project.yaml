@@ -440,6 +440,7 @@ p6_retention_enforcement:
       feature_flag_secret: RETENTION_DELETE_WINDOW_ENABLED
       enabled_value: "true"
       fallback_mode_when_disabled: dry_run
+      current_environment_value_test: "false"
     validation:
       run_id: "22417582060"
       completed_at_utc: "2026-02-25T21:53:50Z"
@@ -448,6 +449,13 @@ p6_retention_enforcement:
       scanned: 3
       skipped_not_expired: 3
       skipped_policy_missing: 0
+    latest_manual_validation:
+      run_id: "22417713581"
+      completed_at_utc: "2026-02-25T21:57:51Z"
+      status: success
+      retention_mode: manual
+      dry_run: true
+      trace_id: "8d5ac3ff-6da3-4dd1-b75b-27635886f2a3"
 
 p3_parallel_execution:
   p3_2_retrieval_real:
