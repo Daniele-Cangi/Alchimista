@@ -287,7 +287,7 @@ p0_p1_progress:
   p4_3_regulator_bundle_and_admin_cross_tenant: done
   p4_4_crypto_verify_and_regulator_package: done
   p5_governance_retention_immutability_connectors: done
-  p6_retention_enforcement_engine: implemented_local_pending_deploy
+  p6_retention_enforcement_engine: deployed_pending_authenticated_smoke
 
 p4_audit_trail_engine:
   status: p4_4_done
@@ -379,7 +379,7 @@ p5_governance_connectors:
     registry_table: audit_artifacts
 
 p6_retention_enforcement:
-  status: implemented_local_pending_deploy
+  status: deployed_pending_authenticated_smoke
   endpoint: POST /v1/admin/retention/enforce
   modes:
     - dry_run
