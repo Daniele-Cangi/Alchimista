@@ -334,7 +334,41 @@ gh workflow run rotate-audit-signing-key.yml -f environment_name=test -f project
 ```
 
 ## P6 Retention Enforcement
-- Execute retention enforcement in dry-run mode (admin endpoint, requires `x-admin-key`):
+- Prerequisites (auth for admin endpoints):
+```bash
+TOKEN="$(./scripts/get_auth0_m2m_token.sh \
+  alchimista.eu.auth0.com \
+  '<AUTH0_CLIENT_ID>' \
+  '<AUTH0_CLIENT_SECRET>' \
+  'https://api.alchimista.ai')"
+
+ADMIN_API_KEY="$(gcloud secrets versions access latest \
+  --secret alchimista-admin-api-key \
+  --project secure-electron-474908-k9)"
+```
+- Seed retention policies by artifact type (recommended before first enforcement run):
+```bash
+for TYPE in decision_report policy_snapshot regulator_package_manifest; do
+  curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/retention-policies" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "x-admin-key: ${ADMIN_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"tenant\":\"default\",
+      \"artifact_type\":\"${TYPE}\",
+      \"retain_days\":3650,
+      \"legal_hold_enabled\":true,
+      \"immutable_required\":true
+    }"
+done
+```
+- List active retention policies:
+```bash
+curl -sS "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/retention-policies?tenant=default" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "x-admin-key: ${ADMIN_API_KEY}"
+```
+- Execute retention enforcement in dry-run mode (`artifact_type:null` scans all tenant artifact types):
 ```bash
 curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/retention/enforce" \
   -H "Authorization: Bearer ${TOKEN}" \
@@ -342,7 +376,7 @@ curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin
   -H "Content-Type: application/json" \
   -d '{
     "tenant":"default",
-    "artifact_type":"decision_export",
+    "artifact_type":null,
     "dry_run":true,
     "limit":200
   }'
@@ -355,9 +389,22 @@ curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin
   -H "Content-Type: application/json" \
   -d '{
     "tenant":"default",
-    "artifact_type":"decision_export",
+    "artifact_type":null,
     "dry_run":false,
     "limit":200
+  }'
+```
+- Optional legal hold for protection before deletion:
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/legal-holds" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "x-admin-key: ${ADMIN_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":"default",
+    "scope_type":"artifact",
+    "scope_id":"gs://alchimista-reports-994021588311/reports/default/audit/packages/pkg-.../manifest.json",
+    "reason":"regulatory_hold"
   }'
 ```
 - Enforcement behavior:
@@ -365,4 +412,8 @@ curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin
   - active legal holds block deletion
   - deleted artifacts are soft-marked in SQL (`deleted_at`, `deleted_by`, `deletion_reason`, `delete_job_id`)
   - GCS object deletion is generation-aware when generation metadata exists
+- Observed production validation on 2026-02-25:
+  - `dry_run` smoke: `HTTP 200`, trace_id `6ef64f51-fb5a-4539-b58a-9964bc4791e1`
+  - `delete` smoke: `HTTP 200`, trace_id `52698ca4-3e2c-4971-b0ce-e0bfcd8ee094`
+  - post-policy-seed dry-run: `HTTP 200`, trace_id `882ce2d8-e8dc-4bf9-a596-60cb8b6ad525`, `skipped_policy_missing=0`
 - Full P6 details: `docs/p6-retention-enforcement.md`.
