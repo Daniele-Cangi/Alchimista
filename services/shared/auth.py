@@ -20,6 +20,8 @@ from services.shared.config import RuntimeConfig
 _OPENID_CACHE_TTL_SECONDS = 300
 _openid_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _jwks_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_GOOGLE_OIDC_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
+_GOOGLE_OIDC_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
 
 
 @dataclass(frozen=True)
@@ -46,6 +48,35 @@ def require_auth(request: Request, *, config: RuntimeConfig, tenant: str | None 
         raise HTTPException(status_code=401, detail="Invalid token: missing sub")
 
     _authorize_tenant(principal, tenant=tenant, config=config)
+    return principal
+
+
+def require_pubsub_push_auth(request: Request, *, config: RuntimeConfig) -> AuthPrincipal:
+    if not config.pubsub_push_auth_enabled:
+        raise HTTPException(status_code=401, detail="Pub/Sub push auth is not enabled")
+
+    token = _extract_bearer_token(request)
+    try:
+        header, claims, signing_input, signature = _decode_unverified(token)
+        algorithm = str(header.get("alg") or "")
+        if algorithm != "RS256":
+            raise HTTPException(status_code=401, detail=f"Invalid token: algorithm {algorithm} is not allowed")
+        _verify_rs256_signature(signing_input, signature, header=header, jwks_url=_GOOGLE_OIDC_JWKS_URL)
+        _verify_time_claims(claims)
+        _verify_pubsub_push_claims(claims, config)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from exc
+
+    principal = AuthPrincipal(
+        subject=str(claims.get("sub") or ""),
+        issuer=str(claims.get("iss") or ""),
+        audiences=_normalize_aud_claim(claims.get("aud")),
+        claims=claims,
+    )
+    if not principal.subject:
+        raise HTTPException(status_code=401, detail="Invalid token: missing sub")
     return principal
 
 
@@ -186,6 +217,22 @@ def _resolve_signing_jwk(jwks_url: str, kid: Any) -> dict[str, Any]:
 
 
 def _verify_registered_claims(claims: dict[str, Any], config: RuntimeConfig) -> None:
+    _verify_time_claims(claims)
+
+    if config.auth_issuer:
+        issuer = str(claims.get("iss") or "")
+        if issuer != config.auth_issuer:
+            raise HTTPException(status_code=401, detail="Invalid token: issuer mismatch")
+
+    if config.auth_audiences:
+        audience_claim = _normalize_aud_claim(claims.get("aud"))
+        if not audience_claim:
+            raise HTTPException(status_code=401, detail="Invalid token: audience missing")
+        if not set(audience_claim).intersection(set(config.auth_audiences)):
+            raise HTTPException(status_code=401, detail="Invalid token: audience mismatch")
+
+
+def _verify_time_claims(claims: dict[str, Any]) -> None:
     now = int(time.time())
     skew = 30
 
@@ -203,17 +250,25 @@ def _verify_registered_claims(claims: dict[str, Any], config: RuntimeConfig) -> 
     if isinstance(iat, (int, float)) and int(iat) > now + skew:
         raise HTTPException(status_code=401, detail="Invalid token: issued in future")
 
-    if config.auth_issuer:
-        issuer = str(claims.get("iss") or "")
-        if issuer != config.auth_issuer:
-            raise HTTPException(status_code=401, detail="Invalid token: issuer mismatch")
+ 
 
-    if config.auth_audiences:
+def _verify_pubsub_push_claims(claims: dict[str, Any], config: RuntimeConfig) -> None:
+    issuer = str(claims.get("iss") or "")
+    if issuer not in _GOOGLE_OIDC_ISSUERS:
+        raise HTTPException(status_code=401, detail="Invalid token: issuer mismatch")
+
+    if config.pubsub_push_audiences:
         audience_claim = _normalize_aud_claim(claims.get("aud"))
         if not audience_claim:
             raise HTTPException(status_code=401, detail="Invalid token: audience missing")
-        if not set(audience_claim).intersection(set(config.auth_audiences)):
+        if not set(audience_claim).intersection(set(config.pubsub_push_audiences)):
             raise HTTPException(status_code=401, detail="Invalid token: audience mismatch")
+
+    email = str(claims.get("email") or "").strip().lower()
+    if config.pubsub_push_service_accounts:
+        allowed = {item.strip().lower() for item in config.pubsub_push_service_accounts if item}
+        if not email or email not in allowed:
+            raise HTTPException(status_code=403, detail="Forbidden: service account mismatch")
 
 
 def _authorize_tenant(principal: AuthPrincipal, *, tenant: str | None, config: RuntimeConfig) -> None:

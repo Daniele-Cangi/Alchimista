@@ -267,6 +267,7 @@ p3_parallel_execution:
     status: done
     mode: jwt_oidc_bearer_verification
     rollout_script: scripts/apply_p3_auth_oidc.sh
+    pubsub_push_oidc_rollout_script: scripts/apply_p3_pubsub_push_oidc.sh
     issuer: https://alchimista.eu.auth0.com/
     audience: https://api.alchimista.ai
     tenant_claims:

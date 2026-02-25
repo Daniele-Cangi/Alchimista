@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from pypdf import PdfReader
 
-from services.shared.auth import require_auth
+from services.shared.auth import require_auth, require_pubsub_push_auth
 from services.shared.backpressure import InflightGate
 from services.shared.chunking import chunk_text
 from services.shared.config import load_runtime_config
@@ -90,7 +90,12 @@ def process_pubsub(envelope: PubSubPushEnvelope, request: Request) -> ProcessRes
 
     auth_header = request.headers.get("authorization", "")
     if config.auth_enabled and (not config.auth_allow_unauthenticated_pubsub or auth_header):
-        require_auth(request, config=config, tenant=message.tenant)
+        try:
+            require_auth(request, config=config, tenant=message.tenant)
+        except HTTPException:
+            if not auth_header or not config.pubsub_push_auth_enabled:
+                raise
+            require_pubsub_push_auth(request, config=config)
 
     return _process_with_backpressure(message)
 

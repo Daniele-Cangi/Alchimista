@@ -64,6 +64,9 @@ class RuntimeConfig:
     auth_require_tenant_claim: bool
     auth_jwt_shared_secret: str
     auth_allow_unauthenticated_pubsub: bool
+    pubsub_push_auth_enabled: bool
+    pubsub_push_audiences: tuple[str, ...]
+    pubsub_push_service_accounts: tuple[str, ...]
 
 
 
@@ -100,4 +103,7 @@ def load_runtime_config() -> RuntimeConfig:
         auth_require_tenant_claim=get_env_bool("AUTH_REQUIRE_TENANT_CLAIM", True),
         auth_jwt_shared_secret=get_env("AUTH_JWT_SHARED_SECRET", ""),
         auth_allow_unauthenticated_pubsub=get_env_bool("AUTH_ALLOW_UNAUTHENTICATED_PUBSUB", True),
+        pubsub_push_auth_enabled=get_env_bool("PUBSUB_PUSH_AUTH_ENABLED", False),
+        pubsub_push_audiences=get_env_csv("PUBSUB_PUSH_AUDIENCE", ""),
+        pubsub_push_service_accounts=get_env_csv("PUBSUB_PUSH_SERVICE_ACCOUNTS", ""),
     )

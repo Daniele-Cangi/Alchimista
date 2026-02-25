@@ -42,3 +42,4 @@ gcloud run services update document-processor-service \
 
 echo "P3.3 OIDC auth settings applied."
 echo "Note: /v1/process/pubsub remains allowed without bearer token until Pub/Sub push OIDC is configured."
+echo "Next step: ./scripts/apply_p3_pubsub_push_oidc.sh ${PROJECT_ID} ${REGION}"

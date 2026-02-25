@@ -106,7 +106,10 @@ MAX_MESSAGES=25 ./scripts/replay_dlq.sh
 ```
 - Current transitional behavior:
   - `/v1/healthz` and `/v1/readyz` remain open.
-  - `/v1/process/pubsub` can remain unauthenticated until Pub/Sub push OIDC is configured.
+- Enforce authenticated Pub/Sub push to `/v1/process/pubsub` (recommended for enterprise hardening):
+```bash
+./scripts/apply_p3_pubsub_push_oidc.sh secure-electron-474908-k9 europe-west4
+```
 - Get an Auth0 M2M access token for Alchimista API:
 ```bash
 TOKEN="$(./scripts/get_auth0_m2m_token.sh \

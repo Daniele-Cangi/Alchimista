@@ -50,6 +50,9 @@ def test_build_embedder_deterministic_backend() -> None:
         auth_require_tenant_claim=True,
         auth_jwt_shared_secret="",
         auth_allow_unauthenticated_pubsub=True,
+        pubsub_push_auth_enabled=False,
+        pubsub_push_audiences=tuple(),
+        pubsub_push_service_accounts=tuple(),
     )
 
     embedder = build_embedder(config)

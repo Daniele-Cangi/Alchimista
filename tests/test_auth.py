@@ -7,7 +7,8 @@ import time
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from services.shared.auth import require_auth
+import services.shared.auth as auth_module
+from services.shared.auth import require_auth, require_pubsub_push_auth
 from services.shared.config import RuntimeConfig
 
 
@@ -69,6 +70,54 @@ def test_require_auth_rejects_tenant_mismatch() -> None:
         assert exc.status_code == 403
 
 
+def test_require_pubsub_push_auth_success(monkeypatch) -> None:
+    config = _make_config(
+        auth_enabled=True,
+        pubsub_push_auth_enabled=True,
+        pubsub_push_audiences=("https://document-processor-service.example/v1/process/pubsub",),
+        pubsub_push_service_accounts=("pubsub-push-sa@secure-electron-474908-k9.iam.gserviceaccount.com",),
+    )
+    token = _encode_rs256_for_test(
+        payload={
+            "sub": "service-994021588311@gcp-sa-pubsub.iam.gserviceaccount.com",
+            "iss": "https://accounts.google.com",
+            "aud": "https://document-processor-service.example/v1/process/pubsub",
+            "email": "pubsub-push-sa@secure-electron-474908-k9.iam.gserviceaccount.com",
+            "exp": int(time.time()) + 300,
+        }
+    )
+    request = _build_request(token)
+    monkeypatch.setattr(auth_module, "_verify_rs256_signature", lambda *args, **kwargs: None)
+    principal = require_pubsub_push_auth(request, config=config)
+    assert principal.subject == "service-994021588311@gcp-sa-pubsub.iam.gserviceaccount.com"
+    assert principal.issuer == "https://accounts.google.com"
+
+
+def test_require_pubsub_push_auth_rejects_service_account_mismatch(monkeypatch) -> None:
+    config = _make_config(
+        auth_enabled=True,
+        pubsub_push_auth_enabled=True,
+        pubsub_push_audiences=("https://document-processor-service.example/v1/process/pubsub",),
+        pubsub_push_service_accounts=("allowed-sa@secure-electron-474908-k9.iam.gserviceaccount.com",),
+    )
+    token = _encode_rs256_for_test(
+        payload={
+            "sub": "service-994021588311@gcp-sa-pubsub.iam.gserviceaccount.com",
+            "iss": "https://accounts.google.com",
+            "aud": "https://document-processor-service.example/v1/process/pubsub",
+            "email": "different-sa@secure-electron-474908-k9.iam.gserviceaccount.com",
+            "exp": int(time.time()) + 300,
+        }
+    )
+    request = _build_request(token)
+    monkeypatch.setattr(auth_module, "_verify_rs256_signature", lambda *args, **kwargs: None)
+    try:
+        require_pubsub_push_auth(request, config=config)
+        assert False, "expected HTTPException"
+    except HTTPException as exc:
+        assert exc.status_code == 403
+
+
 def _make_config(**overrides: object) -> RuntimeConfig:
     base = RuntimeConfig(
         project_id="p",
@@ -102,6 +151,9 @@ def _make_config(**overrides: object) -> RuntimeConfig:
         auth_require_tenant_claim=True,
         auth_jwt_shared_secret="",
         auth_allow_unauthenticated_pubsub=True,
+        pubsub_push_auth_enabled=False,
+        pubsub_push_audiences=tuple(),
+        pubsub_push_service_accounts=tuple(),
     )
     return RuntimeConfig(**{**base.__dict__, **overrides})
 
@@ -131,6 +183,14 @@ def _encode_hs256(*, payload: dict[str, object], secret: str) -> str:
     signing_input = f"{header_bytes}.{payload_bytes}".encode("ascii")
     signature = hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
     signature_bytes = _b64url_encode(signature)
+    return f"{header_bytes}.{payload_bytes}.{signature_bytes}"
+
+
+def _encode_rs256_for_test(*, payload: dict[str, object]) -> str:
+    header = {"alg": "RS256", "typ": "JWT", "kid": "test-kid"}
+    header_bytes = _b64url_encode(json.dumps(header, separators=(",", ":"), ensure_ascii=True).encode("utf-8"))
+    payload_bytes = _b64url_encode(json.dumps(payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8"))
+    signature_bytes = _b64url_encode(b"fake-signature")
     return f"{header_bytes}.{payload_bytes}.{signature_bytes}"
 
 
