@@ -410,6 +410,21 @@ p6_retention_enforcement:
     scanned: 3
     deleted: 0
     skipped_policy_missing: 3
+  retention_policy_seed:
+    applied_at_utc: "2026-02-25T21:47:00Z"
+    tenant: default
+    retain_days: 3650
+    artifact_types:
+      - decision_report
+      - policy_snapshot
+      - regulator_package_manifest
+  post_seed_dry_run:
+    checked_at_utc: "2026-02-25T21:48:00Z"
+    http: 200
+    trace_id: "882ce2d8-e8dc-4bf9-a596-60cb8b6ad525"
+    scanned: 3
+    skipped_not_expired: 3
+    skipped_policy_missing: 0
 
 p3_parallel_execution:
   p3_2_retrieval_real:
