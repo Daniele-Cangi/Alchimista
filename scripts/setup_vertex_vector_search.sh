@@ -97,7 +97,7 @@ DEPLOYED_ALREADY="$(
   gcloud ai index-endpoints describe "$ENDPOINT_ID" \
     --project "$PROJECT_ID" \
     --region "$REGION" \
-    --format=json | jq -r --arg did "$DEPLOYED_INDEX_ID" 'any((.deployedIndexes // []); .id == $did)'
+    --format=json | jq -r --arg did "$DEPLOYED_INDEX_ID" 'any((.deployedIndexes // [])[]?; .id == $did)'
 )"
 
 if [[ "$DEPLOYED_ALREADY" != "true" ]]; then
@@ -120,7 +120,7 @@ for _ in $(seq 1 180); do
     gcloud ai index-endpoints describe "$ENDPOINT_ID" \
       --project "$PROJECT_ID" \
       --region "$REGION" \
-      --format=json | jq -r --arg did "$DEPLOYED_INDEX_ID" 'any((.deployedIndexes // []); .id == $did)'
+      --format=json | jq -r --arg did "$DEPLOYED_INDEX_ID" 'any((.deployedIndexes // [])[]?; .id == $did)'
   )"
   if [[ "$READY" == "true" ]]; then
     break
@@ -132,7 +132,7 @@ READY="$(
   gcloud ai index-endpoints describe "$ENDPOINT_ID" \
     --project "$PROJECT_ID" \
     --region "$REGION" \
-    --format=json | jq -r --arg did "$DEPLOYED_INDEX_ID" 'any((.deployedIndexes // []); .id == $did)'
+    --format=json | jq -r --arg did "$DEPLOYED_INDEX_ID" 'any((.deployedIndexes // [])[]?; .id == $did)'
 )"
 
 if [[ "$READY" != "true" ]]; then
