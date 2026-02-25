@@ -440,7 +440,8 @@ p6_retention_enforcement:
       feature_flag_secret: RETENTION_DELETE_WINDOW_ENABLED
       enabled_value: "true"
       fallback_mode_when_disabled: dry_run
-      current_environment_value_test: "false"
+      current_environment_value_test: "true"
+      market_mode_enabled_at_utc: "2026-02-25T22:04:42Z"
     validation:
       run_id: "22417582060"
       completed_at_utc: "2026-02-25T21:53:50Z"
@@ -457,19 +458,17 @@ p6_retention_enforcement:
       dry_run: true
       trace_id: "8d5ac3ff-6da3-4dd1-b75b-27635886f2a3"
     latest_manual_delete_validation:
-      run_id: "22417790886"
-      completed_at_utc: "2026-02-25T22:00:12Z"
+      run_id: "22417964263"
+      completed_at_utc: "2026-02-25T22:05:25Z"
       status: success
       retention_mode: manual
       dry_run: false
-      trace_id: "fc831c66-ecec-46c2-98a5-943720e59968"
+      trace_id: "a8653ac0-6b6f-4064-886f-fefaa571e3d1"
       scanned: 3
       eligible: 0
       deleted: 0
       skipped_not_expired: 3
       skipped_policy_missing: 0
-    post_test_feature_flag_state:
-      RETENTION_DELETE_WINDOW_ENABLED: "false"
 
 p3_parallel_execution:
   p3_2_retrieval_real:
