@@ -96,8 +96,8 @@ sql:
   backup_enabled: true
   pitr_enabled: true
   deletion_protection_enabled: true
-  app_db_secret: null
-  app_db_secret_exists: false
+  app_db_secret: alchimista-db-url
+  app_db_secret_exists: true
 
 vector_search:
   provider: vertex_ai_vector_search
@@ -109,6 +109,8 @@ vector_search:
 runtime_services:
   ingestion_api_service:
     target_name: ingestion-api-service
+    deployed_url: https://ingestion-api-service-pe7qslbcvq-ez.a.run.app
+    latest_ready_revision: ingestion-api-service-00001-hkn
     expected_endpoints:
       - POST /v1/ingest
       - POST /v1/ingest/complete
@@ -117,6 +119,8 @@ runtime_services:
       - GET /v1/readyz
   document_processor_service:
     target_name: document-processor-service
+    deployed_url: https://document-processor-service-pe7qslbcvq-ez.a.run.app
+    latest_ready_revision: document-processor-service-00001-mgq
     expected_endpoints:
       - POST /v1/process
       - POST /v1/process/pubsub
@@ -124,6 +128,8 @@ runtime_services:
       - GET /v1/readyz
   rag_query_service:
     target_name: rag-query-service
+    deployed_url: https://rag-query-service-pe7qslbcvq-ez.a.run.app
+    latest_ready_revision: rag-query-service-00001-n67
     expected_endpoints:
       - POST /v1/query
       - GET /v1/healthz
@@ -187,5 +193,12 @@ contracts:
 
 p0_p1_progress:
   p0_direction_lock: done
-  p1_vertical_slice: in_progress
+  p1_vertical_slice: done
   p2_hardening: pending
+
+validation:
+  last_smoke_test_at: "2026-02-25T11:30:18Z"
+  smoke_test_result: passed
+  sample_doc_id: d4f5b676-e92d-4def-9d75-82e1f454f922
+  sample_trace_id: 108af780-951b-440c-acdc-abf28e4bf0c6
+  ingest_subscription_push_endpoint: https://document-processor-service-pe7qslbcvq-ez.a.run.app/v1/process/pubsub
