@@ -1,0 +1,65 @@
+name: rotate-audit-signing-key
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: "GitHub Environment name"
+        required: true
+        default: test
+      project_id:
+        description: "GCP project id"
+        required: true
+        default: secure-electron-474908-k9
+      region:
+        description: "Cloud Run region"
+        required: true
+        default: europe-west4
+  schedule:
+    - cron: "30 3 1 * *"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ github.event.inputs.environment_name || 'test' }}
+    env:
+      PROJECT_ID: ${{ github.event.inputs.project_id || 'secure-electron-474908-k9' }}
+      REGION: ${{ github.event.inputs.region || 'europe-west4' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Validate required secrets
+        run: |
+          if [[ -z "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" || -z "${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}" ]]; then
+            echo "Missing GCP_WORKLOAD_IDENTITY_PROVIDER or GCP_DEPLOY_SERVICE_ACCOUNT in GitHub environment secrets"
+            exit 1
+          fi
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Rotate signing key and update ingestion service
+        run: |
+          ./scripts/rotate_audit_report_signing_key_secret.sh "$PROJECT_ID" "$REGION"
+
+      - name: Show effective signing key config
+        run: |
+          gcloud run services describe ingestion-api-service \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --format=json \
+            | jq -r '.status.latestReadyRevisionName, (.spec.template.spec.containers[0].env // [] | map(select(.name=="AUDIT_REPORT_SIGNING_KEY_ID" or .name=="AUDIT_REPORT_SIGNING_KEY")) )'

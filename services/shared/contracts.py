@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class JobStatus(str, Enum):
@@ -65,6 +65,12 @@ class QueryResponse(BaseModel):
 class DecisionOrder(str, Enum):
     ASC = "asc"
     DESC = "desc"
+
+
+class ConfidenceBand(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 class AIDecisionIngestRequest(BaseModel):
@@ -128,8 +134,12 @@ class AIDecisionQueryRequest(BaseModel):
     decision_id_prefix: str | None = None
     model: str | None = None
     model_version: str | None = None
+    outputs: list[str] | None = None
+    decision_trace_id: str | None = None
     query: str | None = None
     context_docs: list[str] | None = None
+    context_chunks: list[str] | None = None
+    confidence_band: ConfidenceBand | None = None
     min_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     max_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     created_from: datetime | None = None
@@ -139,9 +149,9 @@ class AIDecisionQueryRequest(BaseModel):
     order: DecisionOrder = Field(default=DecisionOrder.DESC)
     trace_id: str | None = None
 
-    @field_validator("context_docs")
+    @field_validator("context_docs", "context_chunks", "outputs")
     @classmethod
-    def normalize_optional_doc_ids(cls, value: list[str] | None) -> list[str] | None:
+    def normalize_optional_string_list(cls, value: list[str] | None) -> list[str] | None:
         if value is None:
             return None
         normalized: list[str] = []
@@ -149,12 +159,22 @@ class AIDecisionQueryRequest(BaseModel):
         for item in value:
             candidate = str(item).strip()
             if not candidate:
-                raise ValueError("context_docs ids must not be empty")
+                raise ValueError("list items must not be empty")
             if candidate in seen:
                 continue
             seen.add(candidate)
             normalized.append(candidate)
         return normalized
+
+    @model_validator(mode="after")
+    def validate_ranges(self) -> AIDecisionQueryRequest:
+        if self.min_confidence is not None and self.max_confidence is not None:
+            if self.min_confidence > self.max_confidence:
+                raise ValueError("min_confidence cannot be greater than max_confidence")
+        if self.created_from is not None and self.created_to is not None:
+            if self.created_from > self.created_to:
+                raise ValueError("created_from cannot be greater than created_to")
+        return self
 
 
 class AIDecisionQueryResponse(BaseModel):
@@ -164,6 +184,25 @@ class AIDecisionQueryResponse(BaseModel):
     offset: int
     limit: int
     returned: int
+
+
+class AIDecisionExportRequest(AIDecisionQueryRequest):
+    limit: int = Field(default=200, ge=1, le=1000)
+    include_context: bool = False
+    object_name: str | None = None
+
+
+class AIDecisionExportResponse(BaseModel):
+    trace_id: str
+    generated_at: datetime
+    tenant: str
+    total: int
+    returned: int
+    gs_uri: str
+    report_hash_sha256: str
+    signature_alg: str
+    signature_key_id: str | None = None
+    signature: str | None = None
 
 
 class AIDecisionReportResponse(BaseModel):

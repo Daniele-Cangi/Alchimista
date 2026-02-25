@@ -164,7 +164,7 @@ python scripts/check_benchmark_gate.py --spec spec/project.yaml --report reports
 - Full operational details:
   - `docs/p4-cicd.md`
 
-## P4.0 AI Decision Trail
+## P4 Audit Trail Engine (P4.2)
 - Register an AI decision linked to existing context documents/chunks:
 ```bash
 curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions" \
@@ -182,20 +182,55 @@ curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decis
     "trace_id":"'"$(uuidgen)"'"
   }'
 ```
-- Query decisions with tenant/model/text filters:
+- Query decisions with advanced enterprise filters:
 ```bash
 curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/query" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
-  -d '{"tenant":"default","model":"gpt-4","query":"approved","limit":20,"offset":0,"order":"desc"}'
+  -d '{
+    "tenant":"default",
+    "model":"gpt-4",
+    "model_version":"2024-01",
+    "outputs":["approved"],
+    "query":"kyc case",
+    "min_confidence":0.8,
+    "confidence_band":"high",
+    "created_from":"2026-02-01T00:00:00Z",
+    "created_to":"2026-02-28T23:59:59Z",
+    "context_docs":["default::bench-alpha-v1"],
+    "limit":20,
+    "offset":0,
+    "order":"desc"
+  }'
 ```
 - Generate a regulator-friendly decision trail report:
 ```bash
 curl -sS -H "Authorization: Bearer ${TOKEN}" \
   "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/d-001/report?tenant=default"
 ```
+- Export a signed audit snapshot to GCS (`REPORTS_BUCKET`):
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/export" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":"default",
+    "model":"gpt-4",
+    "min_confidence":0.8,
+    "limit":200,
+    "include_context":true
+  }'
+```
 - Optional signing (HMAC) for exported reports:
 ```bash
 AUDIT_REPORT_SIGNING_KEY='REPLACE_WITH_STRONG_SECRET'
 AUDIT_REPORT_SIGNING_KEY_ID='audit-key-v1'
+```
+- Rotate signing key manually:
+```bash
+./scripts/rotate_audit_report_signing_key_secret.sh secure-electron-474908-k9 europe-west4
+```
+- Rotate signing key via GitHub Actions (manual or monthly schedule):
+```bash
+gh workflow run rotate-audit-signing-key.yml -f environment_name=test -f project_id=secure-electron-474908-k9 -f region=europe-west4
 ```

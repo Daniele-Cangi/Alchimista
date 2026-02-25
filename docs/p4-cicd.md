@@ -16,6 +16,9 @@ This stage introduces objective quality gates before release and controlled Clou
   - Uses GitHub Environment secrets (`environment_name` input, default `test`).
   - Builds each service image with Cloud Build and deploys to Cloud Run.
   - Executes `/v1/readyz` checks after deployment.
+- `.github/workflows/rotate-audit-signing-key.yml`
+  - Manual and scheduled (`monthly`) secret rotation workflow for `AUDIT_REPORT_SIGNING_KEY`.
+  - Runs `scripts/rotate_audit_report_signing_key_secret.sh` and updates `ingestion-api-service`.
 
 ## Required GitHub environment secrets
 - Environment: `test`
@@ -42,6 +45,7 @@ The service account referenced by `GCP_DEPLOY_SERVICE_ACCOUNT` must have at leas
 - `scripts/deploy_cloud_run_service.sh`: build + deploy one service.
 - `scripts/check_benchmark_gate.py`: validates benchmark metrics against spec gates.
 - `scripts/bootstrap_github_deploy_iam.sh`: grants IAM roles required by `deploy-cloud-run`.
+- `scripts/rotate_audit_report_signing_key_secret.sh`: rotates HMAC signing key in Secret Manager and rebinds ingestion service.
 
 ## Operator notes
 - Keep `benchmark.gates` in `spec/project.yaml` as the single source of truth.

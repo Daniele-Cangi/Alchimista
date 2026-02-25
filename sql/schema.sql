@@ -95,6 +95,12 @@ CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_confidence_created_at
 CREATE INDEX IF NOT EXISTS idx_ai_decisions_trace_id
   ON ai_decisions (trace_id);
 
+CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_trace_id
+  ON ai_decisions (tenant, trace_id);
+
+CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_output_created_at
+  ON ai_decisions (tenant, output_text, created_at DESC);
+
 CREATE TABLE IF NOT EXISTS ai_decision_context_docs (
   id BIGSERIAL PRIMARY KEY,
   decision_ref_id BIGINT NOT NULL REFERENCES ai_decisions(id) ON DELETE CASCADE,

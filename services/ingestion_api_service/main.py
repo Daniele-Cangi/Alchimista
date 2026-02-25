@@ -17,6 +17,8 @@ from psycopg.types.json import Json
 from services.shared.auth import require_auth
 from services.shared.config import load_runtime_config
 from services.shared.contracts import (
+    AIDecisionExportRequest,
+    AIDecisionExportResponse,
     AIDecisionIngestRequest,
     AIDecisionIngestResponse,
     AIDecisionQueryRequest,
@@ -339,6 +341,108 @@ def query_decisions(payload: AIDecisionQueryRequest, request: Request) -> AIDeci
         offset=payload.offset,
         limit=payload.limit,
         returned=len(decisions),
+    )
+
+
+@app.post("/v1/decisions/export", response_model=AIDecisionExportResponse)
+def export_decisions(payload: AIDecisionExportRequest, request: Request) -> AIDecisionExportResponse:
+    require_auth(request, config=config, tenant=payload.tenant)
+    _require_reports_bucket()
+    trace_id = payload.trace_id or str(uuid4())
+    generated_at = datetime.now(timezone.utc)
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            conn.commit()
+            rows, total = _query_ai_decisions(cur, payload=payload)
+            decisions = [_map_ai_decision_row(row) for row in rows]
+            decision_context: dict[str, dict[str, Any]] = {}
+            if payload.include_context:
+                for row in rows:
+                    decision_ref_id = int(row["id"])
+                    decision_context[str(row["decision_id"])] = {
+                        "context_documents": _fetch_ai_decision_context_documents(
+                            cur,
+                            tenant=payload.tenant,
+                            decision_ref_id=decision_ref_id,
+                        ),
+                        "context_chunks": _fetch_ai_decision_context_chunks(
+                            cur,
+                            tenant=payload.tenant,
+                            decision_ref_id=decision_ref_id,
+                        ),
+                    }
+
+    export_payload: dict[str, Any] = {
+        "trace_id": trace_id,
+        "generated_at": generated_at,
+        "tenant": payload.tenant,
+        "filters": payload.model_dump(
+            mode="json",
+            exclude={"trace_id", "include_context", "object_name"},
+            exclude_none=True,
+        ),
+        "total": total,
+        "returned": len(decisions),
+        "decisions": [item.model_dump(mode="json") for item in decisions],
+    }
+    if payload.include_context:
+        export_payload["decision_context"] = decision_context
+
+    report_hash = _sha256_json(export_payload)
+    signature_alg = "none"
+    signature = None
+    signature_key_id = None
+    if config.audit_report_signing_key:
+        signature_alg = "hmac-sha256"
+        signature = _hmac_sha256_b64(config.audit_report_signing_key, export_payload)
+        signature_key_id = config.audit_report_signing_key_id or None
+
+    export_document = {
+        **export_payload,
+        "report_hash_sha256": report_hash,
+        "signature_alg": signature_alg,
+        "signature_key_id": signature_key_id,
+        "signature": signature,
+    }
+    object_name = _resolve_audit_export_object_name(
+        tenant=payload.tenant,
+        requested_object_name=payload.object_name,
+        trace_id=trace_id,
+        generated_at=generated_at,
+    )
+    gs_uri = storage_client.upload_bytes(
+        bucket_name=config.reports_bucket,
+        object_name=object_name,
+        payload=json.dumps(export_document, ensure_ascii=True, separators=(",", ":"), default=_json_default).encode("utf-8"),
+        content_type="application/json",
+    )
+
+    log_event(
+        "info",
+        "ai_decision_export_written",
+        trace_id=trace_id,
+        doc_id=decisions[0].context_docs[0] if decisions and decisions[0].context_docs else None,
+        job_id=f"ai-decision-export:{payload.tenant}:{trace_id}",
+        tenant=payload.tenant,
+        total=total,
+        returned=len(decisions),
+        include_context=payload.include_context,
+        gs_uri=gs_uri,
+        signature_alg=signature_alg,
+    )
+    return AIDecisionExportResponse(
+        trace_id=trace_id,
+        generated_at=generated_at,
+        tenant=payload.tenant,
+        total=total,
+        returned=len(decisions),
+        gs_uri=gs_uri,
+        report_hash_sha256=report_hash,
+        signature_alg=signature_alg,
+        signature_key_id=signature_key_id,
+        signature=signature,
     )
 
 
@@ -704,6 +808,10 @@ def _ensure_ai_decision_schema(cur: Any) -> None:
             "CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_confidence_created_at ON ai_decisions (tenant, confidence, created_at DESC)"
         )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_decisions_trace_id ON ai_decisions (trace_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_trace_id ON ai_decisions (tenant, trace_id)")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_output_created_at ON ai_decisions (tenant, output_text, created_at DESC)"
+        )
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_ai_decision_context_docs_tenant_doc ON ai_decision_context_docs (tenant, doc_id, decision_ref_id)"
         )
@@ -831,6 +939,12 @@ def _query_ai_decisions(cur: Any, *, payload: AIDecisionQueryRequest) -> tuple[l
     if payload.model_version:
         conditions.append("d.model_version = %s")
         params.append(payload.model_version)
+    if payload.outputs:
+        conditions.append("d.output_text = ANY(%s)")
+        params.append(payload.outputs)
+    if payload.decision_trace_id:
+        conditions.append("d.trace_id = %s")
+        params.append(payload.decision_trace_id)
     if payload.query:
         pattern = f"%{payload.query.strip()}%"
         conditions.append("(d.input_text ILIKE %s OR d.output_text ILIKE %s)")
@@ -841,6 +955,13 @@ def _query_ai_decisions(cur: Any, *, payload: AIDecisionQueryRequest) -> tuple[l
     if payload.max_confidence is not None:
         conditions.append("d.confidence <= %s")
         params.append(payload.max_confidence)
+    if payload.confidence_band is not None:
+        if payload.confidence_band.value == "low":
+            conditions.append("d.confidence IS NOT NULL AND d.confidence < 0.40")
+        elif payload.confidence_band.value == "medium":
+            conditions.append("d.confidence >= 0.40 AND d.confidence < 0.70")
+        else:
+            conditions.append("d.confidence >= 0.70")
     if payload.created_from is not None:
         conditions.append("d.created_at >= %s")
         params.append(payload.created_from)
@@ -854,6 +975,13 @@ def _query_ai_decisions(cur: Any, *, payload: AIDecisionQueryRequest) -> tuple[l
                 "WHERE filter_docs.decision_ref_id = d.id AND filter_docs.doc_id = %s)"
             )
             params.append(doc_id)
+    if payload.context_chunks:
+        for chunk_id in payload.context_chunks:
+            conditions.append(
+                "EXISTS (SELECT 1 FROM ai_decision_context_chunks filter_chunks "
+                "WHERE filter_chunks.decision_ref_id = d.id AND filter_chunks.chunk_id = %s)"
+            )
+            params.append(chunk_id)
 
     where_clause = " AND ".join(conditions)
     cur.execute(
@@ -1004,6 +1132,22 @@ def _hmac_sha256_b64(secret: str, payload: dict[str, Any]) -> str:
     return base64.b64encode(digest).decode("ascii")
 
 
+def _resolve_audit_export_object_name(
+    *,
+    tenant: str,
+    requested_object_name: str | None,
+    trace_id: str,
+    generated_at: datetime,
+) -> str:
+    if requested_object_name:
+        value = requested_object_name.strip().lstrip("/")
+        if not value:
+            raise HTTPException(status_code=400, detail="object_name cannot be empty")
+        return safe_object_name(value)
+    stamp = generated_at.strftime("%Y%m%dT%H%M%SZ")
+    return safe_object_name(f"reports/{tenant}/audit/decisions_export_{stamp}_{trace_id}.json")
+
+
 def _publish_ingest_message(message: IngestMessage, *, job_id: str | None = None) -> str:
     payload = message.model_dump(mode="json")
     message_id = publisher.publish_json(config.ingest_topic, payload)
@@ -1023,6 +1167,13 @@ def _publish_ingest_message(message: IngestMessage, *, job_id: str | None = None
 def _require_raw_bucket() -> None:
     if not config.raw_bucket or config.raw_bucket.startswith("TODO"):
         raise HTTPException(status_code=500, detail="RAW_BUCKET is not configured")
+
+
+def _require_reports_bucket() -> None:
+    if not config.reports_bucket or config.reports_bucket.startswith("TODO"):
+        raise HTTPException(status_code=500, detail="REPORTS_BUCKET is not configured")
+    if config.enforce_storage_hardening:
+        _assert_bucket_hardening(config.reports_bucket)
 
 
 def _assert_bucket_hardening(bucket_name: str) -> None:

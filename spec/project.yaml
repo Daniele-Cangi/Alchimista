@@ -126,6 +126,7 @@ runtime_services:
       - POST /v1/admin/replay-dlq
       - POST /v1/decisions
       - POST /v1/decisions/query
+      - POST /v1/decisions/export
       - GET /v1/decisions/{id}/report
       - GET /v1/doc/{id}
       - GET /v1/healthz
@@ -271,11 +272,13 @@ p0_p1_progress:
   p3_4_cicd_discipline: done
   p4_0_ai_decision_trail: done
   p4_1_audit_query_export_signing: done
+  p4_2_audit_export_gcs_and_advanced_filters: done
 
 p4_audit_trail_engine:
-  status: p4_1_done
+  status: p4_2_done
   write_endpoint: POST /v1/decisions
   query_endpoint: POST /v1/decisions/query
+  export_endpoint: POST /v1/decisions/export
   report_endpoint: GET /v1/decisions/{id}/report
   sql_tables:
     - ai_decisions
@@ -288,13 +291,19 @@ p4_audit_trail_engine:
   query_capabilities:
     - decision_id_prefix_filter
     - model_and_model_version_filters
+    - outputs_filter
+    - decision_trace_id_filter
     - text_filter_on_input_and_output
+    - context_chunks_all_match_filter
     - confidence_range_filter
+    - confidence_band_filter
     - created_at_range_filter
     - context_docs_all_match_filter
     - offset_limit_pagination
     - asc_desc_ordering
   report_export:
+    gcs_bucket_env: REPORTS_BUCKET
+    object_prefix: reports/{tenant}/audit/
     hash_field: report_hash_sha256
     optional_signature:
       alg: hmac-sha256
@@ -349,6 +358,7 @@ p3_parallel_execution:
       - .github/workflows/ci.yml
       - .github/workflows/benchmark-gate.yml
       - .github/workflows/deploy-cloud-run.yml
+      - .github/workflows/rotate-audit-signing-key.yml
     deploy_script: scripts/deploy_cloud_run_service.sh
     benchmark_gate_script: scripts/check_benchmark_gate.py
     github_environment: test
@@ -379,6 +389,10 @@ security_hardening:
   aiplatform_user_role_bound_to_processor_and_rag: true
   dlq_replay_admin_key_configured: true
   dlq_replay_admin_key_source: secret_manager:alchimista-admin-api-key
+  audit_report_signing_key_rotation:
+    script: scripts/rotate_audit_report_signing_key_secret.sh
+    workflow: .github/workflows/rotate-audit-signing-key.yml
+    cadence: monthly_or_manual
   processor_backpressure_guard_enabled: true
 
 observability:

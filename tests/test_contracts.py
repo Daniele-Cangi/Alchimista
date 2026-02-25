@@ -1,6 +1,13 @@
 import pytest
 
-from services.shared.contracts import AIDecisionIngestRequest, AIDecisionQueryRequest, IngestMessage, QueryAnswer
+from services.shared.contracts import (
+    AIDecisionExportRequest,
+    AIDecisionIngestRequest,
+    AIDecisionQueryRequest,
+    ConfidenceBand,
+    IngestMessage,
+    QueryAnswer,
+)
 
 
 def test_ingest_message_contract() -> None:
@@ -65,3 +72,37 @@ def test_ai_decision_query_contract_defaults() -> None:
     assert model.offset == 0
     assert model.limit == 50
     assert model.order.value == "desc"
+
+
+def test_ai_decision_query_contract_normalizes_advanced_lists() -> None:
+    model = AIDecisionQueryRequest.model_validate(
+        {
+            "tenant": "default",
+            "outputs": ["approved", " approved ", "rejected"],
+            "context_docs": ["doc-1", "doc-1"],
+            "context_chunks": ["chunk-1", " chunk-1 ", "chunk-2"],
+            "confidence_band": "high",
+        }
+    )
+    assert model.outputs == ["approved", "rejected"]
+    assert model.context_docs == ["doc-1"]
+    assert model.context_chunks == ["chunk-1", "chunk-2"]
+    assert model.confidence_band == ConfidenceBand.HIGH
+
+
+def test_ai_decision_query_contract_rejects_invalid_ranges() -> None:
+    with pytest.raises(ValueError):
+        AIDecisionQueryRequest.model_validate(
+            {
+                "tenant": "default",
+                "min_confidence": 0.9,
+                "max_confidence": 0.2,
+            }
+        )
+
+
+def test_ai_decision_export_contract_defaults() -> None:
+    model = AIDecisionExportRequest.model_validate({"tenant": "default"})
+    assert model.limit == 200
+    assert model.offset == 0
+    assert model.include_context is False
