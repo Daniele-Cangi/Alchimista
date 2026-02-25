@@ -56,6 +56,10 @@ jobs:
             echo "Missing GCP_WORKLOAD_IDENTITY_PROVIDER or GCP_DEPLOY_SERVICE_ACCOUNT in GitHub environment secrets"
             exit 1
           fi
+          if [[ ! "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" =~ ^projects/[0-9]+/locations/global/workloadIdentityPools/[^/]+/providers/[^/]+$ ]]; then
+            echo "GCP_WORKLOAD_IDENTITY_PROVIDER has invalid format"
+            exit 1
+          fi
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2

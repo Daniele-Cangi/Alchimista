@@ -55,8 +55,19 @@ jobs:
         env:
           BENCHMARK_BEARER_TOKEN: ${{ steps.auth.outputs.token }}
         run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          source = Path("benchmark/dataset_v1.json")
+          target = Path("/tmp/benchmark_dataset_runtime.json")
+          data = json.loads(source.read_text(encoding="utf-8"))
+          data["tenant"] = "default"
+          target.write_text(json.dumps(data, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+          PY
+
           ./scripts/run_p3_benchmark.py \
-            --dataset benchmark/dataset_v1.json \
+            --dataset /tmp/benchmark_dataset_runtime.json \
             --output-dir reports/benchmarks \
             --ingest-url "$INGEST_URL" \
             --processor-url "$PROCESSOR_URL" \
