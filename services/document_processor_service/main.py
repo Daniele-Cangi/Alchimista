@@ -15,6 +15,7 @@ from services.shared.chunking import chunk_text
 from services.shared.config import load_runtime_config
 from services.shared.contracts import IngestMessage, JobStatus, PubSubPushEnvelope
 from services.shared.db import (
+    get_chunk_ids_for_doc,
     get_connection,
     replace_chunks,
     replace_entities,
@@ -28,12 +29,14 @@ from services.shared.hashing import sha256_bytes
 from services.shared.logging_utils import log_event
 from services.shared.pubsub_client import PubSubPublisher
 from services.shared.storage import StorageClient
+from services.shared.vertex_vector_search import build_vertex_client
 
 
 config = load_runtime_config()
 app = FastAPI(title="document-processor-service", version="0.1.0")
 storage_client = StorageClient(config.project_id)
 publisher = PubSubPublisher(config.project_id)
+vertex_client = build_vertex_client(config)
 
 
 class ProcessResponse(BaseModel):
@@ -118,6 +121,7 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
             chunk_records.append(
                 {
                     "chunk_id": chunk_id,
+                    "doc_id": message.id,
                     "chunk_index": idx,
                     "chunk_text": chunk,
                     "token_count": len(chunk.split()),
@@ -137,9 +141,11 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
 
         finished_at = utcnow()
         duration_ms = int((time.perf_counter() - t0) * 1000)
+        existing_chunk_ids: list[str] = []
 
         with get_connection(config.database_url) as conn:
             with conn.cursor() as cur:
+                existing_chunk_ids = get_chunk_ids_for_doc(cur, message.id, message.tenant)
                 upsert_document(
                     cur,
                     doc_id=message.id,
@@ -151,6 +157,16 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
                 )
                 replace_chunks(cur, doc_id=message.id, tenant=message.tenant, chunks=chunk_records)
                 replace_entities(cur, doc_id=message.id, tenant=message.tenant, entities=entity_records)
+                conn.commit()
+
+        _sync_vector_index(
+            tenant=message.tenant,
+            chunk_records=chunk_records,
+            existing_chunk_ids=existing_chunk_ids,
+        )
+
+        with get_connection(config.database_url) as conn:
+            with conn.cursor() as cur:
                 upsert_process_job(
                     cur,
                     doc_id=message.id,
@@ -163,6 +179,7 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
                         "chunks": len(chunk_records),
                         "entities": len(entity_records),
                         "duration_ms": duration_ms,
+                        "vector_backend": config.vector_backend,
                     },
                 )
                 conn.commit()
@@ -218,6 +235,16 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
             error=error_text,
         )
         raise HTTPException(status_code=500, detail=error_text) from exc
+
+
+def _sync_vector_index(*, tenant: str, chunk_records: list[dict], existing_chunk_ids: list[str]) -> None:
+    if not vertex_client:
+        return
+
+    new_ids = {chunk["chunk_id"] for chunk in chunk_records}
+    stale_ids = [chunk_id for chunk_id in existing_chunk_ids if chunk_id not in new_ids]
+    vertex_client.upsert_chunks(tenant=tenant, chunks=chunk_records)
+    vertex_client.remove_chunks(stale_ids)
 
 
 def _extract_text(payload: bytes, mime_type: str, uri: str) -> str:

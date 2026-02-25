@@ -176,3 +176,49 @@ def replace_entities(
                 entity["entity_value"],
             ),
         )
+
+
+def get_chunk_ids_for_doc(cur: psycopg.Cursor, doc_id: str, tenant: str) -> list[str]:
+    cur.execute(
+        """
+        SELECT chunk_id
+        FROM chunks
+        WHERE doc_id = %s AND tenant = %s
+        ORDER BY chunk_index ASC
+        """,
+        (doc_id, tenant),
+    )
+    rows = cur.fetchall()
+    return [row["chunk_id"] for row in rows]
+
+
+def fetch_chunks_by_ids(
+    cur: psycopg.Cursor,
+    *,
+    tenant: str,
+    chunk_ids: list[str],
+    doc_ids: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    if not chunk_ids:
+        return []
+
+    if doc_ids:
+        cur.execute(
+            """
+            SELECT doc_id, chunk_id, chunk_text, embedding
+            FROM chunks
+            WHERE tenant = %s AND chunk_id = ANY(%s) AND doc_id = ANY(%s)
+            """,
+            (tenant, chunk_ids, doc_ids),
+        )
+        return cur.fetchall()
+
+    cur.execute(
+        """
+        SELECT doc_id, chunk_id, chunk_text, embedding
+        FROM chunks
+        WHERE tenant = %s AND chunk_id = ANY(%s)
+        """,
+        (tenant, chunk_ids),
+    )
+    return cur.fetchall()

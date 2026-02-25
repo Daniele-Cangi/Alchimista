@@ -101,9 +101,18 @@ sql:
 
 vector_search:
   provider: vertex_ai_vector_search
-  index_id: null
-  endpoint_id: null
-  deployed_index_id: null
+  index_id: "3994068346873053184"
+  endpoint_id: "5596857233007706112"
+  deployed_index_id: "alchimista_chunks_deployed_v3"
+  index_display_name: alchimista-doc-chunks-v2
+  endpoint_display_name: alchimista-doc-chunks-endpoint-v2
+  deployment_status: pending
+  deploy_operations:
+    - "8784978471479672832" # v1 endpoint deploy attempt
+    - "4094197984596590592" # v1 endpoint deploy retry
+    - "3211492457631973376" # v2 endpoint deploy attempt
+  dimensions: 128
+  distance_measure_type: DOT_PRODUCT_DISTANCE
   fallback_provider: sql_embedding_scan
 
 runtime_services:
@@ -120,7 +129,7 @@ runtime_services:
   document_processor_service:
     target_name: document-processor-service
     deployed_url: https://document-processor-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: document-processor-service-00002-72b
+    latest_ready_revision: document-processor-service-00003-6p7
     expected_endpoints:
       - POST /v1/process
       - POST /v1/process/pubsub
@@ -129,7 +138,7 @@ runtime_services:
   rag_query_service:
     target_name: rag-query-service
     deployed_url: https://rag-query-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: rag-query-service-00002-wfh
+    latest_ready_revision: rag-query-service-00003-dzh
     expected_endpoints:
       - POST /v1/query
       - GET /v1/healthz
@@ -204,10 +213,12 @@ security_hardening:
   db_credentials_in_secret_manager: true
   buckets_cmek_ubla_enforced: true
   signed_url_runtime_signing_mode: iam_signblob_via_access_token
+  aiplatform_user_role_bound_to_processor_and_rag: true
 
 validation:
-  last_smoke_test_at: "2026-02-25T11:51:11Z"
+  last_smoke_test_at: "2026-02-25T12:21:52Z"
   smoke_test_result: passed
   sample_doc_id: d4f5b676-e92d-4def-9d75-82e1f454f922
-  sample_trace_id: e825747d-95e3-4471-85e5-e5ee845f9c0c
+  sample_trace_id: fdc7bc63-06be-4ff5-8ad9-ad6e163dae69
   ingest_subscription_push_endpoint: https://document-processor-service-pe7qslbcvq-ez.a.run.app/v1/process/pubsub
+  runtime_vector_backend_active: sql_embedding_scan

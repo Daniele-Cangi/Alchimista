@@ -24,6 +24,7 @@ override.tf.json
 # Local env
 .env
 .env.*
+!.env.example
 
 # Build artifacts
 coverage/

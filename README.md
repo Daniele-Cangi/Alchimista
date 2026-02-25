@@ -62,3 +62,14 @@ PROCESSOR_URL='https://document-processor-service-pe7qslbcvq-ez.a.run.app' \
 RAG_URL='https://rag-query-service-pe7qslbcvq-ez.a.run.app' \
 ./scripts/smoke_p1.sh
 ```
+
+## Vertex Vector Search operations
+- Provision index + endpoint + deployment (idempotent, waits until active):
+```bash
+./scripts/setup_vertex_vector_search.sh secure-electron-474908-k9 europe-west4
+```
+- Switch processor + rag services from SQL fallback to Vertex backend:
+```bash
+./scripts/enable_vertex_backend.sh secure-electron-474908-k9 europe-west4 \
+  3994068346873053184 5596857233007706112 alchimista_chunks_deployed_v3
+```
