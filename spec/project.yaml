@@ -106,7 +106,7 @@ vector_search:
   deployed_index_id: "alchimista_chunks_deployed_v3"
   index_display_name: alchimista-doc-chunks-v2
   endpoint_display_name: alchimista-doc-chunks-endpoint-v2
-  deployment_status: pending
+  deployment_status: deployed
   deploy_operations:
     - "8784978471479672832" # v1 endpoint deploy attempt
     - "4094197984596590592" # v1 endpoint deploy retry
@@ -129,7 +129,7 @@ runtime_services:
   document_processor_service:
     target_name: document-processor-service
     deployed_url: https://document-processor-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: document-processor-service-00004-w6z
+    latest_ready_revision: document-processor-service-00005-j79
     expected_endpoints:
       - POST /v1/process
       - POST /v1/process/pubsub
@@ -138,7 +138,7 @@ runtime_services:
   rag_query_service:
     target_name: rag-query-service
     deployed_url: https://rag-query-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: rag-query-service-00004-r79
+    latest_ready_revision: rag-query-service-00007-q4n
     expected_endpoints:
       - POST /v1/query
       - GET /v1/healthz
@@ -216,9 +216,9 @@ security_hardening:
   aiplatform_user_role_bound_to_processor_and_rag: true
 
 validation:
-  last_smoke_test_at: "2026-02-25T12:39:06Z"
+  last_smoke_test_at: "2026-02-25T13:11:38Z"
   smoke_test_result: passed
   sample_doc_id: d4f5b676-e92d-4def-9d75-82e1f454f922
-  sample_trace_id: 88f324d3-b573-4dec-989f-267614918c28
+  sample_trace_id: 313b7e61-b4fe-40f2-83d2-9a55dd3b0cb8
   ingest_subscription_push_endpoint: https://document-processor-service-pe7qslbcvq-ez.a.run.app/v1/process/pubsub
-  runtime_vector_backend_active: sql_embedding_scan
+  runtime_vector_backend_active: vertex_ai_vector_search

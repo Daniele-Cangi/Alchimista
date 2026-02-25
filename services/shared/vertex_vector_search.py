@@ -27,6 +27,7 @@ class VertexVectorSearchClient:
         self._index_name = f"projects/{project_id}/locations/{region}/indexes/{index_id}"
         self._index_endpoint_name = f"projects/{project_id}/locations/{region}/indexEndpoints/{index_endpoint_id}"
         self._deployed_index_id = deployed_index_id
+        self._query_base = self._resolve_query_base()
 
     def upsert_chunks(self, *, tenant: str, chunks: list[dict[str, Any]]) -> None:
         if not chunks:
@@ -75,14 +76,23 @@ class VertexVectorSearchClient:
             "deployedIndexId": self._deployed_index_id,
             "queries": [
                 {
-                    "datapoint": {"featureVector": query_embedding},
+                    "datapoint": {
+                        "featureVector": query_embedding,
+                        "restricts": restricts,
+                    },
                     "neighborCount": max(1, top_k),
-                    "restricts": restricts,
                 }
             ],
             "returnFullDatapoint": False,
         }
-        body = self._post(f"{self._base}/{self._index_endpoint_name}:findNeighbors", payload)
+        query_url = f"{self._query_base}/{self._index_endpoint_name}:findNeighbors"
+        try:
+            body = self._post(query_url, payload)
+        except Exception:
+            if self._query_base == self._base:
+                raise
+            # Fallback to control-plane endpoint if public endpoint call fails.
+            body = self._post(f"{self._base}/{self._index_endpoint_name}:findNeighbors", payload)
         nearest = body.get("nearestNeighbors") or []
         if not nearest:
             return []
@@ -106,6 +116,19 @@ class VertexVectorSearchClient:
         if not response.text:
             return {}
         return response.json()
+
+    def _resolve_query_base(self) -> str:
+        try:
+            endpoint = self._session.get(f"{self._base}/{self._index_endpoint_name}", timeout=30)
+            if endpoint.status_code >= 400:
+                return self._base
+            body = endpoint.json()
+            host = body.get("publicEndpointDomainName")
+            if host:
+                return f"https://{host}/v1"
+        except Exception:
+            return self._base
+        return self._base
 
 
 def build_vertex_client(config: RuntimeConfig) -> VertexVectorSearchClient | None:

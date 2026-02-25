@@ -102,16 +102,29 @@ DEPLOYED_ALREADY="$(
 
 if [[ "$DEPLOYED_ALREADY" != "true" ]]; then
   echo "Submitting deploy-index operation..."
-  gcloud ai index-endpoints deploy-index "$ENDPOINT_ID" \
-    --project "$PROJECT_ID" \
-    --region "$REGION" \
-    --index "$INDEX_NAME" \
-    --deployed-index-id "$DEPLOYED_INDEX_ID" \
-    --display-name "$DEPLOYED_INDEX_ID" \
-    --min-replica-count 1 \
-    --max-replica-count 1 \
-    --enable-access-logging \
-    --quiet >/dev/null
+  set +e
+  DEPLOY_OUTPUT="$(
+    gcloud ai index-endpoints deploy-index "$ENDPOINT_ID" \
+      --project "$PROJECT_ID" \
+      --region "$REGION" \
+      --index "$INDEX_NAME" \
+      --deployed-index-id "$DEPLOYED_INDEX_ID" \
+      --display-name "$DEPLOYED_INDEX_ID" \
+      --min-replica-count 1 \
+      --max-replica-count 1 \
+      --enable-access-logging \
+      --quiet 2>&1
+  )"
+  DEPLOY_EXIT=$?
+  set -e
+  if [[ $DEPLOY_EXIT -ne 0 ]]; then
+    if grep -q "ALREADY_EXISTS" <<<"$DEPLOY_OUTPUT"; then
+      echo "Deploy already exists; continuing wait loop..."
+    else
+      echo "$DEPLOY_OUTPUT" >&2
+      exit $DEPLOY_EXIT
+    fi
+  fi
 fi
 
 echo "Waiting for deployed index to become active..."
