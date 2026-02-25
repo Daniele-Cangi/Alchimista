@@ -45,12 +45,14 @@ images:
 EOF
 
 echo "Building image for ${SERVICE}..."
-BUILD_ID="$(gcloud builds submit \
+SUBMIT_OUTPUT="$(gcloud builds submit \
   --project "$PROJECT_ID" \
   --config "$TMP_CONFIG" \
   --async \
-  --format='value(metadata.build.id)' \
-  .)"
+  . 2>&1)"
+echo "$SUBMIT_OUTPUT"
+
+BUILD_ID="$(printf '%s\n' "$SUBMIT_OUTPUT" | sed -nE 's#.*\/builds/([a-z0-9-]+)\].*#\1#p' | tail -n1)"
 
 if [[ -z "$BUILD_ID" ]]; then
   echo "Failed to obtain Cloud Build ID for ${SERVICE}" >&2
