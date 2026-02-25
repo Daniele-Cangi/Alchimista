@@ -62,6 +62,107 @@ class QueryResponse(BaseModel):
     trace_id: str
 
 
+class AIDecisionIngestRequest(BaseModel):
+    decision_id: str = Field(..., min_length=1)
+    model: str = Field(..., min_length=1)
+    model_version: str | None = None
+    input: str = Field(..., min_length=1)
+    output: str = Field(..., min_length=1)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    context_docs: list[str] = Field(..., min_length=1)
+    context_chunks: list[str] = Field(default_factory=list)
+    tenant: str = Field(default="default", min_length=1)
+    trace_id: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("context_docs", "context_chunks")
+    @classmethod
+    def normalize_string_ids(cls, value: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            candidate = str(item).strip()
+            if not candidate:
+                raise ValueError("context ids must not be empty")
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+        return normalized
+
+
+class AIDecisionIngestResponse(BaseModel):
+    decision_id: str
+    tenant: str
+    trace_id: str
+    status: str
+    context_docs_count: int
+    context_chunks_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class AIDecisionRecord(BaseModel):
+    decision_id: str
+    tenant: str
+    model: str
+    model_version: str | None = None
+    input: str
+    output: str
+    confidence: float | None = None
+    trace_id: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    context_docs: list[str] = Field(default_factory=list)
+    context_chunks: list[str] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class AIDecisionQueryRequest(BaseModel):
+    tenant: str = Field(default="default", min_length=1)
+    model: str | None = None
+    model_version: str | None = None
+    query: str | None = None
+    context_docs: list[str] | None = None
+    min_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    max_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    created_from: datetime | None = None
+    created_to: datetime | None = None
+    limit: int = Field(default=50, ge=1, le=200)
+    trace_id: str | None = None
+
+    @field_validator("context_docs")
+    @classmethod
+    def normalize_optional_doc_ids(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            candidate = str(item).strip()
+            if not candidate:
+                raise ValueError("context_docs ids must not be empty")
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+        return normalized
+
+
+class AIDecisionQueryResponse(BaseModel):
+    trace_id: str
+    decisions: list[AIDecisionRecord]
+    total: int
+
+
+class AIDecisionReportResponse(BaseModel):
+    trace_id: str
+    generated_at: datetime
+    decision: AIDecisionRecord
+    context_documents: list[dict[str, Any]] = Field(default_factory=list)
+    context_chunks: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class JobRecord(BaseModel):
     job_id: str
     doc_id: str

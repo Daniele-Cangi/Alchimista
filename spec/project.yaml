@@ -124,6 +124,9 @@ runtime_services:
       - POST /v1/ingest
       - POST /v1/ingest/complete
       - POST /v1/admin/replay-dlq
+      - POST /v1/decisions
+      - POST /v1/decisions/query
+      - GET /v1/decisions/{id}/report
       - GET /v1/doc/{id}
       - GET /v1/healthz
       - GET /v1/readyz
@@ -203,6 +206,19 @@ contracts:
           }
         ]
       }
+  ai_decision_ingest_request:
+    required_json: |
+      {
+        "decision_id": "d-001",
+        "model": "gpt-4",
+        "model_version": "2024-01",
+        "input": "...",
+        "output": "approved",
+        "confidence": 0.94,
+        "context_docs": ["doc_id_1", "doc_id_2"],
+        "tenant": "vendor-x",
+        "trace_id": "uuid"
+      }
 
 benchmark:
   p3_1_baseline:
@@ -253,6 +269,21 @@ p0_p1_progress:
   p3_2_retrieval_real: done
   p3_3_enterprise_auth: done
   p3_4_cicd_discipline: done
+  p4_0_ai_decision_trail: done
+
+p4_audit_trail_engine:
+  status: p4_0_done
+  write_endpoint: POST /v1/decisions
+  query_endpoint: POST /v1/decisions/query
+  report_endpoint: GET /v1/decisions/{id}/report
+  sql_tables:
+    - ai_decisions
+    - ai_decision_context_docs
+    - ai_decision_context_chunks
+  invariants:
+    - idempotent_by_tenant_and_decision_id
+    - decision_context_docs_must_exist_in_documents_table
+    - optional_context_chunks_must_belong_to_context_docs
 
 p3_parallel_execution:
   p3_2_retrieval_real:

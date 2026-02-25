@@ -9,10 +9,23 @@ from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
+from psycopg.types.json import Json
 
 from services.shared.auth import require_auth
 from services.shared.config import load_runtime_config
-from services.shared.contracts import DocumentStatusResponse, IngestMessage, JobRecord, JobStatus, now_iso8601
+from services.shared.contracts import (
+    AIDecisionIngestRequest,
+    AIDecisionIngestResponse,
+    AIDecisionQueryRequest,
+    AIDecisionQueryResponse,
+    AIDecisionRecord,
+    AIDecisionReportResponse,
+    DocumentStatusResponse,
+    IngestMessage,
+    JobRecord,
+    JobStatus,
+    now_iso8601,
+)
 from services.shared.db import (
     fetch_document_status,
     get_connection,
@@ -211,6 +224,137 @@ def get_document_status(request: Request, doc_id: str, tenant: str = config.defa
         content_hash=row.get("content_hash"),
         updated_at=row["updated_at"],
         job=job,
+    )
+
+
+@app.post("/v1/decisions", response_model=AIDecisionIngestResponse)
+def ingest_decision(payload: AIDecisionIngestRequest, request: Request) -> AIDecisionIngestResponse:
+    require_auth(request, config=config, tenant=payload.tenant)
+    trace_id = payload.trace_id or str(uuid4())
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            missing_doc_ids = _missing_document_ids(cur, tenant=payload.tenant, doc_ids=payload.context_docs)
+            if missing_doc_ids:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"message": "Context documents not found", "missing_doc_ids": missing_doc_ids},
+                )
+
+            missing_chunk_ids, mismatched_chunk_ids = _validate_context_chunks(
+                cur,
+                tenant=payload.tenant,
+                chunk_ids=payload.context_chunks,
+                allowed_doc_ids=payload.context_docs,
+            )
+            if missing_chunk_ids:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"message": "Context chunks not found", "missing_chunk_ids": missing_chunk_ids},
+                )
+            if mismatched_chunk_ids:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "message": "Context chunks must belong to context_docs",
+                        "mismatched_chunk_ids": mismatched_chunk_ids,
+                    },
+                )
+
+            decision_ref_id, created_at, updated_at = _upsert_ai_decision(cur, payload=payload, trace_id=trace_id)
+            _replace_ai_decision_context_docs(
+                cur,
+                decision_ref_id=decision_ref_id,
+                tenant=payload.tenant,
+                doc_ids=payload.context_docs,
+            )
+            _replace_ai_decision_context_chunks(
+                cur,
+                decision_ref_id=decision_ref_id,
+                tenant=payload.tenant,
+                chunk_ids=payload.context_chunks,
+            )
+            conn.commit()
+
+    log_event(
+        "info",
+        "ai_decision_recorded",
+        trace_id=trace_id,
+        doc_id=payload.context_docs[0],
+        job_id=f"ai-decision:{payload.tenant}:{payload.decision_id}",
+        tenant=payload.tenant,
+        decision_id=payload.decision_id,
+        model=payload.model,
+        context_docs=len(payload.context_docs),
+        context_chunks=len(payload.context_chunks),
+    )
+
+    return AIDecisionIngestResponse(
+        decision_id=payload.decision_id,
+        tenant=payload.tenant,
+        trace_id=trace_id,
+        status="RECORDED",
+        context_docs_count=len(payload.context_docs),
+        context_chunks_count=len(payload.context_chunks),
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+
+
+@app.post("/v1/decisions/query", response_model=AIDecisionQueryResponse)
+def query_decisions(payload: AIDecisionQueryRequest, request: Request) -> AIDecisionQueryResponse:
+    require_auth(request, config=config, tenant=payload.tenant)
+    trace_id = payload.trace_id or str(uuid4())
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            rows = _query_ai_decisions(cur, payload=payload)
+
+    decisions = [_map_ai_decision_row(row) for row in rows]
+    log_event(
+        "info",
+        "ai_decision_query_completed",
+        trace_id=trace_id,
+        doc_id=None,
+        job_id=f"ai-decision-query:{trace_id}",
+        tenant=payload.tenant,
+        model=payload.model,
+        returned=len(decisions),
+    )
+    return AIDecisionQueryResponse(trace_id=trace_id, decisions=decisions, total=len(decisions))
+
+
+@app.get("/v1/decisions/{decision_id}/report", response_model=AIDecisionReportResponse)
+def get_decision_report(request: Request, decision_id: str, tenant: str = config.default_tenant) -> AIDecisionReportResponse:
+    require_auth(request, config=config, tenant=tenant)
+    trace_id = str(uuid4())
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            row = _fetch_ai_decision(cur, tenant=tenant, decision_id=decision_id)
+            if not row:
+                raise HTTPException(status_code=404, detail="Decision not found")
+            context_documents = _fetch_ai_decision_context_documents(cur, tenant=tenant, decision_ref_id=row["id"])
+            context_chunks = _fetch_ai_decision_context_chunks(cur, tenant=tenant, decision_ref_id=row["id"])
+
+    decision = _map_ai_decision_row(row)
+    log_event(
+        "info",
+        "ai_decision_report_generated",
+        trace_id=trace_id,
+        doc_id=decision.context_docs[0] if decision.context_docs else None,
+        job_id=f"ai-decision-report:{tenant}:{decision_id}",
+        tenant=tenant,
+        decision_id=decision_id,
+        context_docs=len(decision.context_docs),
+        context_chunks=len(decision.context_chunks),
+    )
+    return AIDecisionReportResponse(
+        trace_id=trace_id,
+        generated_at=datetime.now(timezone.utc),
+        decision=decision,
+        context_documents=context_documents,
+        context_chunks=context_chunks,
     )
 
 
@@ -454,6 +598,255 @@ async def _ingest_multipart(request: Request) -> IngestResponse:
         gcs_uri=gcs_uri,
         published=True,
         pubsub_message_id=message_id,
+    )
+
+
+def _missing_document_ids(cur: Any, *, tenant: str, doc_ids: list[str]) -> list[str]:
+    cur.execute(
+        "SELECT doc_id FROM documents WHERE tenant = %s AND doc_id = ANY(%s)",
+        (tenant, doc_ids),
+    )
+    found = {str(row["doc_id"]) for row in cur.fetchall()}
+    return [doc_id for doc_id in doc_ids if doc_id not in found]
+
+
+def _validate_context_chunks(
+    cur: Any,
+    *,
+    tenant: str,
+    chunk_ids: list[str],
+    allowed_doc_ids: list[str],
+) -> tuple[list[str], list[str]]:
+    if not chunk_ids:
+        return [], []
+    cur.execute(
+        "SELECT chunk_id, doc_id FROM chunks WHERE tenant = %s AND chunk_id = ANY(%s)",
+        (tenant, chunk_ids),
+    )
+    rows = cur.fetchall()
+    by_chunk_id = {str(row["chunk_id"]): str(row["doc_id"]) for row in rows}
+    missing = [chunk_id for chunk_id in chunk_ids if chunk_id not in by_chunk_id]
+    allowed_docs = set(allowed_doc_ids)
+    mismatched = [chunk_id for chunk_id, doc_id in by_chunk_id.items() if doc_id not in allowed_docs]
+    return missing, mismatched
+
+
+def _upsert_ai_decision(
+    cur: Any,
+    *,
+    payload: AIDecisionIngestRequest,
+    trace_id: str,
+) -> tuple[int, datetime, datetime]:
+    cur.execute(
+        """
+        INSERT INTO ai_decisions (
+          decision_id, tenant, model, model_version, input_text, output_text,
+          confidence, trace_id, metadata, created_at, updated_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+        ON CONFLICT (tenant, decision_id)
+        DO UPDATE SET
+          model = EXCLUDED.model,
+          model_version = EXCLUDED.model_version,
+          input_text = EXCLUDED.input_text,
+          output_text = EXCLUDED.output_text,
+          confidence = EXCLUDED.confidence,
+          trace_id = EXCLUDED.trace_id,
+          metadata = EXCLUDED.metadata,
+          updated_at = NOW()
+        RETURNING id, created_at, updated_at
+        """,
+        (
+            payload.decision_id,
+            payload.tenant,
+            payload.model,
+            payload.model_version,
+            payload.input,
+            payload.output,
+            payload.confidence,
+            trace_id,
+            Json(payload.metadata or {}),
+        ),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise RuntimeError("Unable to persist AI decision")
+    return int(row["id"]), row["created_at"], row["updated_at"]
+
+
+def _replace_ai_decision_context_docs(cur: Any, *, decision_ref_id: int, tenant: str, doc_ids: list[str]) -> None:
+    cur.execute(
+        "DELETE FROM ai_decision_context_docs WHERE decision_ref_id = %s AND tenant = %s",
+        (decision_ref_id, tenant),
+    )
+    for doc_id in doc_ids:
+        cur.execute(
+            """
+            INSERT INTO ai_decision_context_docs (decision_ref_id, tenant, doc_id)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (decision_ref_id, doc_id) DO NOTHING
+            """,
+            (decision_ref_id, tenant, doc_id),
+        )
+
+
+def _replace_ai_decision_context_chunks(cur: Any, *, decision_ref_id: int, tenant: str, chunk_ids: list[str]) -> None:
+    cur.execute(
+        "DELETE FROM ai_decision_context_chunks WHERE decision_ref_id = %s AND tenant = %s",
+        (decision_ref_id, tenant),
+    )
+    for chunk_id in chunk_ids:
+        cur.execute(
+            """
+            INSERT INTO ai_decision_context_chunks (decision_ref_id, tenant, chunk_id)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (decision_ref_id, chunk_id) DO NOTHING
+            """,
+            (decision_ref_id, tenant, chunk_id),
+        )
+
+
+def _query_ai_decisions(cur: Any, *, payload: AIDecisionQueryRequest) -> list[dict[str, Any]]:
+    conditions = ["d.tenant = %s"]
+    params: list[Any] = [payload.tenant]
+
+    if payload.model:
+        conditions.append("d.model = %s")
+        params.append(payload.model)
+    if payload.model_version:
+        conditions.append("d.model_version = %s")
+        params.append(payload.model_version)
+    if payload.query:
+        pattern = f"%{payload.query.strip()}%"
+        conditions.append("(d.input_text ILIKE %s OR d.output_text ILIKE %s)")
+        params.extend([pattern, pattern])
+    if payload.min_confidence is not None:
+        conditions.append("d.confidence >= %s")
+        params.append(payload.min_confidence)
+    if payload.max_confidence is not None:
+        conditions.append("d.confidence <= %s")
+        params.append(payload.max_confidence)
+    if payload.created_from is not None:
+        conditions.append("d.created_at >= %s")
+        params.append(payload.created_from)
+    if payload.created_to is not None:
+        conditions.append("d.created_at <= %s")
+        params.append(payload.created_to)
+    if payload.context_docs:
+        for doc_id in payload.context_docs:
+            conditions.append(
+                "EXISTS (SELECT 1 FROM ai_decision_context_docs filter_docs "
+                "WHERE filter_docs.decision_ref_id = d.id AND filter_docs.doc_id = %s)"
+            )
+            params.append(doc_id)
+
+    where_clause = " AND ".join(conditions)
+    params.append(payload.limit)
+    cur.execute(
+        f"""
+        SELECT
+          d.id,
+          d.decision_id,
+          d.tenant,
+          d.model,
+          d.model_version,
+          d.input_text,
+          d.output_text,
+          d.confidence,
+          d.trace_id,
+          d.metadata,
+          d.created_at,
+          d.updated_at,
+          COALESCE(array_agg(DISTINCT cd.doc_id) FILTER (WHERE cd.doc_id IS NOT NULL), ARRAY[]::TEXT[]) AS context_docs,
+          COALESCE(array_agg(DISTINCT cc.chunk_id) FILTER (WHERE cc.chunk_id IS NOT NULL), ARRAY[]::TEXT[]) AS context_chunks
+        FROM ai_decisions d
+        LEFT JOIN ai_decision_context_docs cd ON cd.decision_ref_id = d.id
+        LEFT JOIN ai_decision_context_chunks cc ON cc.decision_ref_id = d.id
+        WHERE {where_clause}
+        GROUP BY d.id
+        ORDER BY d.created_at DESC
+        LIMIT %s
+        """,
+        params,
+    )
+    return cur.fetchall()
+
+
+def _fetch_ai_decision(cur: Any, *, tenant: str, decision_id: str) -> dict[str, Any] | None:
+    cur.execute(
+        """
+        SELECT
+          d.id,
+          d.decision_id,
+          d.tenant,
+          d.model,
+          d.model_version,
+          d.input_text,
+          d.output_text,
+          d.confidence,
+          d.trace_id,
+          d.metadata,
+          d.created_at,
+          d.updated_at,
+          COALESCE(array_agg(DISTINCT cd.doc_id) FILTER (WHERE cd.doc_id IS NOT NULL), ARRAY[]::TEXT[]) AS context_docs,
+          COALESCE(array_agg(DISTINCT cc.chunk_id) FILTER (WHERE cc.chunk_id IS NOT NULL), ARRAY[]::TEXT[]) AS context_chunks
+        FROM ai_decisions d
+        LEFT JOIN ai_decision_context_docs cd ON cd.decision_ref_id = d.id
+        LEFT JOIN ai_decision_context_chunks cc ON cc.decision_ref_id = d.id
+        WHERE d.tenant = %s AND d.decision_id = %s
+        GROUP BY d.id
+        """,
+        (tenant, decision_id),
+    )
+    return cur.fetchone()
+
+
+def _fetch_ai_decision_context_documents(cur: Any, *, tenant: str, decision_ref_id: int) -> list[dict[str, Any]]:
+    cur.execute(
+        """
+        SELECT d.doc_id, d.source_uri, d.mime_type, d.size_bytes, d.updated_at
+        FROM ai_decision_context_docs c
+        JOIN documents d ON d.doc_id = c.doc_id
+        WHERE c.decision_ref_id = %s AND c.tenant = %s AND d.tenant = %s
+        ORDER BY d.doc_id ASC
+        """,
+        (decision_ref_id, tenant, tenant),
+    )
+    return cur.fetchall()
+
+
+def _fetch_ai_decision_context_chunks(cur: Any, *, tenant: str, decision_ref_id: int) -> list[dict[str, Any]]:
+    cur.execute(
+        """
+        SELECT ch.chunk_id, ch.doc_id, ch.chunk_index, ch.token_count, LEFT(ch.chunk_text, 280) AS preview
+        FROM ai_decision_context_chunks c
+        JOIN chunks ch ON ch.chunk_id = c.chunk_id
+        WHERE c.decision_ref_id = %s AND c.tenant = %s AND ch.tenant = %s
+        ORDER BY ch.doc_id ASC, ch.chunk_index ASC
+        """,
+        (decision_ref_id, tenant, tenant),
+    )
+    return cur.fetchall()
+
+
+def _map_ai_decision_row(row: dict[str, Any]) -> AIDecisionRecord:
+    metadata = row.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+    return AIDecisionRecord(
+        decision_id=str(row["decision_id"]),
+        tenant=str(row["tenant"]),
+        model=str(row["model"]),
+        model_version=row.get("model_version"),
+        input=str(row["input_text"]),
+        output=str(row["output_text"]),
+        confidence=row.get("confidence"),
+        trace_id=str(row["trace_id"]),
+        metadata=metadata,
+        context_docs=[str(item) for item in (row.get("context_docs") or [])],
+        context_chunks=[str(item) for item in (row.get("context_chunks") or [])],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
     )
 
 

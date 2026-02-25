@@ -7,7 +7,7 @@ Upload a document, convert it into structured knowledge (chunks, entities, embed
 
 ## Repository layout
 - `spec/project.yaml`: single source of truth for project direction and infrastructure contract
-- `sql/schema.sql`: canonical relational schema (`documents`, `jobs`, `chunks`, `entities`)
+- `sql/schema.sql`: canonical relational schema (`documents`, `jobs`, `chunks`, `entities`, `ai_decisions`, decision context tables)
 - `services/ingestion_api_service`: ingest API (`/v1/ingest`, `/v1/ingest/complete`, `/v1/doc/{id}`)
 - `services/document_processor_service`: parser/chunker/embedder/DB writer (`/v1/process`, `/v1/process/pubsub`)
 - `services/rag_query_service`: retrieval + answer with citations (`/v1/query`)
@@ -163,3 +163,34 @@ python scripts/check_benchmark_gate.py --spec spec/project.yaml --report reports
 ```
 - Full operational details:
   - `docs/p4-cicd.md`
+
+## P4.0 AI Decision Trail
+- Register an AI decision linked to existing context documents/chunks:
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decision_id":"d-001",
+    "model":"gpt-4",
+    "model_version":"2024-01",
+    "input":"customer request payload",
+    "output":"approved",
+    "confidence":0.94,
+    "context_docs":["default::bench-alpha-v1","default::bench-beta-v1"],
+    "tenant":"default",
+    "trace_id":"'"$(uuidgen)"'"
+  }'
+```
+- Query decisions with tenant/model/text filters:
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/query" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"tenant":"default","model":"gpt-4","query":"approved","limit":20}'
+```
+- Generate a regulator-friendly decision trail report:
+```bash
+curl -sS -H "Authorization: Bearer ${TOKEN}" \
+  "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/d-001/report?tenant=default"
+```

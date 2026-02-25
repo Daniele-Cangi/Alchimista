@@ -1,4 +1,6 @@
-from services.shared.contracts import IngestMessage, QueryAnswer
+import pytest
+
+from services.shared.contracts import AIDecisionIngestRequest, IngestMessage, QueryAnswer
 
 
 def test_ingest_message_contract() -> None:
@@ -24,3 +26,35 @@ def test_query_answer_requires_citations() -> None:
         }
     )
     assert answer.citations[0].doc_id == "d1"
+
+
+def test_ai_decision_contract_normalizes_context_ids() -> None:
+    payload = {
+        "decision_id": "d-001",
+        "model": "gpt-4",
+        "model_version": "2024-01",
+        "input": "case input",
+        "output": "approved",
+        "confidence": 0.94,
+        "context_docs": ["doc_id_1", " doc_id_1 ", "doc_id_2"],
+        "context_chunks": ["chunk_1", "chunk_1"],
+        "tenant": "vendor-x",
+        "trace_id": "trace-1",
+    }
+    model = AIDecisionIngestRequest.model_validate(payload)
+    assert model.context_docs == ["doc_id_1", "doc_id_2"]
+    assert model.context_chunks == ["chunk_1"]
+
+
+def test_ai_decision_contract_rejects_empty_context_doc_ids() -> None:
+    with pytest.raises(ValueError):
+        AIDecisionIngestRequest.model_validate(
+            {
+                "decision_id": "d-001",
+                "model": "gpt-4",
+                "input": "case input",
+                "output": "approved",
+                "context_docs": ["doc_id_1", " "],
+                "tenant": "vendor-x",
+            }
+        )
