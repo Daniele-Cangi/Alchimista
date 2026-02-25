@@ -252,7 +252,7 @@ p0_p1_progress:
   p3_1_benchmark: done
   p3_2_retrieval_real: done
   p3_3_enterprise_auth: done
-  p3_4_cicd_discipline: pending
+  p3_4_cicd_discipline: in_progress
 
 p3_parallel_execution:
   p3_2_retrieval_real:
@@ -287,6 +287,19 @@ p3_parallel_execution:
       readyz_ingestion_http: 200
       noauth_rag_query_http: 401
       noauth_ingestion_doc_http: 401
+  p3_4_cicd_discipline:
+    status: in_progress
+    workflows:
+      - .github/workflows/ci.yml
+      - .github/workflows/benchmark-gate.yml
+      - .github/workflows/deploy-cloud-run.yml
+    deploy_script: scripts/deploy_cloud_run_service.sh
+    benchmark_gate_script: scripts/check_benchmark_gate.py
+    pending_repo_secrets:
+      - GCP_WORKLOAD_IDENTITY_PROVIDER
+      - GCP_DEPLOY_SERVICE_ACCOUNT
+      - AUTH0_CLIENT_ID
+      - AUTH0_CLIENT_SECRET
 
 security_hardening:
   dedicated_service_accounts_enabled: true

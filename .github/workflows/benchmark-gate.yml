@@ -1,0 +1,69 @@
+name: benchmark-gate
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 5 * * *"
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AUTH0_DOMAIN: alchimista.eu.auth0.com
+      AUTH0_AUDIENCE: https://api.alchimista.ai
+      BENCHMARK_TENANT: default
+      INGEST_URL: https://ingestion-api-service-pe7qslbcvq-ez.a.run.app
+      PROCESSOR_URL: https://document-processor-service-pe7qslbcvq-ez.a.run.app
+      RAG_URL: https://rag-query-service-pe7qslbcvq-ez.a.run.app
+      AUTH0_CLIENT_ID: ${{ secrets.AUTH0_CLIENT_ID }}
+      AUTH0_CLIENT_SECRET: ${{ secrets.AUTH0_CLIENT_SECRET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r services/requirements-common.txt requests pyyaml
+
+      - name: Validate required secrets
+        run: |
+          if [[ -z "$AUTH0_CLIENT_ID" || -z "$AUTH0_CLIENT_SECRET" ]]; then
+            echo "Missing AUTH0_CLIENT_ID or AUTH0_CLIENT_SECRET repository secrets"
+            exit 1
+          fi
+
+      - name: Mint bearer token
+        id: auth
+        run: |
+          TOKEN="$(./scripts/get_auth0_m2m_token.sh "$AUTH0_DOMAIN" "$AUTH0_CLIENT_ID" "$AUTH0_CLIENT_SECRET" "$AUTH0_AUDIENCE")"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Run benchmark
+        env:
+          BENCHMARK_BEARER_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          ./scripts/run_p3_benchmark.py \
+            --dataset benchmark/dataset_v1.json \
+            --output-dir reports/benchmarks \
+            --ingest-url "$INGEST_URL" \
+            --processor-url "$PROCESSOR_URL" \
+            --rag-url "$RAG_URL"
+
+      - name: Enforce gates from spec
+        run: |
+          python scripts/check_benchmark_gate.py \
+            --spec spec/project.yaml \
+            --report reports/benchmarks/latest.json
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-report
+          path: reports/benchmarks/latest.json

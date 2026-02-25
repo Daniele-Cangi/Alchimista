@@ -1,0 +1,80 @@
+name: deploy-cloud-run
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Service target"
+        type: choice
+        options:
+          - all
+          - ingestion-api-service
+          - document-processor-service
+          - rag-query-service
+        default: all
+      project_id:
+        description: "GCP project id"
+        required: true
+        default: secure-electron-474908-k9
+      region:
+        description: "Cloud Run region"
+        required: true
+        default: europe-west4
+      image_tag:
+        description: "Optional image tag (defaults to commit SHA)"
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PROJECT_ID: ${{ inputs.project_id }}
+      REGION: ${{ inputs.region }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ inputs.project_id }}
+
+      - name: Resolve deploy set
+        id: matrix
+        run: |
+          TARGET="${{ inputs.target }}"
+          if [[ "$TARGET" == "all" ]]; then
+            echo "services=ingestion-api-service document-processor-service rag-query-service" >> "$GITHUB_OUTPUT"
+          else
+            echo "services=$TARGET" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and deploy services
+        run: |
+          TAG_INPUT="${{ inputs.image_tag }}"
+          if [[ -z "$TAG_INPUT" ]]; then
+            TAG_INPUT="${GITHUB_SHA::12}"
+          fi
+
+          for svc in ${{ steps.matrix.outputs.services }}; do
+            ./scripts/deploy_cloud_run_service.sh "$svc" "$PROJECT_ID" "$REGION" "${TAG_INPUT}-${svc}"
+          done
+
+      - name: Post-deploy readiness checks
+        run: |
+          for svc in ${{ steps.matrix.outputs.services }}; do
+            url="$(gcloud run services describe "$svc" --project "$PROJECT_ID" --region "$REGION" --format='value(status.url)')"
+            curl -fsS "${url}/v1/readyz" >/dev/null
+            echo "readyz_ok ${svc} ${url}"
+          done

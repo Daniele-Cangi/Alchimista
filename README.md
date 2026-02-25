@@ -130,3 +130,19 @@ TOKEN="$(./scripts/get_auth0_m2m_token.sh \
 ```bash
 BENCHMARK_BEARER_TOKEN='REPLACE_ME' ./scripts/run_p3_benchmark.py
 ```
+
+## P3.4 CI/CD
+- CI workflows:
+  - `.github/workflows/ci.yml`
+  - `.github/workflows/benchmark-gate.yml`
+  - `.github/workflows/deploy-cloud-run.yml`
+- Deploy one service from terminal:
+```bash
+./scripts/deploy_cloud_run_service.sh ingestion-api-service secure-electron-474908-k9 europe-west4
+```
+- Enforce benchmark gate on latest report:
+```bash
+python scripts/check_benchmark_gate.py --spec spec/project.yaml --report reports/benchmarks/latest.json
+```
+- Full operational details:
+  - `docs/p4-cicd.md`
