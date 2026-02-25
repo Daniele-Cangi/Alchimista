@@ -1,0 +1,191 @@
+version: 1
+last_updated: "2026-02-25"
+north_star: >-
+  Enterprise Document Processing + RAG Engine: upload document, transform into
+  chunked and indexed knowledge, and answer queries with mandatory citations.
+
+project:
+  id: secure-electron-474908-k9
+  number: "994021588311"
+  region: europe-west4
+  zone: europe-west4-a
+  environment_tag: Production
+
+invariants:
+  - single_source_of_truth_spec
+  - stable_contracts_pubsub_http_sql
+  - idempotent_reprocessing_by_doc_id_and_hash
+  - rag_answers_must_include_citations
+  - traceability_with_trace_id_and_job_id
+
+storage:
+  existing:
+    run_sources:
+      name: run-sources-secure-electron-474908-k9-us-central1
+      location: US-CENTRAL1
+      uniform_bucket_level_access: true
+      public_access_prevention: inherited
+      cmek_enabled: false
+    raw_bucket:
+      name: alchimista-raw-994021588311
+      location: EUROPE-WEST4
+      uniform_bucket_level_access: true
+      public_access_prevention: enforced
+      cmek_key: projects/secure-electron-474908-k9/locations/europe-west4/keyRings/alchimista-data-kr/cryptoKeys/alchimista-data-key
+    processed_bucket:
+      name: alchimista-processed-994021588311
+      location: EUROPE-WEST4
+      uniform_bucket_level_access: true
+      public_access_prevention: enforced
+      cmek_key: projects/secure-electron-474908-k9/locations/europe-west4/keyRings/alchimista-data-kr/cryptoKeys/alchimista-data-key
+    reports_bucket:
+      name: alchimista-reports-994021588311
+      location: EUROPE-WEST4
+      uniform_bucket_level_access: true
+      public_access_prevention: enforced
+      cmek_key: projects/secure-electron-474908-k9/locations/europe-west4/keyRings/alchimista-data-kr/cryptoKeys/alchimista-data-key
+  target:
+    raw_bucket:
+      name: alchimista-raw-994021588311
+      required_prefix: raw/
+      cmek_required: true
+      ubla_required: true
+      status: ready
+    processed_bucket:
+      name: alchimista-processed-994021588311
+      required_prefix: processed/
+      cmek_required: true
+      ubla_required: true
+      status: ready
+    reports_bucket:
+      name: alchimista-reports-994021588311
+      required_prefix: reports/
+      cmek_required: true
+      ubla_required: true
+      status: ready
+
+pubsub:
+  ingest_topic:
+    name: doc-ingest-topic
+    full_name: projects/secure-electron-474908-k9/topics/doc-ingest-topic
+    exists: true
+  ingest_subscription:
+    name: doc-ingest-sub
+    full_name: projects/secure-electron-474908-k9/subscriptions/doc-ingest-sub
+    exists: true
+  dead_letter_topic:
+    name: doc-ingest-topic-dlq
+    full_name: projects/secure-electron-474908-k9/topics/doc-ingest-topic-dlq
+    exists: true
+  dead_letter_subscription:
+    name: doc-ingest-topic-dlq-sub
+    full_name: projects/secure-electron-474908-k9/subscriptions/doc-ingest-topic-dlq-sub
+    exists: true
+
+kms:
+  key_ring: projects/secure-electron-474908-k9/locations/europe-west4/keyRings/alchimista-data-kr
+  crypto_key: projects/secure-electron-474908-k9/locations/europe-west4/keyRings/alchimista-data-kr/cryptoKeys/alchimista-data-key
+  rotation_period: 2592000s
+  next_rotation_time: "2026-03-27T10:36:09.094029Z"
+
+sql:
+  instance: alchimista-test-db
+  connection_name: secure-electron-474908-k9:europe-west4:alchimista-test-db
+  database: postgres
+  private_network: projects/secure-electron-474908-k9/global/networks/alchimista-vpc
+  backup_enabled: true
+  pitr_enabled: true
+  deletion_protection_enabled: true
+  app_db_secret: null
+  app_db_secret_exists: false
+
+vector_search:
+  provider: vertex_ai_vector_search
+  index_id: null
+  endpoint_id: null
+  deployed_index_id: null
+  fallback_provider: sql_embedding_scan
+
+runtime_services:
+  ingestion_api_service:
+    target_name: ingestion-api-service
+    expected_endpoints:
+      - POST /v1/ingest
+      - POST /v1/ingest/complete
+      - GET /v1/doc/{id}
+      - GET /v1/healthz
+      - GET /v1/readyz
+  document_processor_service:
+    target_name: document-processor-service
+    expected_endpoints:
+      - POST /v1/process
+      - POST /v1/process/pubsub
+      - GET /v1/healthz
+      - GET /v1/readyz
+  rag_query_service:
+    target_name: rag-query-service
+    expected_endpoints:
+      - POST /v1/query
+      - GET /v1/healthz
+      - GET /v1/readyz
+
+service_accounts:
+  current_runtime_default: 994021588311-compute@developer.gserviceaccount.com
+  target_dedicated:
+    ingestion_api_service: "TODO-create"
+    document_processor_service: "TODO-create"
+    rag_query_service: "TODO-create"
+  least_privilege_target_roles:
+    ingestion_api_service:
+      - roles/storage.objectCreator
+      - roles/storage.objectViewer
+      - roles/pubsub.publisher
+      - roles/cloudsql.client
+      - roles/secretmanager.secretAccessor
+    document_processor_service:
+      - roles/storage.objectViewer
+      - roles/storage.objectCreator
+      - roles/pubsub.subscriber
+      - roles/pubsub.publisher
+      - roles/cloudsql.client
+      - roles/secretmanager.secretAccessor
+    rag_query_service:
+      - roles/cloudsql.client
+      - roles/secretmanager.secretAccessor
+
+contracts:
+  pubsub_ingest_message:
+    required_json: |
+      {
+        "id": "doc_id",
+        "uri": "gs://bucket/raw/doc.pdf",
+        "type": "application/pdf",
+        "size": 123,
+        "tenant": "default",
+        "ts": "ISO8601",
+        "trace_id": "uuid"
+      }
+  sql_job_status:
+    statuses:
+      - QUEUED
+      - RUNNING
+      - SUCCEEDED
+      - FAILED
+  query_response:
+    required_json: |
+      {
+        "answers": [
+          {
+            "text": "...",
+            "score": 0.87,
+            "citations": [
+              {"doc_id": "...", "chunk_id": "..."}
+            ]
+          }
+        ]
+      }
+
+p0_p1_progress:
+  p0_direction_lock: done
+  p1_vertical_slice: in_progress
+  p2_hardening: pending

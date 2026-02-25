@@ -1,0 +1,57 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+
+def get_env(name: str, default: str | None = None, required: bool = False) -> str:
+    value = os.getenv(name, default)
+    if required and (value is None or value == ""):
+        raise RuntimeError(f"Missing required env var: {name}")
+    return value or ""
+
+
+def get_env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or raw == "":
+        return default
+    return int(raw)
+
+
+def get_env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+@dataclass(frozen=True)
+class RuntimeConfig:
+    project_id: str
+    region: str
+    database_url: str
+    raw_bucket: str
+    processed_bucket: str
+    reports_bucket: str
+    ingest_topic: str
+    ingest_dlq_topic: str
+    signed_url_expiration_minutes: int
+    default_tenant: str
+    enforce_storage_hardening: bool
+
+
+
+def load_runtime_config() -> RuntimeConfig:
+    return RuntimeConfig(
+        project_id=get_env("PROJECT_ID", required=True),
+        region=get_env("REGION", "europe-west4"),
+        database_url=get_env("DATABASE_URL", required=True),
+        raw_bucket=get_env("RAW_BUCKET", ""),
+        processed_bucket=get_env("PROCESSED_BUCKET", ""),
+        reports_bucket=get_env("REPORTS_BUCKET", ""),
+        ingest_topic=get_env("INGEST_TOPIC", "doc-ingest-topic"),
+        ingest_dlq_topic=get_env("INGEST_DLQ_TOPIC", "doc-ingest-topic-dlq"),
+        signed_url_expiration_minutes=get_env_int("SIGNED_URL_EXPIRATION_MINUTES", 15),
+        default_tenant=get_env("DEFAULT_TENANT", "default"),
+        enforce_storage_hardening=get_env_bool("ENFORCE_STORAGE_HARDENING", False),
+    )

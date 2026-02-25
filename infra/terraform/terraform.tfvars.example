@@ -1,0 +1,18 @@
+project_id = "secure-electron-474908-k9"
+project_number = "994021588311"
+region = "europe-west4"
+zone = "europe-west4-a"
+bucket_location = "EUROPE-WEST4"
+
+run_service_name = "my-first-app"
+run_image = "us-central1-docker.pkg.dev/secure-electron-474908-k9/cloud-run-source-deploy/my-first-app@sha256:7dc189eadbbc49ebf32d4196b9d02957fa5729fa44601a374f04f5aa7a24dd5f"
+run_service_account = "994021588311-compute@developer.gserviceaccount.com"
+allow_unauthenticated = true
+
+raw_bucket_name = "alchimista-raw-994021588311"
+processed_bucket_name = "alchimista-processed-994021588311"
+reports_bucket_name = "alchimista-reports-994021588311"
+
+ingest_topic_name = "doc-ingest-topic"
+ingest_dlq_topic_name = "doc-ingest-topic-dlq"
+ingest_subscription_name = "doc-ingest-sub"
