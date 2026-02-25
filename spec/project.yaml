@@ -305,6 +305,7 @@ p3_parallel_execution:
       project_roles:
         - roles/run.admin
         - roles/cloudbuild.builds.editor
+        - roles/artifactregistry.reader
         - roles/serviceusage.serviceUsageConsumer
         - roles/storage.objectAdmin
       service_account_user_on:

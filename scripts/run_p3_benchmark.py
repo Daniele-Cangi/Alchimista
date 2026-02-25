@@ -55,7 +55,7 @@ def main() -> int:
 
     for doc in dataset["documents"]:
         doc_alias = str(doc["alias"])
-        doc_id = str(doc["doc_id"])
+        doc_id = _tenant_scoped_doc_id(str(doc["doc_id"]), tenant)
         filename = str(doc["filename"])
         content_type = str(doc.get("content_type", "text/plain"))
         content = _apply_tokens(str(doc["content"]), run_id)
@@ -107,6 +107,7 @@ def main() -> int:
         document_runs.append(
             {
                 "alias": doc_alias,
+                "requested_doc_id": doc_id,
                 "doc_id": ingest["doc_id"],
                 "trace_id": ingest["trace_id"],
                 "processor_status": job_status,
@@ -249,6 +250,12 @@ def main() -> int:
 
 def _apply_tokens(value: str, run_id: str) -> str:
     return value.replace("{{RUN_ID}}", run_id)
+
+
+def _tenant_scoped_doc_id(doc_id: str, tenant: str) -> str:
+    if doc_id.startswith(f"{tenant}::"):
+        return doc_id
+    return f"{tenant}::{doc_id}"
 
 
 def _multipart_ingest(

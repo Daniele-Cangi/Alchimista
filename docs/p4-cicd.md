@@ -29,6 +29,7 @@ The service account referenced by `GCP_DEPLOY_SERVICE_ACCOUNT` must have at leas
 - Project roles:
   - `roles/run.admin`
   - `roles/cloudbuild.builds.editor`
+  - `roles/artifactregistry.reader`
   - `roles/serviceusage.serviceUsageConsumer`
   - `roles/storage.objectAdmin` (Cloud Build source staging bucket access)
 - Service account level role (`roles/iam.serviceAccountUser`) on:

@@ -26,6 +26,7 @@ echo "Configuring project roles for ${DEPLOY_SA}"
 for ROLE in \
   roles/run.admin \
   roles/cloudbuild.builds.editor \
+  roles/artifactregistry.reader \
   roles/serviceusage.serviceUsageConsumer \
   roles/storage.objectAdmin; do
   gcloud projects add-iam-policy-binding "${PROJECT_ID}" \

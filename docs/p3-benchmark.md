@@ -32,6 +32,7 @@ RAG_URL='https://rag-query-service-pe7qslbcvq-ez.a.run.app' \
 Processing mode:
 - Default: `event-driven` (recommended in production, waits on `/v1/doc/{id}` until terminal status).
 - Optional: `direct` (calls `document-processor-service /v1/process` and then waits on status).
+- Benchmark ingest uses tenant-scoped runtime doc IDs (`<tenant>::<dataset_doc_id>`) to avoid cross-tenant ID collisions.
 
 ```bash
 ./scripts/run_p3_benchmark.py \
