@@ -12,6 +12,10 @@ Upload documents and AI decisions, convert them into auditable knowledge (chunks
 - Governance controls for retention policies and legal holds (`/v1/admin/retention-policies`, `/v1/admin/legal-holds`).
 - Retention enforcement engine (`/v1/admin/retention/enforce`) with dry-run, hold-aware deletion, and audit trail of deletion actions.
 
+## License
+This repository is distributed under a proprietary commercial license.
+See `LICENSE`.
+
 ## Repository layout
 - `spec/project.yaml`: single source of truth for project direction and infrastructure contract
 - `sql/schema.sql`: canonical relational schema (`documents`, `jobs`, `chunks`, `entities`, `ai_decisions`, decision context tables)
