@@ -435,17 +435,19 @@ TENANT=default ARTIFACT_TYPE='' DRY_RUN=true LIMIT=200 \
     - maintenance window at `02:10 UTC` on Sunday (`cron: 10 2 * * 0`)
   - delete mode in scheduled maintenance window is controlled by feature flag secret `RETENTION_DELETE_WINDOW_ENABLED`.
   - if the feature flag is missing or different from `true`, scheduled maintenance run falls back to `dry_run=true`.
-  - current environment (`test`) is set to `RETENTION_DELETE_WINDOW_ENABLED=true` (market mode active).
+  - market environment (`prod`) is set to `RETENTION_DELETE_WINDOW_ENABLED=true` (market mode active).
+  - workflow schedule resolves automatically to GitHub environment `prod`; manual runs can still target `test` or `prod`.
   - enable maintenance delete window:
 ```bash
-gh secret set RETENTION_DELETE_WINDOW_ENABLED --env test --body true
+gh secret set RETENTION_DELETE_WINDOW_ENABLED --env prod --body true
 ```
   - disable maintenance delete window:
 ```bash
-gh secret set RETENTION_DELETE_WINDOW_ENABLED --env test --body false
+gh secret set RETENTION_DELETE_WINDOW_ENABLED --env prod --body false
 ```
 - First validated run: `22417582060` (2026-02-25, status `success`).
 - Latest delete validation run: `22417964263` (2026-02-25, `dry_run=false`, status `success`).
+- First `prod` validation run: `22418533597` (2026-02-25, `dry_run=false`, status `success`).
   - Manual delete run example:
 ```bash
 gh workflow run retention-enforce.yml \

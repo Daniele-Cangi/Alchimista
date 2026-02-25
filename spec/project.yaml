@@ -441,6 +441,7 @@ p6_retention_enforcement:
       enabled_value: "true"
       fallback_mode_when_disabled: dry_run
       current_environment_value_test: "true"
+      current_environment_value_prod: "true"
       market_mode_enabled_at_utc: "2026-02-25T22:04:42Z"
     validation:
       run_id: "22417582060"
@@ -464,6 +465,19 @@ p6_retention_enforcement:
       retention_mode: manual
       dry_run: false
       trace_id: "a8653ac0-6b6f-4064-886f-fefaa571e3d1"
+      scanned: 3
+      eligible: 0
+      deleted: 0
+      skipped_not_expired: 3
+      skipped_policy_missing: 0
+    latest_prod_validation:
+      run_id: "22418533597"
+      completed_at_utc: "2026-02-25T22:22:47Z"
+      status: success
+      environment: prod
+      retention_mode: manual
+      dry_run: false
+      trace_id: "30263661-42e5-4472-9837-6221f5fb2e47"
       scanned: 3
       eligible: 0
       deleted: 0
@@ -522,7 +536,9 @@ p3_parallel_execution:
       - .github/workflows/retention-enforce.yml
     deploy_script: scripts/deploy_cloud_run_service.sh
     benchmark_gate_script: scripts/check_benchmark_gate.py
-    github_environment: test
+    github_environments:
+      - test
+      - prod
     required_environment_secrets:
       - GCP_WORKLOAD_IDENTITY_PROVIDER
       - GCP_DEPLOY_SERVICE_ACCOUNT

@@ -26,7 +26,7 @@ This stage introduces objective quality gates before release and controlled Clou
   - Manual dispatch supports `dry_run=false` for controlled deletion windows.
 
 ## Required GitHub environment secrets
-- Environment: `test`
+- Environments: `test`, `prod`
 - `GCP_WORKLOAD_IDENTITY_PROVIDER`
 - `GCP_DEPLOY_SERVICE_ACCOUNT`
 - `AUTH0_CLIENT_ID` (M2M app authorized on `https://api.alchimista.ai`)
