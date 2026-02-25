@@ -11,6 +11,7 @@ INGEST_TOPIC="${INGEST_TOPIC:-doc-ingest-topic}"
 DLQ_TOPIC="${DLQ_TOPIC:-doc-ingest-topic-dlq}"
 DLQ_SUBSCRIPTION="${DLQ_SUBSCRIPTION:-doc-ingest-topic-dlq-sub}"
 DB_SECRET="${DB_SECRET:-alchimista-db-url}"
+ADMIN_API_KEY_SECRET="${ADMIN_API_KEY_SECRET:-alchimista-admin-api-key}"
 
 INGEST_SA_ID="${INGEST_SA_ID:-ingestion-api-sa}"
 PROCESSOR_SA_ID="${PROCESSOR_SA_ID:-document-processor-sa}"
@@ -67,6 +68,12 @@ gcloud pubsub subscriptions add-iam-policy-binding "$DLQ_SUBSCRIPTION" \
   --project "$PROJECT_ID" \
   --member="serviceAccount:${INGEST_SA}" \
   --role="roles/pubsub.subscriber" \
+  --quiet >/dev/null || true
+
+gcloud secrets add-iam-policy-binding "$ADMIN_API_KEY_SECRET" \
+  --project "$PROJECT_ID" \
+  --member="serviceAccount:${INGEST_SA}" \
+  --role="roles/secretmanager.secretAccessor" \
   --quiet >/dev/null || true
 
 gcloud iam service-accounts add-iam-policy-binding "$INGEST_SA" \

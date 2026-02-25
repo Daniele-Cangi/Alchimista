@@ -70,6 +70,20 @@ RAG_URL='https://rag-query-service-pe7qslbcvq-ez.a.run.app' \
 ```bash
 ADMIN_API_KEY='REPLACE_ME' MAX_MESSAGES=25 ./scripts/replay_dlq.sh
 ```
+or directly from Secret Manager:
+```bash
+PROJECT_ID='secure-electron-474908-k9' \
+ADMIN_API_KEY_SECRET='alchimista-admin-api-key' \
+MAX_MESSAGES=25 ./scripts/replay_dlq.sh
+```
+- Rotate and bind `ADMIN_API_KEY` through Secret Manager:
+```bash
+./scripts/rotate_admin_api_key_secret.sh secure-electron-474908-k9 europe-west4
+```
+- Apply P2 observability dashboard and alert policies:
+```bash
+./scripts/apply_p2_observability.sh secure-electron-474908-k9 europe-west4
+```
 
 ## Vertex Vector Search operations
 - Provision index + endpoint + deployment (idempotent, waits until active):

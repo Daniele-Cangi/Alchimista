@@ -119,7 +119,7 @@ runtime_services:
   ingestion_api_service:
     target_name: ingestion-api-service
     deployed_url: https://ingestion-api-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: ingestion-api-service-00007-2r6
+    latest_ready_revision: ingestion-api-service-00009-2nq
     expected_endpoints:
       - POST /v1/ingest
       - POST /v1/ingest/complete
@@ -217,7 +217,27 @@ security_hardening:
   signed_url_runtime_signing_mode: iam_signblob_via_access_token
   aiplatform_user_role_bound_to_processor_and_rag: true
   dlq_replay_admin_key_configured: true
+  dlq_replay_admin_key_source: secret_manager:alchimista-admin-api-key
   processor_backpressure_guard_enabled: true
+
+observability:
+  dashboard:
+    name: projects/994021588311/dashboards/b595714b-b0ab-4534-ac90-d39c9373f5e3
+    display_name: Alchimista P2 Operations
+  alert_policies_active:
+    - name: projects/secure-electron-474908-k9/alertPolicies/8840730067332886076
+      display_name: Alchimista P2 Ingest Backlog Age
+    - name: projects/secure-electron-474908-k9/alertPolicies/9829802951063327188
+      display_name: Alchimista P2 DLQ Growth
+    - name: projects/secure-electron-474908-k9/alertPolicies/17998058155877203706
+      display_name: Alchimista P2 Processor P95 Latency
+    - name: projects/secure-electron-474908-k9/alertPolicies/883252886433335131
+      display_name: Alchimista P2 Cloud SQL Connections
+  legacy_policies_disabled:
+    - name: projects/secure-electron-474908-k9/alertPolicies/13114588826634431855
+      display_name: Pub/Sub Undelivered Messages
+    - name: projects/secure-electron-474908-k9/alertPolicies/431833831792684197
+      display_name: Cloud Run P95 Latency High
 
 validation:
   last_smoke_test_at: "2026-02-25T13:33:28Z"
@@ -242,3 +262,8 @@ validation:
     min_retry_delay: 10s
     max_retry_delay: 300s
     max_delivery_attempts: 5
+  dlq_replay_test:
+    trace_id: 40196d12-850a-4884-b456-40c97b29acf2
+    requested: 1
+    pulled: 0
+    replayed: 0
