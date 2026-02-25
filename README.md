@@ -107,6 +107,18 @@ MAX_MESSAGES=25 ./scripts/replay_dlq.sh
 - Current transitional behavior:
   - `/v1/healthz` and `/v1/readyz` remain open.
   - `/v1/process/pubsub` can remain unauthenticated until Pub/Sub push OIDC is configured.
+- Get an Auth0 M2M access token for Alchimista API:
+```bash
+TOKEN="$(./scripts/get_auth0_m2m_token.sh \
+  alchimista.eu.auth0.com \
+  '<AUTH0_CLIENT_ID>' \
+  '<AUTH0_CLIENT_SECRET>' \
+  'https://api.alchimista.ai')"
+```
+- Run authenticated smoke query:
+```bash
+./scripts/smoke_p3_auth.sh "$TOKEN" default
+```
 
 ## P3.1 Benchmark
 - Dataset baseline: `benchmark/dataset_v1.json`
