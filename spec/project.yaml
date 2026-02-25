@@ -119,7 +119,7 @@ runtime_services:
   ingestion_api_service:
     target_name: ingestion-api-service
     deployed_url: https://ingestion-api-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: ingestion-api-service-00010-fbv
+    latest_ready_revision: ingestion-api-service-00012-bfk
     expected_endpoints:
       - POST /v1/ingest
       - POST /v1/ingest/complete
@@ -130,7 +130,7 @@ runtime_services:
   document_processor_service:
     target_name: document-processor-service
     deployed_url: https://document-processor-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: document-processor-service-00008-wdl
+    latest_ready_revision: document-processor-service-00011-grp
     expected_endpoints:
       - POST /v1/process
       - POST /v1/process/pubsub
@@ -139,7 +139,7 @@ runtime_services:
   rag_query_service:
     target_name: rag-query-service
     deployed_url: https://rag-query-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: rag-query-service-00009-kz9
+    latest_ready_revision: rag-query-service-00012-m5f
     expected_endpoints:
       - POST /v1/query
       - GET /v1/healthz
@@ -251,7 +251,7 @@ p0_p1_progress:
   p2_hardening: done
   p3_1_benchmark: done
   p3_2_retrieval_real: done
-  p3_3_enterprise_auth: in_progress
+  p3_3_enterprise_auth: done
   p3_4_cicd_discipline: pending
 
 p3_parallel_execution:
@@ -264,9 +264,16 @@ p3_parallel_execution:
     last_validation_run: "20260225T144807Z"
     latest_mrr: 0.8333333333333334
   p3_3_enterprise_auth:
-    status: in_progress
+    status: done
     mode: jwt_oidc_bearer_verification
     rollout_script: scripts/apply_p3_auth_oidc.sh
+    issuer: https://alchimista.eu.auth0.com/
+    audience: https://api.alchimista.ai
+    tenant_claims:
+      - https://alchimista.ai/tenant
+      - tenant
+      - tenants
+    require_tenant_claim: true
     protected_endpoints:
       - ingestion-api-service: /v1/ingest /v1/ingest/complete /v1/doc/{id} /v1/admin/replay-dlq
       - rag-query-service: /v1/query
@@ -275,6 +282,11 @@ p3_parallel_execution:
       - /v1/healthz
       - /v1/readyz
       - /v1/process/pubsub (until Pub/Sub push OIDC token is configured)
+    validation:
+      checked_at_utc: "2026-02-25T15:00:00Z"
+      readyz_ingestion_http: 200
+      noauth_rag_query_http: 401
+      noauth_ingestion_doc_http: 401
 
 security_hardening:
   dedicated_service_accounts_enabled: true
