@@ -223,6 +223,22 @@ benchmark:
     interpretation:
       - baseline_is_functional_but_ranking_quality_is_low_for_top1
       - deterministic_hash_embedding_is_non_semantic_placeholder
+  p3_2_validation:
+    run_id: "20260225T144807Z"
+    report_path: reports/benchmarks/latest.json
+    generated_at_utc: "2026-02-25T14:48:22Z"
+    summary:
+      total_queries: 6
+      successful_queries: 6
+      failed_queries: 0
+      error_rate: 0.0
+      citation_coverage: 1.0
+      recall_at_k: 1.0
+      keyword_hit_rate: 1.0
+      mrr: 0.8333333333333334
+    gate_check:
+      min_mrr_required: 0.65
+      min_mrr_passed: true
   gates:
     min_success_rate: 0.99
     min_citation_coverage: 1.0
@@ -234,17 +250,19 @@ p0_p1_progress:
   p1_vertical_slice: done
   p2_hardening: done
   p3_1_benchmark: done
-  p3_2_retrieval_real: in_progress
+  p3_2_retrieval_real: done
   p3_3_enterprise_auth: in_progress
   p3_4_cicd_discipline: pending
 
 p3_parallel_execution:
   p3_2_retrieval_real:
-    status: in_progress
+    status: done
     embedding_backend: vertex_text_embedding_with_dimension_projection
     target_embedding_dimensions: 128
     rollout_script: scripts/enable_vertex_backend.sh
     success_gate: benchmark.gates.min_mrr >= 0.65
+    last_validation_run: "20260225T144807Z"
+    latest_mrr: 0.8333333333333334
   p3_3_enterprise_auth:
     status: in_progress
     mode: jwt_oidc_bearer_verification
