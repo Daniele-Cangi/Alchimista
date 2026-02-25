@@ -56,5 +56,11 @@ Objects are deleted from GCS with generation precondition when generation metada
 
 ## Automation
 - GitHub workflow: `.github/workflows/retention-enforce.yml`
-- Schedule: daily at `03:40 UTC` (`dry_run=true`)
+- Schedule:
+  - daily at `03:40 UTC` (`cron: 40 3 * * *`, `dry_run=true`)
+  - maintenance window at `02:10 UTC` on Sunday (`cron: 10 2 * * 0`)
+- Maintenance delete window feature flag:
+  - GitHub Environment secret `RETENTION_DELETE_WINDOW_ENABLED`
+  - only when set to `true`, Sunday maintenance schedule runs with `dry_run=false`
+  - otherwise it degrades safely to `dry_run=true`
 - Manual dispatch supports deletion mode (`dry_run=false`) for controlled maintenance windows.

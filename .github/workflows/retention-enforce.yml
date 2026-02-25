@@ -39,6 +39,7 @@ on:
         default: true
   schedule:
     - cron: "40 3 * * *"
+    - cron: "10 2 * * 0"
 
 permissions:
   contents: read
@@ -56,11 +57,13 @@ jobs:
       LIMIT: ${{ github.event.inputs.limit || '200' }}
       INGEST_URL: ${{ github.event.inputs.ingest_url || 'https://ingestion-api-service-pe7qslbcvq-ez.a.run.app' }}
       FAIL_ON_ERRORS: ${{ github.event.inputs.fail_on_errors || 'true' }}
+      MAINTENANCE_DELETE_CRON: "10 2 * * 0"
       AUTH0_DOMAIN: alchimista.eu.auth0.com
       AUTH0_AUDIENCE: https://api.alchimista.ai
       AUTH0_CLIENT_ID: ${{ secrets.AUTH0_CLIENT_ID }}
       AUTH0_CLIENT_SECRET: ${{ secrets.AUTH0_CLIENT_SECRET }}
       ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+      RETENTION_DELETE_WINDOW_ENABLED: ${{ secrets.RETENTION_DELETE_WINDOW_ENABLED }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,11 +92,30 @@ jobs:
 
       - name: Resolve run mode
         run: |
-          if [[ "${{ github.event_name }}" == "schedule" ]]; then
-            echo "DRY_RUN=true" >> "$GITHUB_ENV"
-          else
+          EVENT_NAME="${{ github.event_name }}"
+          if [[ "$EVENT_NAME" != "schedule" ]]; then
+            echo "RETENTION_MODE=manual" >> "$GITHUB_ENV"
             echo "DRY_RUN=${{ github.event.inputs.dry_run || 'true' }}" >> "$GITHUB_ENV"
+            exit 0
           fi
+
+          SCHEDULE_EXPR="${{ github.event.schedule }}"
+          FLAG="$(echo "${RETENTION_DELETE_WINDOW_ENABLED:-false}" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$SCHEDULE_EXPR" == "$MAINTENANCE_DELETE_CRON" && "$FLAG" == "true" ]]; then
+            echo "RETENTION_MODE=scheduled_delete_window" >> "$GITHUB_ENV"
+            echo "DRY_RUN=false" >> "$GITHUB_ENV"
+          else
+            echo "RETENTION_MODE=scheduled_dry_run" >> "$GITHUB_ENV"
+            echo "DRY_RUN=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Show resolved mode
+        run: |
+          echo "retention_mode=${RETENTION_MODE}"
+          echo "dry_run=${DRY_RUN}"
+          echo "tenant=${TENANT}"
+          echo "artifact_type=${ARTIFACT_TYPE:-<all>}"
+          echo "limit=${LIMIT}"
 
       - name: Mint Auth0 M2M token
         run: |

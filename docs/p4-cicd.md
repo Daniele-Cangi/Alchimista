@@ -22,6 +22,7 @@ This stage introduces objective quality gates before release and controlled Clou
 - `.github/workflows/retention-enforce.yml`
   - Manual and scheduled (`daily`) governance workflow for `POST /v1/admin/retention/enforce`.
   - Scheduled mode is safe by default (`dry_run=true`).
+  - Includes an optional weekly maintenance cron (`Sunday 02:10 UTC`) that runs with `dry_run=false` only if feature flag is enabled.
   - Manual dispatch supports `dry_run=false` for controlled deletion windows.
 
 ## Required GitHub environment secrets
@@ -31,6 +32,7 @@ This stage introduces objective quality gates before release and controlled Clou
 - `AUTH0_CLIENT_ID` (M2M app authorized on `https://api.alchimista.ai`)
 - `AUTH0_CLIENT_SECRET`
 - `ADMIN_API_KEY` (optional but recommended; if absent, workflow attempts Secret Manager fallback)
+- `RETENTION_DELETE_WINDOW_ENABLED` (optional; set `true` to activate scheduled delete window, otherwise scheduled runs remain dry-run)
 
 ## Required GCP IAM for deploy service account
 The service account referenced by `GCP_DEPLOY_SERVICE_ACCOUNT` must have at least:

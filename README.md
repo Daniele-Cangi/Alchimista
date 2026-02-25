@@ -430,7 +430,19 @@ TENANT=default ARTIFACT_TYPE='' DRY_RUN=true LIMIT=200 \
 ./scripts/run_p6_retention_enforcement.sh
 ```
 - Scheduled automation:
-  - `.github/workflows/retention-enforce.yml` runs daily at `03:40 UTC` in `dry_run=true`.
+  - `.github/workflows/retention-enforce.yml` runs:
+    - daily dry-run at `03:40 UTC` (`cron: 40 3 * * *`)
+    - maintenance window at `02:10 UTC` on Sunday (`cron: 10 2 * * 0`)
+  - delete mode in scheduled maintenance window is controlled by feature flag secret `RETENTION_DELETE_WINDOW_ENABLED`.
+  - if the feature flag is missing or different from `true`, scheduled maintenance run falls back to `dry_run=true`.
+  - enable maintenance delete window:
+```bash
+gh secret set RETENTION_DELETE_WINDOW_ENABLED --env test --body true
+```
+  - disable maintenance delete window:
+```bash
+gh secret set RETENTION_DELETE_WINDOW_ENABLED --env test --body false
+```
   - First validated run: `22417582060` (2026-02-25, status `success`).
   - Manual delete run example:
 ```bash

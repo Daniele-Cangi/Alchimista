@@ -291,6 +291,7 @@ p0_p1_progress:
   p5_governance_retention_immutability_connectors: done
   p6_retention_enforcement_engine: done
   p6_1_retention_scheduler_automation: done
+  p6_2_maintenance_delete_window_control: done
 
 p4_audit_trail_engine:
   status: p4_4_done
@@ -431,8 +432,14 @@ p6_retention_enforcement:
   automation:
     workflow: .github/workflows/retention-enforce.yml
     helper_script: scripts/run_p6_retention_enforcement.sh
-    schedule_utc: "40 3 * * *"
+    schedule_utc:
+      daily_dry_run: "40 3 * * *"
+      maintenance_window: "10 2 * * 0"
     default_scheduled_mode: dry_run
+    maintenance_window_delete_mode:
+      feature_flag_secret: RETENTION_DELETE_WINDOW_ENABLED
+      enabled_value: "true"
+      fallback_mode_when_disabled: dry_run
     validation:
       run_id: "22417582060"
       completed_at_utc: "2026-02-25T21:53:50Z"
@@ -502,6 +509,7 @@ p3_parallel_execution:
       - AUTH0_CLIENT_SECRET
     optional_environment_secrets:
       - ADMIN_API_KEY
+      - RETENTION_DELETE_WINDOW_ENABLED
     deploy_service_account_requirements:
       project_roles:
         - roles/run.admin
