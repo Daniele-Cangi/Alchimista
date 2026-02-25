@@ -119,17 +119,18 @@ runtime_services:
   ingestion_api_service:
     target_name: ingestion-api-service
     deployed_url: https://ingestion-api-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: ingestion-api-service-00003-smt
+    latest_ready_revision: ingestion-api-service-00007-2r6
     expected_endpoints:
       - POST /v1/ingest
       - POST /v1/ingest/complete
+      - POST /v1/admin/replay-dlq
       - GET /v1/doc/{id}
       - GET /v1/healthz
       - GET /v1/readyz
   document_processor_service:
     target_name: document-processor-service
     deployed_url: https://document-processor-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: document-processor-service-00005-j79
+    latest_ready_revision: document-processor-service-00007-4mv
     expected_endpoints:
       - POST /v1/process
       - POST /v1/process/pubsub
@@ -138,7 +139,7 @@ runtime_services:
   rag_query_service:
     target_name: rag-query-service
     deployed_url: https://rag-query-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: rag-query-service-00007-q4n
+    latest_ready_revision: rag-query-service-00008-wj4
     expected_endpoints:
       - POST /v1/query
       - GET /v1/healthz
@@ -156,6 +157,7 @@ service_accounts:
       - roles/storage.objectViewer
       - roles/storage.bucketViewer
       - roles/pubsub.publisher
+      - roles/pubsub.subscriber (doc-ingest-topic-dlq-sub for replay)
       - roles/cloudsql.client
       - roles/secretmanager.secretAccessor
       - roles/iam.serviceAccountTokenCreator (self-binding for signed URLs)
@@ -214,11 +216,29 @@ security_hardening:
   buckets_cmek_ubla_enforced: true
   signed_url_runtime_signing_mode: iam_signblob_via_access_token
   aiplatform_user_role_bound_to_processor_and_rag: true
+  dlq_replay_admin_key_configured: true
+  processor_backpressure_guard_enabled: true
 
 validation:
-  last_smoke_test_at: "2026-02-25T13:11:38Z"
+  last_smoke_test_at: "2026-02-25T13:33:28Z"
   smoke_test_result: passed
   sample_doc_id: d4f5b676-e92d-4def-9d75-82e1f454f922
-  sample_trace_id: 313b7e61-b4fe-40f2-83d2-9a55dd3b0cb8
+  sample_trace_id: 7b86ce59-5234-477f-97f8-6e832828a495
   ingest_subscription_push_endpoint: https://document-processor-service-pe7qslbcvq-ez.a.run.app/v1/process/pubsub
   runtime_vector_backend_active: vertex_ai_vector_search
+  processor_runtime_limits:
+    max_instances: 4
+    concurrency: 4
+    timeout_seconds: 900
+    max_inflight: 8
+  rag_runtime_limits:
+    max_instances: 8
+    concurrency: 40
+  ingestion_runtime_limits:
+    max_instances: 10
+    concurrency: 80
+  pubsub_retry_budget:
+    ack_deadline_seconds: 60
+    min_retry_delay: 10s
+    max_retry_delay: 300s
+    max_delivery_attempts: 5

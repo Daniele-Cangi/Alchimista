@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import json
 import os
 from datetime import datetime, timezone
@@ -18,9 +19,10 @@ from services.shared.db import (
     upsert_document,
     upsert_process_job,
 )
+from services.shared.dlq_replay import parse_ingest_message_from_dlq
 from services.shared.hashing import sha256_bytes
 from services.shared.logging_utils import log_event
-from services.shared.pubsub_client import PubSubPublisher
+from services.shared.pubsub_client import PubSubPublisher, PubSubSubscriber
 from services.shared.storage import StorageClient, safe_object_name
 
 
@@ -28,6 +30,7 @@ config = load_runtime_config()
 app = FastAPI(title="ingestion-api-service", version="0.1.0")
 storage_client = StorageClient(config.project_id)
 publisher = PubSubPublisher(config.project_id)
+subscriber = PubSubSubscriber(config.project_id)
 
 
 class IngestSignedUrlRequest(BaseModel):
@@ -61,6 +64,20 @@ class IngestResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
+
+
+class DlqReplayRequest(BaseModel):
+    max_messages: int = Field(default=10, ge=1, le=200)
+
+
+class DlqReplayResponse(BaseModel):
+    trace_id: str
+    requested: int
+    pulled: int
+    replayed: int
+    acked: int
+    failed: int
+    replayed_doc_ids: list[str]
 
 
 @app.get("/v1/healthz", response_model=HealthResponse)
@@ -190,6 +207,86 @@ def get_document_status(doc_id: str, tenant: str = config.default_tenant) -> Doc
         content_hash=row.get("content_hash"),
         updated_at=row["updated_at"],
         job=job,
+    )
+
+
+@app.post("/v1/admin/replay-dlq", response_model=DlqReplayResponse)
+def replay_dlq(request: DlqReplayRequest, raw_request: Request) -> DlqReplayResponse:
+    _require_admin_api_key(raw_request)
+    trace_id = str(uuid4())
+    try:
+        received = subscriber.pull(config.ingest_dlq_subscription, request.max_messages)
+    except Exception as exc:
+        log_event(
+            "error",
+            "dlq_replay_pull_failed",
+            trace_id=trace_id,
+            subscription=config.ingest_dlq_subscription,
+            error=str(exc),
+        )
+        raise HTTPException(status_code=502, detail="Unable to read DLQ subscription") from exc
+    replayed_doc_ids: list[str] = []
+    ack_ids: list[str] = []
+    failed = 0
+
+    for item in received:
+        try:
+            message = parse_ingest_message_from_dlq(item.message.data)
+            message_id = _publish_ingest_message(message)
+            replayed_doc_ids.append(message.id)
+            ack_ids.append(item.ack_id)
+            log_event(
+                "info",
+                "dlq_message_replayed",
+                trace_id=trace_id,
+                doc_id=message.id,
+                tenant=message.tenant,
+                dlq_message_id=item.message.message_id,
+                replay_message_id=message_id,
+                subscription=config.ingest_dlq_subscription,
+            )
+        except Exception as exc:
+            failed += 1
+            log_event(
+                "error",
+                "dlq_message_replay_failed",
+                trace_id=trace_id,
+                dlq_message_id=item.message.message_id,
+                subscription=config.ingest_dlq_subscription,
+                error=str(exc),
+            )
+
+    if ack_ids:
+        try:
+            subscriber.acknowledge(config.ingest_dlq_subscription, ack_ids)
+        except Exception as exc:
+            log_event(
+                "error",
+                "dlq_replay_ack_failed",
+                trace_id=trace_id,
+                subscription=config.ingest_dlq_subscription,
+                error=str(exc),
+            )
+            raise HTTPException(status_code=502, detail="DLQ replay ack failed") from exc
+
+    log_event(
+        "info",
+        "dlq_replay_completed",
+        trace_id=trace_id,
+        requested=request.max_messages,
+        pulled=len(received),
+        replayed=len(ack_ids),
+        failed=failed,
+        acked=len(ack_ids),
+    )
+    return DlqReplayResponse(
+        trace_id=trace_id,
+        requested=request.max_messages,
+        pulled=len(received),
+        replayed=len(ack_ids),
+        acked=len(ack_ids),
+        failed=failed,
+        replayed_doc_ids=replayed_doc_ids,
     )
 
 
@@ -375,6 +472,14 @@ def _assert_bucket_hardening(bucket_name: str) -> None:
         raise HTTPException(status_code=412, detail="UBLA is required but disabled")
     if not status["default_kms_key_name"]:
         raise HTTPException(status_code=412, detail="CMEK default KMS key is required but missing")
+
+
+def _require_admin_api_key(request: Request) -> None:
+    if not config.admin_api_key:
+        raise HTTPException(status_code=503, detail="ADMIN_API_KEY is not configured")
+    provided = request.headers.get("x-admin-key", "")
+    if not hmac.compare_digest(provided, config.admin_api_key):
+        raise HTTPException(status_code=403, detail="Forbidden")
 
 
 if __name__ == "__main__":

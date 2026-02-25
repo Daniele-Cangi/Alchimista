@@ -38,6 +38,9 @@ class RuntimeConfig:
     signed_url_expiration_minutes: int
     default_tenant: str
     enforce_storage_hardening: bool
+    admin_api_key: str
+    ingest_dlq_subscription: str
+    processor_max_inflight: int
     vector_backend: str
     vertex_index_id: str
     vertex_index_endpoint_id: str
@@ -58,6 +61,9 @@ def load_runtime_config() -> RuntimeConfig:
         signed_url_expiration_minutes=get_env_int("SIGNED_URL_EXPIRATION_MINUTES", 15),
         default_tenant=get_env("DEFAULT_TENANT", "default"),
         enforce_storage_hardening=get_env_bool("ENFORCE_STORAGE_HARDENING", False),
+        admin_api_key=get_env("ADMIN_API_KEY", ""),
+        ingest_dlq_subscription=get_env("INGEST_DLQ_SUBSCRIPTION", "doc-ingest-topic-dlq-sub"),
+        processor_max_inflight=max(1, get_env_int("PROCESSOR_MAX_INFLIGHT", 8)),
         vector_backend=get_env("VECTOR_BACKEND", "sql_embedding_scan"),
         vertex_index_id=get_env("VERTEX_INDEX_ID", ""),
         vertex_index_endpoint_id=get_env("VERTEX_INDEX_ENDPOINT_ID", ""),

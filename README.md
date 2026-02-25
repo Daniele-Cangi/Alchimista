@@ -62,6 +62,14 @@ PROCESSOR_URL='https://document-processor-service-pe7qslbcvq-ez.a.run.app' \
 RAG_URL='https://rag-query-service-pe7qslbcvq-ez.a.run.app' \
 ./scripts/smoke_p1.sh
 ```
+- Apply P2 backpressure limits on Cloud Run + Pub/Sub:
+```bash
+./scripts/apply_p2_backpressure.sh secure-electron-474908-k9 europe-west4
+```
+- Replay messages from DLQ (requires `ADMIN_API_KEY` configured on ingestion service):
+```bash
+ADMIN_API_KEY='REPLACE_ME' MAX_MESSAGES=25 ./scripts/replay_dlq.sh
+```
 
 ## Vertex Vector Search operations
 - Provision index + endpoint + deployment (idempotent, waits until active):

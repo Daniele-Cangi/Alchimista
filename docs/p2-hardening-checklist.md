@@ -3,12 +3,12 @@
 ## Queue reliability
 - [x] Configure subscription on `doc-ingest-topic`
 - [x] Configure dead-letter policy to `doc-ingest-topic-dlq`
-- [ ] Add replay admin endpoint/tool from DLQ to ingest topic
+- [x] Add replay admin endpoint/tool from DLQ to ingest topic (`POST /v1/admin/replay-dlq`, `scripts/replay_dlq.sh`)
 
 ## Backpressure
-- [ ] Set Cloud Run max instances per service
-- [ ] Set Pub/Sub max outstanding messages per worker
-- [ ] Add timeout and retry budget policy
+- [x] Set Cloud Run max instances per service (`scripts/apply_p2_backpressure.sh`)
+- [x] Set per-instance inflight guard in processor (`PROCESSOR_MAX_INFLIGHT`)
+- [x] Add timeout and retry budget policy (Cloud Run timeout + Pub/Sub retry delays + delivery attempts)
 
 ## Security
 - [x] Create dedicated service accounts per service

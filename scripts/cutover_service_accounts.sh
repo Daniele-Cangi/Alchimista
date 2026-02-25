@@ -9,6 +9,7 @@ PROCESSED_BUCKET="${PROCESSED_BUCKET:-alchimista-processed-994021588311}"
 REPORTS_BUCKET="${REPORTS_BUCKET:-alchimista-reports-994021588311}"
 INGEST_TOPIC="${INGEST_TOPIC:-doc-ingest-topic}"
 DLQ_TOPIC="${DLQ_TOPIC:-doc-ingest-topic-dlq}"
+DLQ_SUBSCRIPTION="${DLQ_SUBSCRIPTION:-doc-ingest-topic-dlq-sub}"
 DB_SECRET="${DB_SECRET:-alchimista-db-url}"
 
 INGEST_SA_ID="${INGEST_SA_ID:-ingestion-api-sa}"
@@ -60,6 +61,12 @@ gcloud pubsub topics add-iam-policy-binding "$INGEST_TOPIC" \
   --project "$PROJECT_ID" \
   --member="serviceAccount:${INGEST_SA}" \
   --role="roles/pubsub.publisher" \
+  --quiet >/dev/null || true
+
+gcloud pubsub subscriptions add-iam-policy-binding "$DLQ_SUBSCRIPTION" \
+  --project "$PROJECT_ID" \
+  --member="serviceAccount:${INGEST_SA}" \
+  --role="roles/pubsub.subscriber" \
   --quiet >/dev/null || true
 
 gcloud iam service-accounts add-iam-policy-binding "$INGEST_SA" \

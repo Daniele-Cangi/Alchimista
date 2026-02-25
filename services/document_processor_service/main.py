@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from pypdf import PdfReader
 
+from services.shared.backpressure import InflightGate
 from services.shared.chunking import chunk_text
 from services.shared.config import load_runtime_config
 from services.shared.contracts import IngestMessage, JobStatus, PubSubPushEnvelope
@@ -37,6 +38,7 @@ app = FastAPI(title="document-processor-service", version="0.1.0")
 storage_client = StorageClient(config.project_id)
 publisher = PubSubPublisher(config.project_id)
 vertex_client = build_vertex_client(config)
+inflight_gate = InflightGate(config.processor_max_inflight)
 
 
 class ProcessResponse(BaseModel):
@@ -71,7 +73,7 @@ def readyz() -> HealthResponse:
 
 @app.post("/v1/process", response_model=ProcessResponse)
 def process_direct(message: IngestMessage) -> ProcessResponse:
-    return _process_ingest_message(message)
+    return _process_with_backpressure(message)
 
 
 @app.post("/v1/process/pubsub", response_model=ProcessResponse)
@@ -83,7 +85,25 @@ def process_pubsub(envelope: PubSubPushEnvelope) -> ProcessResponse:
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid Pub/Sub envelope: {exc}") from exc
 
-    return _process_ingest_message(message)
+    return _process_with_backpressure(message)
+
+
+def _process_with_backpressure(message: IngestMessage) -> ProcessResponse:
+    if not inflight_gate.try_enter():
+        log_event(
+            "warning",
+            "processor_backpressure_reject",
+            trace_id=message.trace_id,
+            doc_id=message.id,
+            tenant=message.tenant,
+            active=inflight_gate.active,
+            max_inflight=inflight_gate.limit,
+        )
+        raise HTTPException(status_code=429, detail="Processor busy, retry later")
+    try:
+        return _process_ingest_message(message)
+    finally:
+        inflight_gate.leave()
 
 
 def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
