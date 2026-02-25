@@ -128,6 +128,8 @@ runtime_services:
       - POST /v1/decisions/query
       - POST /v1/decisions/export
       - POST /v1/decisions/bundle
+      - POST /v1/decisions/package
+      - POST /v1/decisions/verify
       - POST /v1/admin/decisions/query
       - GET /v1/decisions/{id}/report
       - GET /v1/doc/{id}
@@ -276,13 +278,16 @@ p0_p1_progress:
   p4_1_audit_query_export_signing: done
   p4_2_audit_export_gcs_and_advanced_filters: done
   p4_3_regulator_bundle_and_admin_cross_tenant: done
+  p4_4_crypto_verify_and_regulator_package: in_progress
 
 p4_audit_trail_engine:
-  status: p4_3_done
+  status: p4_4_in_progress
   write_endpoint: POST /v1/decisions
   query_endpoint: POST /v1/decisions/query
   export_endpoint: POST /v1/decisions/export
   bundle_endpoint: POST /v1/decisions/bundle
+  package_endpoint: POST /v1/decisions/package
+  verify_endpoint: POST /v1/decisions/verify
   admin_query_endpoint: POST /v1/admin/decisions/query
   report_endpoint: GET /v1/decisions/{id}/report
   sql_tables:
@@ -322,6 +327,18 @@ p4_audit_trail_engine:
     object_prefix: reports/{tenant}/audit/bundles/
     supports_case_id_and_regulator_ref: true
     includes_per_decision_report_hashes: true
+  regulator_package:
+    object_prefix: reports/{tenant}/audit/packages/{package_id}/
+    manifest_file: manifest.json
+    evidence_files:
+      - decision_reports/*.json
+      - policy_snapshot.json (optional)
+  cryptographic_verification:
+    endpoint: POST /v1/decisions/verify
+    verifies:
+      - report_hash_sha256
+      - signature_hmac_sha256
+    default_tenant_path_guard: true
 
 p3_parallel_execution:
   p3_2_retrieval_real:

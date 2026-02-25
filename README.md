@@ -164,7 +164,7 @@ python scripts/check_benchmark_gate.py --spec spec/project.yaml --report reports
 - Full operational details:
   - `docs/p4-cicd.md`
 
-## P4 Audit Trail Engine (P4.3)
+## P4 Audit Trail Engine (P4.4)
 - Register an AI decision linked to existing context documents/chunks:
 ```bash
 curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions" \
@@ -233,6 +233,31 @@ curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decis
     "regulator_ref":"eu-ai-act-art-12",
     "include_context":true,
     "include_policy_snapshot":true
+  }'
+```
+- Build a regulator package with manifest + evidence files:
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/package" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":"default",
+    "decision_ids":["d-001"],
+    "case_id":"kyc-case-001",
+    "regulator_ref":"eu-ai-act-art-12",
+    "include_context":true,
+    "include_policy_snapshot":true
+  }'
+```
+- Verify integrity/signature of an audit artifact already stored in GCS:
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/verify" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":"default",
+    "gs_uri":"gs://alchimista-reports-994021588311/reports/default/audit/packages/pkg-.../manifest.json",
+    "strict_tenant_path":true
   }'
 ```
 - Admin-only cross-tenant decision query (requires `x-admin-key`):

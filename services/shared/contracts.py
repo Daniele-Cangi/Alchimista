@@ -226,6 +226,65 @@ class AIDecisionBundleResponse(BaseModel):
     signature: str | None = None
 
 
+class AIDecisionPackageRequest(AIDecisionQueryRequest):
+    include_context: bool = True
+    include_policy_snapshot: bool = True
+    package_id: str | None = None
+    case_id: str | None = None
+    regulator_ref: str | None = None
+    object_prefix: str | None = None
+
+
+class AIDecisionPackageResponse(BaseModel):
+    trace_id: str
+    package_id: str
+    generated_at: datetime
+    tenant: str
+    total: int
+    returned: int
+    manifest_gs_uri: str
+    files_count: int
+    report_hash_sha256: str
+    signature_alg: str
+    signature_key_id: str | None = None
+    signature: str | None = None
+
+
+class AIDecisionVerifyRequest(BaseModel):
+    tenant: str = Field(default="default", min_length=1)
+    gs_uri: str = Field(..., min_length=1)
+    expected_report_hash_sha256: str | None = None
+    expected_signature_key_id: str | None = None
+    strict_tenant_path: bool = True
+    trace_id: str | None = None
+
+    @field_validator("gs_uri")
+    @classmethod
+    def validate_gs_uri(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate.startswith("gs://"):
+            raise ValueError("gs_uri must start with gs://")
+        return candidate
+
+
+class AIDecisionVerifyResponse(BaseModel):
+    trace_id: str
+    tenant: str
+    gs_uri: str
+    report_type: str
+    verified_at: datetime
+    computed_report_hash_sha256: str
+    stored_report_hash_sha256: str | None = None
+    hash_match: bool
+    expected_hash_match: bool | None = None
+    signature_alg: str
+    signature_key_id: str | None = None
+    signature_valid: bool
+    expected_signature_key_match: bool | None = None
+    verified: bool
+    errors: list[str] = Field(default_factory=list)
+
+
 class AIDecisionAdminQueryRequest(BaseModel):
     tenants: list[str] = Field(..., min_length=1, max_length=50)
     decision_id_prefix: str | None = None

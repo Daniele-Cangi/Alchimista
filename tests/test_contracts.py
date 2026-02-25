@@ -5,7 +5,9 @@ from services.shared.contracts import (
     AIDecisionBundleRequest,
     AIDecisionExportRequest,
     AIDecisionIngestRequest,
+    AIDecisionPackageRequest,
     AIDecisionQueryRequest,
+    AIDecisionVerifyRequest,
     ConfidenceBand,
     IngestMessage,
     QueryAnswer,
@@ -139,5 +141,33 @@ def test_ai_decision_admin_query_contract_rejects_invalid_ranges() -> None:
                 "tenants": ["default"],
                 "created_from": "2026-02-28T00:00:00Z",
                 "created_to": "2026-02-01T00:00:00Z",
+            }
+        )
+
+
+def test_ai_decision_package_contract_defaults() -> None:
+    model = AIDecisionPackageRequest.model_validate({"tenant": "default"})
+    assert model.include_context is True
+    assert model.include_policy_snapshot is True
+    assert model.limit == 50
+
+
+def test_ai_decision_verify_contract_accepts_gs_uri() -> None:
+    model = AIDecisionVerifyRequest.model_validate(
+        {
+            "tenant": "default",
+            "gs_uri": "gs://alchimista-reports-994021588311/reports/default/audit/packages/p1/manifest.json",
+            "strict_tenant_path": True,
+        }
+    )
+    assert model.gs_uri.startswith("gs://")
+
+
+def test_ai_decision_verify_contract_rejects_non_gs_uri() -> None:
+    with pytest.raises(ValueError):
+        AIDecisionVerifyRequest.model_validate(
+            {
+                "tenant": "default",
+                "gs_uri": "https://example.com/file.json",
             }
         )

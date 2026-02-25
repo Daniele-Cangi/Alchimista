@@ -30,6 +30,17 @@ P4 extends Alchimista with auditable AI decision trails linked to document conte
     - `regulator_ref`
     - `include_policy_snapshot`
   - Stores per-decision `report_hash_sha256` entries and one top-level signed bundle hash.
+- `POST /v1/decisions/package`
+  - Produces a regulator package under `reports/<tenant>/audit/packages/<package_id>/`.
+  - Writes:
+    - `manifest.json` (signed)
+    - `decision_reports/*.json` (signed, one file per decision)
+    - optional `policy_snapshot.json` (signed)
+  - Returns `manifest_gs_uri`, `files_count`, and manifest signature metadata.
+- `POST /v1/decisions/verify`
+  - Verifies integrity/signature of a stored audit artifact (`export`, `bundle`, `package manifest`, `decision report`, `policy snapshot`).
+  - Enforces tenant path guard by default (`strict_tenant_path=true`): artifact must live under `reports/<tenant>/audit/`.
+  - Returns `verified`, `hash_match`, `signature_valid`, and mismatch reasons.
 - `POST /v1/admin/decisions/query`
   - Cross-tenant search endpoint for operations/compliance teams.
   - Requires both:
@@ -52,6 +63,7 @@ P4 extends Alchimista with auditable AI decision trails linked to document conte
   - `scripts/rotate_audit_report_signing_key_secret.sh`
   - `.github/workflows/rotate-audit-signing-key.yml` (manual + schedule)
 - Admin cross-tenant query is intentionally isolated behind JWT + `x-admin-key` dual control.
+- Artifact verification endpoint is tenant-scoped and rejects paths outside tenant audit prefix by default.
 
 ## Notes
 - Current database still has global `documents.doc_id` primary key.

@@ -25,10 +25,14 @@ from services.shared.contracts import (
     AIDecisionExportResponse,
     AIDecisionIngestRequest,
     AIDecisionIngestResponse,
+    AIDecisionPackageRequest,
+    AIDecisionPackageResponse,
     AIDecisionQueryRequest,
     AIDecisionQueryResponse,
     AIDecisionRecord,
     AIDecisionReportResponse,
+    AIDecisionVerifyRequest,
+    AIDecisionVerifyResponse,
     DocumentStatusResponse,
     IngestMessage,
     JobRecord,
@@ -46,7 +50,7 @@ from services.shared.dlq_replay import parse_ingest_message_from_dlq
 from services.shared.hashing import sha256_bytes
 from services.shared.logging_utils import log_event
 from services.shared.pubsub_client import PubSubPublisher, PubSubSubscriber
-from services.shared.storage import StorageClient, safe_object_name
+from services.shared.storage import StorageClient, parse_gs_uri, safe_object_name
 
 
 config = load_runtime_config()
@@ -492,18 +496,7 @@ def bundle_decisions(payload: AIDecisionBundleRequest, request: Request) -> AIDe
                     }
                 )
 
-    policy_snapshot = None
-    if payload.include_policy_snapshot:
-        policy_snapshot = {
-            "auth_enabled": config.auth_enabled,
-            "auth_issuer": config.auth_issuer,
-            "auth_audiences": list(config.auth_audiences),
-            "auth_require_tenant_claim": config.auth_require_tenant_claim,
-            "enforce_storage_hardening": config.enforce_storage_hardening,
-            "pubsub_push_auth_enabled": config.pubsub_push_auth_enabled,
-            "cloud_run_revision": os.getenv("K_REVISION", ""),
-            "cloud_run_service": os.getenv("K_SERVICE", ""),
-        }
+    policy_snapshot = _build_policy_snapshot() if payload.include_policy_snapshot else None
 
     bundle_payload: dict[str, Any] = {
         "bundle_id": bundle_id,
@@ -593,6 +586,196 @@ def bundle_decisions(payload: AIDecisionBundleRequest, request: Request) -> AIDe
     )
 
 
+@app.post("/v1/decisions/package", response_model=AIDecisionPackageResponse)
+def package_decisions(payload: AIDecisionPackageRequest, request: Request) -> AIDecisionPackageResponse:
+    principal = require_auth(request, config=config, tenant=payload.tenant)
+    _require_reports_bucket()
+    trace_id = payload.trace_id or str(uuid4())
+    generated_at = datetime.now(timezone.utc)
+    package_id = payload.package_id or f"pkg-{generated_at.strftime('%Y%m%dT%H%M%SZ')}-{trace_id[:8]}"
+    object_prefix = _resolve_audit_package_prefix(
+        tenant=payload.tenant,
+        requested_object_prefix=payload.object_prefix,
+        package_id=package_id,
+    )
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            conn.commit()
+            rows, total = _query_ai_decisions(cur, payload=payload)
+            decisions = [_map_ai_decision_row(row) for row in rows]
+
+            files: list[dict[str, Any]] = []
+            for row, decision in zip(rows, decisions):
+                context_documents: list[dict[str, Any]] = []
+                context_chunks: list[dict[str, Any]] = []
+                if payload.include_context:
+                    context_documents = _fetch_ai_decision_context_documents(
+                        cur,
+                        tenant=payload.tenant,
+                        decision_ref_id=int(row["id"]),
+                    )
+                    context_chunks = _fetch_ai_decision_context_chunks(
+                        cur,
+                        tenant=payload.tenant,
+                        decision_ref_id=int(row["id"]),
+                    )
+
+                decision_report_payload = {
+                    "decision": decision.model_dump(mode="json"),
+                    "context_documents": context_documents,
+                    "context_chunks": context_chunks,
+                }
+                decision_report_hash = _sha256_json(decision_report_payload)
+                decision_signature_alg = "none"
+                decision_signature = None
+                decision_signature_key_id = None
+                if config.audit_report_signing_key:
+                    decision_signature_alg = "hmac-sha256"
+                    decision_signature = _hmac_sha256_b64(config.audit_report_signing_key, decision_report_payload)
+                    decision_signature_key_id = config.audit_report_signing_key_id or None
+
+                decision_report_document = {
+                    **decision_report_payload,
+                    "report_hash_sha256": decision_report_hash,
+                    "signature_alg": decision_signature_alg,
+                    "signature_key_id": decision_signature_key_id,
+                    "signature": decision_signature,
+                }
+                decision_file_id = decision.decision_id.replace("/", "_")
+                decision_object_name = safe_object_name(f"{object_prefix}/decision_reports/{decision_file_id}.json")
+                decision_gs_uri = storage_client.upload_bytes(
+                    bucket_name=config.reports_bucket,
+                    object_name=decision_object_name,
+                    payload=json.dumps(
+                        decision_report_document,
+                        ensure_ascii=True,
+                        separators=(",", ":"),
+                        default=_json_default,
+                    ).encode("utf-8"),
+                    content_type="application/json",
+                )
+                files.append(
+                    {
+                        "kind": "decision_report",
+                        "decision_id": decision.decision_id,
+                        "gs_uri": decision_gs_uri,
+                        "report_hash_sha256": decision_report_hash,
+                        "signature_alg": decision_signature_alg,
+                        "signature_key_id": decision_signature_key_id,
+                        "signature": decision_signature,
+                    }
+                )
+
+    if payload.include_policy_snapshot:
+        policy_snapshot_payload = _build_policy_snapshot()
+        policy_report_hash = _sha256_json(policy_snapshot_payload)
+        policy_signature_alg = "none"
+        policy_signature = None
+        policy_signature_key_id = None
+        if config.audit_report_signing_key:
+            policy_signature_alg = "hmac-sha256"
+            policy_signature = _hmac_sha256_b64(config.audit_report_signing_key, policy_snapshot_payload)
+            policy_signature_key_id = config.audit_report_signing_key_id or None
+        policy_document = {
+            **policy_snapshot_payload,
+            "report_hash_sha256": policy_report_hash,
+            "signature_alg": policy_signature_alg,
+            "signature_key_id": policy_signature_key_id,
+            "signature": policy_signature,
+        }
+        policy_object_name = safe_object_name(f"{object_prefix}/policy_snapshot.json")
+        policy_gs_uri = storage_client.upload_bytes(
+            bucket_name=config.reports_bucket,
+            object_name=policy_object_name,
+            payload=json.dumps(policy_document, ensure_ascii=True, separators=(",", ":"), default=_json_default).encode(
+                "utf-8"
+            ),
+            content_type="application/json",
+        )
+        files.append(
+            {
+                "kind": "policy_snapshot",
+                "gs_uri": policy_gs_uri,
+                "report_hash_sha256": policy_report_hash,
+                "signature_alg": policy_signature_alg,
+                "signature_key_id": policy_signature_key_id,
+                "signature": policy_signature,
+            }
+        )
+
+    manifest_payload: dict[str, Any] = {
+        "package_id": package_id,
+        "trace_id": trace_id,
+        "generated_at": generated_at,
+        "tenant": payload.tenant,
+        "exported_by": principal.subject if principal else "anonymous",
+        "case_id": payload.case_id,
+        "regulator_ref": payload.regulator_ref,
+        "filters": payload.model_dump(
+            mode="json",
+            exclude={"trace_id", "package_id", "case_id", "regulator_ref", "object_prefix"},
+            exclude_none=True,
+        ),
+        "total": total,
+        "returned": len(decisions),
+        "files": files,
+    }
+    manifest_hash = _sha256_json(manifest_payload)
+    manifest_signature_alg = "none"
+    manifest_signature = None
+    manifest_signature_key_id = None
+    if config.audit_report_signing_key:
+        manifest_signature_alg = "hmac-sha256"
+        manifest_signature = _hmac_sha256_b64(config.audit_report_signing_key, manifest_payload)
+        manifest_signature_key_id = config.audit_report_signing_key_id or None
+
+    manifest_document = {
+        **manifest_payload,
+        "report_hash_sha256": manifest_hash,
+        "signature_alg": manifest_signature_alg,
+        "signature_key_id": manifest_signature_key_id,
+        "signature": manifest_signature,
+    }
+    manifest_object_name = safe_object_name(f"{object_prefix}/manifest.json")
+    manifest_gs_uri = storage_client.upload_bytes(
+        bucket_name=config.reports_bucket,
+        object_name=manifest_object_name,
+        payload=json.dumps(manifest_document, ensure_ascii=True, separators=(",", ":"), default=_json_default).encode(
+            "utf-8"
+        ),
+        content_type="application/json",
+    )
+
+    log_event(
+        "info",
+        "ai_decision_package_written",
+        trace_id=trace_id,
+        doc_id=decisions[0].context_docs[0] if decisions and decisions[0].context_docs else None,
+        job_id=f"ai-decision-package:{payload.tenant}:{trace_id}",
+        tenant=payload.tenant,
+        package_id=package_id,
+        files_count=len(files) + 1,
+        manifest_gs_uri=manifest_gs_uri,
+        signature_alg=manifest_signature_alg,
+    )
+    return AIDecisionPackageResponse(
+        trace_id=trace_id,
+        package_id=package_id,
+        generated_at=generated_at,
+        tenant=payload.tenant,
+        total=total,
+        returned=len(decisions),
+        manifest_gs_uri=manifest_gs_uri,
+        files_count=len(files) + 1,
+        report_hash_sha256=manifest_hash,
+        signature_alg=manifest_signature_alg,
+        signature_key_id=manifest_signature_key_id,
+        signature=manifest_signature,
+    )
+
+
 @app.get("/v1/decisions/{decision_id}/report", response_model=AIDecisionReportResponse)
 def get_decision_report(request: Request, decision_id: str, tenant: str = config.default_tenant) -> AIDecisionReportResponse:
     require_auth(request, config=config, tenant=tenant)
@@ -645,6 +828,114 @@ def get_decision_report(request: Request, decision_id: str, tenant: str = config
         signature_alg=signature_alg,
         signature_key_id=signature_key_id,
         signature=signature,
+    )
+
+
+@app.post("/v1/decisions/verify", response_model=AIDecisionVerifyResponse)
+def verify_decision_artifact(payload: AIDecisionVerifyRequest, request: Request) -> AIDecisionVerifyResponse:
+    require_auth(request, config=config, tenant=payload.tenant)
+    _require_reports_bucket()
+    trace_id = payload.trace_id or str(uuid4())
+    errors: list[str] = []
+
+    bucket_name, object_name = parse_gs_uri(payload.gs_uri)
+    if bucket_name != config.reports_bucket:
+        raise HTTPException(status_code=400, detail="gs_uri bucket does not match REPORTS_BUCKET")
+    if payload.strict_tenant_path and not object_name.startswith(f"reports/{payload.tenant}/audit/"):
+        raise HTTPException(status_code=403, detail="gs_uri path is outside tenant audit prefix")
+
+    try:
+        raw_payload = storage_client.download_bytes(payload.gs_uri)
+        document = json.loads(raw_payload.decode("utf-8"))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Unable to load JSON artifact: {exc}") from exc
+    if not isinstance(document, dict):
+        raise HTTPException(status_code=400, detail="Artifact must be a JSON object")
+
+    stored_hash = document.get("report_hash_sha256")
+    signature_alg = str(document.get("signature_alg") or "none")
+    signature_key_id = str(document.get("signature_key_id") or "") or None
+    signature = str(document.get("signature") or "") or None
+    unsigned_payload = dict(document)
+    unsigned_payload.pop("report_hash_sha256", None)
+    unsigned_payload.pop("signature_alg", None)
+    unsigned_payload.pop("signature_key_id", None)
+    unsigned_payload.pop("signature", None)
+
+    computed_hash = _sha256_json(unsigned_payload)
+    hash_match = isinstance(stored_hash, str) and bool(stored_hash) and hmac.compare_digest(computed_hash, stored_hash)
+    if not hash_match:
+        errors.append("hash_mismatch")
+
+    expected_hash_match = None
+    if payload.expected_report_hash_sha256 is not None:
+        expected_hash_match = hmac.compare_digest(computed_hash, payload.expected_report_hash_sha256)
+        if not expected_hash_match:
+            errors.append("expected_hash_mismatch")
+
+    signature_valid = False
+    if signature_alg == "none":
+        signature_valid = signature is None
+    elif signature_alg == "hmac-sha256":
+        if not config.audit_report_signing_key:
+            errors.append("signing_key_not_configured")
+            signature_valid = False
+        elif not signature:
+            errors.append("missing_signature")
+            signature_valid = False
+        else:
+            expected_signature = _hmac_sha256_b64(config.audit_report_signing_key, unsigned_payload)
+            signature_valid = hmac.compare_digest(signature, expected_signature)
+            if not signature_valid:
+                errors.append("signature_mismatch")
+    else:
+        errors.append("unsupported_signature_alg")
+        signature_valid = False
+
+    expected_signature_key_match = None
+    if payload.expected_signature_key_id is not None:
+        expected_signature_key_match = (signature_key_id == payload.expected_signature_key_id)
+        if not expected_signature_key_match:
+            errors.append("signature_key_id_mismatch")
+
+    report_type = _infer_decision_artifact_type(unsigned_payload)
+    verified = hash_match and signature_valid
+    if expected_hash_match is not None:
+        verified = verified and expected_hash_match
+    if expected_signature_key_match is not None:
+        verified = verified and expected_signature_key_match
+
+    log_event(
+        "info",
+        "ai_decision_artifact_verified",
+        trace_id=trace_id,
+        doc_id=None,
+        job_id=f"ai-decision-verify:{payload.tenant}:{trace_id}",
+        tenant=payload.tenant,
+        gs_uri=payload.gs_uri,
+        verified=verified,
+        report_type=report_type,
+        signature_alg=signature_alg,
+        errors=errors,
+    )
+    return AIDecisionVerifyResponse(
+        trace_id=trace_id,
+        tenant=payload.tenant,
+        gs_uri=payload.gs_uri,
+        report_type=report_type,
+        verified_at=datetime.now(timezone.utc),
+        computed_report_hash_sha256=computed_hash,
+        stored_report_hash_sha256=stored_hash if isinstance(stored_hash, str) else None,
+        hash_match=hash_match,
+        expected_hash_match=expected_hash_match,
+        signature_alg=signature_alg,
+        signature_key_id=signature_key_id,
+        signature_valid=signature_valid,
+        expected_signature_key_match=expected_signature_key_match,
+        verified=verified,
+        errors=errors,
     )
 
 
@@ -1456,6 +1747,42 @@ def _resolve_audit_bundle_object_name(
         return safe_object_name(value)
     stamp = generated_at.strftime("%Y%m%dT%H%M%SZ")
     return safe_object_name(f"reports/{tenant}/audit/bundles/decision_bundle_{stamp}_{trace_id}.json")
+
+
+def _resolve_audit_package_prefix(*, tenant: str, requested_object_prefix: str | None, package_id: str) -> str:
+    if requested_object_prefix:
+        value = requested_object_prefix.strip().lstrip("/").rstrip("/")
+        if not value:
+            raise HTTPException(status_code=400, detail="object_prefix cannot be empty")
+        return safe_object_name(value)
+    return safe_object_name(f"reports/{tenant}/audit/packages/{package_id}")
+
+
+def _build_policy_snapshot() -> dict[str, Any]:
+    return {
+        "auth_enabled": config.auth_enabled,
+        "auth_issuer": config.auth_issuer,
+        "auth_audiences": list(config.auth_audiences),
+        "auth_require_tenant_claim": config.auth_require_tenant_claim,
+        "enforce_storage_hardening": config.enforce_storage_hardening,
+        "pubsub_push_auth_enabled": config.pubsub_push_auth_enabled,
+        "cloud_run_revision": os.getenv("K_REVISION", ""),
+        "cloud_run_service": os.getenv("K_SERVICE", ""),
+    }
+
+
+def _infer_decision_artifact_type(payload: dict[str, Any]) -> str:
+    if "package_id" in payload and "files" in payload:
+        return "regulator_package_manifest"
+    if "bundle_id" in payload and "decision_reports" in payload:
+        return "decision_bundle"
+    if "decisions" in payload and "filters" in payload:
+        return "decision_export"
+    if "decision" in payload and "context_documents" in payload:
+        return "decision_report"
+    if "auth_enabled" in payload and "cloud_run_revision" in payload:
+        return "policy_snapshot"
+    return "unknown"
 
 
 def _publish_ingest_message(message: IngestMessage, *, job_id: str | None = None) -> str:
