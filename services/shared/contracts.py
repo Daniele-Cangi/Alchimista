@@ -62,6 +62,11 @@ class QueryResponse(BaseModel):
     trace_id: str
 
 
+class DecisionOrder(str, Enum):
+    ASC = "asc"
+    DESC = "desc"
+
+
 class AIDecisionIngestRequest(BaseModel):
     decision_id: str = Field(..., min_length=1)
     model: str = Field(..., min_length=1)
@@ -120,6 +125,7 @@ class AIDecisionRecord(BaseModel):
 
 class AIDecisionQueryRequest(BaseModel):
     tenant: str = Field(default="default", min_length=1)
+    decision_id_prefix: str | None = None
     model: str | None = None
     model_version: str | None = None
     query: str | None = None
@@ -128,7 +134,9 @@ class AIDecisionQueryRequest(BaseModel):
     max_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     created_from: datetime | None = None
     created_to: datetime | None = None
+    offset: int = Field(default=0, ge=0, le=10000)
     limit: int = Field(default=50, ge=1, le=200)
+    order: DecisionOrder = Field(default=DecisionOrder.DESC)
     trace_id: str | None = None
 
     @field_validator("context_docs")
@@ -153,6 +161,9 @@ class AIDecisionQueryResponse(BaseModel):
     trace_id: str
     decisions: list[AIDecisionRecord]
     total: int
+    offset: int
+    limit: int
+    returned: int
 
 
 class AIDecisionReportResponse(BaseModel):
@@ -161,6 +172,10 @@ class AIDecisionReportResponse(BaseModel):
     decision: AIDecisionRecord
     context_documents: list[dict[str, Any]] = Field(default_factory=list)
     context_chunks: list[dict[str, Any]] = Field(default_factory=list)
+    report_hash_sha256: str
+    signature_alg: str
+    signature_key_id: str | None = None
+    signature: str | None = None
 
 
 class JobRecord(BaseModel):

@@ -83,6 +83,15 @@ CREATE TABLE IF NOT EXISTS ai_decisions (
 CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_model_created_at
   ON ai_decisions (tenant, model, created_at DESC);
 
+CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_created_at
+  ON ai_decisions (tenant, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_model_version_created_at
+  ON ai_decisions (tenant, model_version, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_confidence_created_at
+  ON ai_decisions (tenant, confidence, created_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_ai_decisions_trace_id
   ON ai_decisions (trace_id);
 

@@ -1,6 +1,6 @@
 import pytest
 
-from services.shared.contracts import AIDecisionIngestRequest, IngestMessage, QueryAnswer
+from services.shared.contracts import AIDecisionIngestRequest, AIDecisionQueryRequest, IngestMessage, QueryAnswer
 
 
 def test_ingest_message_contract() -> None:
@@ -58,3 +58,10 @@ def test_ai_decision_contract_rejects_empty_context_doc_ids() -> None:
                 "tenant": "vendor-x",
             }
         )
+
+
+def test_ai_decision_query_contract_defaults() -> None:
+    model = AIDecisionQueryRequest.model_validate({"tenant": "default"})
+    assert model.offset == 0
+    assert model.limit == 50
+    assert model.order.value == "desc"

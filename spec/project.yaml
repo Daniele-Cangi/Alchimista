@@ -270,9 +270,10 @@ p0_p1_progress:
   p3_3_enterprise_auth: done
   p3_4_cicd_discipline: done
   p4_0_ai_decision_trail: done
+  p4_1_audit_query_export_signing: done
 
 p4_audit_trail_engine:
-  status: p4_0_done
+  status: p4_1_done
   write_endpoint: POST /v1/decisions
   query_endpoint: POST /v1/decisions/query
   report_endpoint: GET /v1/decisions/{id}/report
@@ -284,6 +285,21 @@ p4_audit_trail_engine:
     - idempotent_by_tenant_and_decision_id
     - decision_context_docs_must_exist_in_documents_table
     - optional_context_chunks_must_belong_to_context_docs
+  query_capabilities:
+    - decision_id_prefix_filter
+    - model_and_model_version_filters
+    - text_filter_on_input_and_output
+    - confidence_range_filter
+    - created_at_range_filter
+    - context_docs_all_match_filter
+    - offset_limit_pagination
+    - asc_desc_ordering
+  report_export:
+    hash_field: report_hash_sha256
+    optional_signature:
+      alg: hmac-sha256
+      key_env: AUDIT_REPORT_SIGNING_KEY
+      key_id_env: AUDIT_REPORT_SIGNING_KEY_ID
 
 p3_parallel_execution:
   p3_2_retrieval_real:

@@ -154,6 +154,8 @@ def _make_config(**overrides: object) -> RuntimeConfig:
         pubsub_push_auth_enabled=False,
         pubsub_push_audiences=tuple(),
         pubsub_push_service_accounts=tuple(),
+        audit_report_signing_key="",
+        audit_report_signing_key_id="",
     )
     return RuntimeConfig(**{**base.__dict__, **overrides})
 

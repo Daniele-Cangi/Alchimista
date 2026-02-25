@@ -67,6 +67,8 @@ class RuntimeConfig:
     pubsub_push_auth_enabled: bool
     pubsub_push_audiences: tuple[str, ...]
     pubsub_push_service_accounts: tuple[str, ...]
+    audit_report_signing_key: str
+    audit_report_signing_key_id: str
 
 
 
@@ -106,4 +108,6 @@ def load_runtime_config() -> RuntimeConfig:
         pubsub_push_auth_enabled=get_env_bool("PUBSUB_PUSH_AUTH_ENABLED", False),
         pubsub_push_audiences=get_env_csv("PUBSUB_PUSH_AUDIENCE", ""),
         pubsub_push_service_accounts=get_env_csv("PUBSUB_PUSH_SERVICE_ACCOUNTS", ""),
+        audit_report_signing_key=get_env("AUDIT_REPORT_SIGNING_KEY", ""),
+        audit_report_signing_key_id=get_env("AUDIT_REPORT_SIGNING_KEY_ID", ""),
     )

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import hmac
 import json
 import os
@@ -314,7 +316,7 @@ def query_decisions(payload: AIDecisionQueryRequest, request: Request) -> AIDeci
         with conn.cursor() as cur:
             _ensure_ai_decision_schema(cur)
             conn.commit()
-            rows = _query_ai_decisions(cur, payload=payload)
+            rows, total = _query_ai_decisions(cur, payload=payload)
 
     decisions = [_map_ai_decision_row(row) for row in rows]
     log_event(
@@ -325,9 +327,19 @@ def query_decisions(payload: AIDecisionQueryRequest, request: Request) -> AIDeci
         job_id=f"ai-decision-query:{trace_id}",
         tenant=payload.tenant,
         model=payload.model,
+        offset=payload.offset,
+        limit=payload.limit,
+        returned=len(decisions),
+        total=total,
+    )
+    return AIDecisionQueryResponse(
+        trace_id=trace_id,
+        decisions=decisions,
+        total=total,
+        offset=payload.offset,
+        limit=payload.limit,
         returned=len(decisions),
     )
-    return AIDecisionQueryResponse(trace_id=trace_id, decisions=decisions, total=len(decisions))
 
 
 @app.get("/v1/decisions/{decision_id}/report", response_model=AIDecisionReportResponse)
@@ -346,6 +358,20 @@ def get_decision_report(request: Request, decision_id: str, tenant: str = config
             context_chunks = _fetch_ai_decision_context_chunks(cur, tenant=tenant, decision_ref_id=row["id"])
 
     decision = _map_ai_decision_row(row)
+    report_payload = {
+        "decision": decision.model_dump(mode="json"),
+        "context_documents": context_documents,
+        "context_chunks": context_chunks,
+    }
+    report_hash = _sha256_json(report_payload)
+    signature_alg = "none"
+    signature = None
+    signature_key_id = None
+    if config.audit_report_signing_key:
+        signature_alg = "hmac-sha256"
+        signature = _hmac_sha256_b64(config.audit_report_signing_key, report_payload)
+        signature_key_id = config.audit_report_signing_key_id or None
+
     log_event(
         "info",
         "ai_decision_report_generated",
@@ -356,6 +382,7 @@ def get_decision_report(request: Request, decision_id: str, tenant: str = config
         decision_id=decision_id,
         context_docs=len(decision.context_docs),
         context_chunks=len(decision.context_chunks),
+        signature_alg=signature_alg,
     )
     return AIDecisionReportResponse(
         trace_id=trace_id,
@@ -363,6 +390,10 @@ def get_decision_report(request: Request, decision_id: str, tenant: str = config
         decision=decision,
         context_documents=context_documents,
         context_chunks=context_chunks,
+        report_hash_sha256=report_hash,
+        signature_alg=signature_alg,
+        signature_key_id=signature_key_id,
+        signature=signature,
     )
 
 
@@ -663,6 +694,15 @@ def _ensure_ai_decision_schema(cur: Any) -> None:
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_model_created_at ON ai_decisions (tenant, model, created_at DESC)"
         )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_created_at ON ai_decisions (tenant, created_at DESC)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_model_version_created_at ON ai_decisions (tenant, model_version, created_at DESC)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_confidence_created_at ON ai_decisions (tenant, confidence, created_at DESC)"
+        )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_ai_decisions_trace_id ON ai_decisions (trace_id)")
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_ai_decision_context_docs_tenant_doc ON ai_decision_context_docs (tenant, doc_id, decision_ref_id)"
@@ -778,10 +818,13 @@ def _replace_ai_decision_context_chunks(cur: Any, *, decision_ref_id: int, tenan
         )
 
 
-def _query_ai_decisions(cur: Any, *, payload: AIDecisionQueryRequest) -> list[dict[str, Any]]:
+def _query_ai_decisions(cur: Any, *, payload: AIDecisionQueryRequest) -> tuple[list[dict[str, Any]], int]:
     conditions = ["d.tenant = %s"]
     params: list[Any] = [payload.tenant]
 
+    if payload.decision_id_prefix:
+        conditions.append("d.decision_id ILIKE %s")
+        params.append(f"{payload.decision_id_prefix.strip()}%")
     if payload.model:
         conditions.append("d.model = %s")
         params.append(payload.model)
@@ -813,7 +856,21 @@ def _query_ai_decisions(cur: Any, *, payload: AIDecisionQueryRequest) -> list[di
             params.append(doc_id)
 
     where_clause = " AND ".join(conditions)
-    params.append(payload.limit)
+    cur.execute(
+        f"""
+        SELECT COUNT(*) AS total
+        FROM ai_decisions d
+        WHERE {where_clause}
+        """,
+        params,
+    )
+    total_row = cur.fetchone() or {"total": 0}
+    total = int(total_row.get("total") or 0)
+    if total == 0:
+        return [], 0
+
+    order_sql = "ASC" if payload.order.value == "asc" else "DESC"
+    query_params = [*params, payload.limit, payload.offset]
     cur.execute(
         f"""
         SELECT
@@ -836,12 +893,12 @@ def _query_ai_decisions(cur: Any, *, payload: AIDecisionQueryRequest) -> list[di
         LEFT JOIN ai_decision_context_chunks cc ON cc.decision_ref_id = d.id
         WHERE {where_clause}
         GROUP BY d.id
-        ORDER BY d.created_at DESC
-        LIMIT %s
+        ORDER BY d.created_at {order_sql}, d.id {order_sql}
+        LIMIT %s OFFSET %s
         """,
-        params,
+        query_params,
     )
-    return cur.fetchall()
+    return cur.fetchall(), total
 
 
 def _fetch_ai_decision(cur: Any, *, tenant: str, decision_id: str) -> dict[str, Any] | None:
@@ -920,6 +977,31 @@ def _map_ai_decision_row(row: dict[str, Any]) -> AIDecisionRecord:
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
+
+
+def _canonical_json_bytes(payload: dict[str, Any]) -> bytes:
+    return json.dumps(
+        payload,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+        default=_json_default,
+    ).encode("utf-8")
+
+
+def _json_default(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _sha256_json(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical_json_bytes(payload)).hexdigest()
+
+
+def _hmac_sha256_b64(secret: str, payload: dict[str, Any]) -> str:
+    digest = hmac.new(secret.encode("utf-8"), _canonical_json_bytes(payload), hashlib.sha256).digest()
+    return base64.b64encode(digest).decode("ascii")
 
 
 def _publish_ingest_message(message: IngestMessage, *, job_id: str | None = None) -> str:

@@ -53,6 +53,8 @@ def test_build_embedder_deterministic_backend() -> None:
         pubsub_push_auth_enabled=False,
         pubsub_push_audiences=tuple(),
         pubsub_push_service_accounts=tuple(),
+        audit_report_signing_key="",
+        audit_report_signing_key_id="",
     )
 
     embedder = build_embedder(config)

@@ -187,10 +187,15 @@ curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decis
 curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/query" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
-  -d '{"tenant":"default","model":"gpt-4","query":"approved","limit":20}'
+  -d '{"tenant":"default","model":"gpt-4","query":"approved","limit":20,"offset":0,"order":"desc"}'
 ```
 - Generate a regulator-friendly decision trail report:
 ```bash
 curl -sS -H "Authorization: Bearer ${TOKEN}" \
   "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/d-001/report?tenant=default"
+```
+- Optional signing (HMAC) for exported reports:
+```bash
+AUDIT_REPORT_SIGNING_KEY='REPLACE_WITH_STRONG_SECRET'
+AUDIT_REPORT_SIGNING_KEY_ID='audit-key-v1'
 ```
