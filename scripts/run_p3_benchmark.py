@@ -35,6 +35,13 @@ def main() -> int:
     parser.add_argument("--rag-url", default=os.getenv("RAG_URL", DEFAULT_RAG_URL))
     parser.add_argument("--bearer-token", default=os.getenv("BENCHMARK_BEARER_TOKEN", ""))
     parser.add_argument("--timeout-seconds", type=int, default=60)
+    parser.add_argument(
+        "--processing-mode",
+        choices=("event-driven", "direct"),
+        default=os.getenv("BENCHMARK_PROCESSING_MODE", "event-driven"),
+    )
+    parser.add_argument("--processing-timeout-seconds", type=int, default=300)
+    parser.add_argument("--poll-interval-seconds", type=float, default=2.0)
     args = parser.parse_args()
 
     dataset_path = Path(args.dataset)
@@ -63,27 +70,38 @@ def main() -> int:
             bearer_token=args.bearer_token,
             timeout=args.timeout_seconds,
         )
-        process = _direct_process(
-            processor_url=args.processor_url,
-            message={
-                "id": ingest["doc_id"],
-                "uri": ingest["gcs_uri"],
-                "type": content_type,
-                "size": len(content.encode("utf-8")),
-                "tenant": tenant,
-                "ts": datetime.now(timezone.utc).isoformat(),
-                "trace_id": ingest["trace_id"],
-            },
-            bearer_token=args.bearer_token,
-            timeout=args.timeout_seconds,
-        )
-        status = _document_status(
+        if args.processing_mode == "direct":
+            _direct_process(
+                processor_url=args.processor_url,
+                message={
+                    "id": ingest["doc_id"],
+                    "uri": ingest["gcs_uri"],
+                    "type": content_type,
+                    "size": len(content.encode("utf-8")),
+                    "tenant": tenant,
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "trace_id": ingest["trace_id"],
+                },
+                bearer_token=args.bearer_token,
+                timeout=args.timeout_seconds,
+            )
+
+        status = _wait_for_document_terminal_status(
             ingest_url=args.ingest_url,
             doc_id=ingest["doc_id"],
             tenant=tenant,
             bearer_token=args.bearer_token,
             timeout=args.timeout_seconds,
+            wait_timeout=args.processing_timeout_seconds,
+            poll_interval_seconds=args.poll_interval_seconds,
         )
+        job = status.get("job") or {}
+        job_status = str(job.get("status") or "")
+        if job_status != "SUCCEEDED":
+            raise RuntimeError(
+                f"Document processing failed for doc_id={ingest['doc_id']}: "
+                f"status={job_status} error={(job.get('error') or '')}"
+            )
 
         alias_to_doc_id[doc_alias] = ingest["doc_id"]
         document_runs.append(
@@ -91,8 +109,8 @@ def main() -> int:
                 "alias": doc_alias,
                 "doc_id": ingest["doc_id"],
                 "trace_id": ingest["trace_id"],
-                "processor_status": process.get("status"),
-                "job_id": (status.get("job") or {}).get("job_id"),
+                "processor_status": job_status,
+                "job_id": job.get("job_id"),
             }
         )
 
@@ -211,6 +229,7 @@ def main() -> int:
             "processor_url": args.processor_url,
             "rag_url": args.rag_url,
         },
+        "processing_mode": args.processing_mode,
         "documents": document_runs,
         "queries": query_results,
         "summary": summary,
@@ -283,6 +302,50 @@ def _document_status(*, ingest_url: str, doc_id: str, tenant: str, bearer_token:
     )
     _raise_for_status(response)
     return response.json()
+
+
+def _wait_for_document_terminal_status(
+    *,
+    ingest_url: str,
+    doc_id: str,
+    tenant: str,
+    bearer_token: str,
+    timeout: int,
+    wait_timeout: int,
+    poll_interval_seconds: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + wait_timeout
+    sleep_for = max(0.2, poll_interval_seconds)
+    last_status = "UNKNOWN"
+    last_error = ""
+
+    while time.monotonic() < deadline:
+        try:
+            body = _document_status(
+                ingest_url=ingest_url,
+                doc_id=doc_id,
+                tenant=tenant,
+                bearer_token=bearer_token,
+                timeout=timeout,
+            )
+        except Exception as exc:
+            last_error = str(exc)
+            time.sleep(sleep_for)
+            continue
+
+        job = body.get("job") or {}
+        status = str(job.get("status") or "")
+        if status:
+            last_status = status
+
+        if status in {"SUCCEEDED", "FAILED"}:
+            return body
+        time.sleep(sleep_for)
+
+    raise RuntimeError(
+        f"Timed out waiting for processing completion for doc_id={doc_id}; "
+        f"last_status={last_status}; last_error={last_error}"
+    )
 
 
 def _query_rag(*, rag_url: str, payload: dict[str, Any], bearer_token: str, timeout: int) -> dict[str, Any]:

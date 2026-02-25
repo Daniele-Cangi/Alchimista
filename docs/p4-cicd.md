@@ -24,9 +24,22 @@ This stage introduces objective quality gates before release and controlled Clou
 - `AUTH0_CLIENT_ID` (M2M app authorized on `https://api.alchimista.ai`)
 - `AUTH0_CLIENT_SECRET`
 
+## Required GCP IAM for deploy service account
+The service account referenced by `GCP_DEPLOY_SERVICE_ACCOUNT` must have at least:
+- Project roles:
+  - `roles/run.admin`
+  - `roles/cloudbuild.builds.editor`
+  - `roles/serviceusage.serviceUsageConsumer`
+  - `roles/storage.objectAdmin` (Cloud Build source staging bucket access)
+- Service account level role (`roles/iam.serviceAccountUser`) on:
+  - `ingestion-api-sa@<project>.iam.gserviceaccount.com`
+  - `document-processor-sa@<project>.iam.gserviceaccount.com`
+  - `rag-query-sa@<project>.iam.gserviceaccount.com`
+
 ## Helper scripts
 - `scripts/deploy_cloud_run_service.sh`: build + deploy one service.
 - `scripts/check_benchmark_gate.py`: validates benchmark metrics against spec gates.
+- `scripts/bootstrap_github_deploy_iam.sh`: grants IAM roles required by `deploy-cloud-run`.
 
 ## Operator notes
 - Keep `benchmark.gates` in `spec/project.yaml` as the single source of truth.

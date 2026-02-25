@@ -126,6 +126,14 @@ TOKEN="$(./scripts/get_auth0_m2m_token.sh \
 ```bash
 ./scripts/run_p3_benchmark.py --dataset benchmark/dataset_v1.json --output-dir reports/benchmarks
 ```
+- Processing defaults to `event-driven` (no direct `/v1/process` call; waits for terminal job status via `/v1/doc/{id}`).
+- Optional explicit processing controls:
+```bash
+./scripts/run_p3_benchmark.py \
+  --processing-mode event-driven \
+  --processing-timeout-seconds 300 \
+  --poll-interval-seconds 2
+```
 - If auth is enabled, pass token:
 ```bash
 BENCHMARK_BEARER_TOKEN='REPLACE_ME' ./scripts/run_p3_benchmark.py
@@ -138,6 +146,10 @@ BENCHMARK_BEARER_TOKEN='REPLACE_ME' ./scripts/run_p3_benchmark.py
   - `.github/workflows/deploy-cloud-run.yml`
 - GitHub Environment used for secrets:
   - `test` (for benchmark + deploy workflows)
+- Bootstrap deploy IAM prerequisites:
+```bash
+./scripts/bootstrap_github_deploy_iam.sh secure-electron-474908-k9
+```
 - Deploy one service from terminal:
 ```bash
 ./scripts/deploy_cloud_run_service.sh ingestion-api-service secure-electron-474908-k9 europe-west4
