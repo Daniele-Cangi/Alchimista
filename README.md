@@ -101,7 +101,8 @@ MAX_MESSAGES=25 ./scripts/replay_dlq.sh
 ```bash
 ./scripts/apply_p3_auth_oidc.sh \
   secure-electron-474908-k9 europe-west4 \
-  'https://YOUR_ISSUER' 'YOUR_AUDIENCE'
+  'https://YOUR_ISSUER' 'YOUR_AUDIENCE' \
+  '' 'tenant,tenants' true
 ```
 - Current transitional behavior:
   - `/v1/healthz` and `/v1/readyz` remain open.

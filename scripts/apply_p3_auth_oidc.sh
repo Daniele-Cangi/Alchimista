@@ -6,13 +6,16 @@ REGION="${2:-europe-west4}"
 AUTH_ISSUER="${3:-}"
 AUTH_AUDIENCE="${4:-}"
 AUTH_JWKS_URL="${5:-}"
+AUTH_TENANT_CLAIMS="${6:-tenant,tenants}"
+AUTH_REQUIRE_TENANT_CLAIM="${7:-true}"
 
 if [[ -z "$AUTH_ISSUER" || -z "$AUTH_AUDIENCE" ]]; then
-  echo "Usage: $0 <project_id> <region> <auth_issuer> <auth_audience> [auth_jwks_url]"
+  echo "Usage: $0 <project_id> <region> <auth_issuer> <auth_audience> [auth_jwks_url] [auth_tenant_claims] [auth_require_tenant_claim]"
   exit 1
 fi
 
-COMMON_ENV="AUTH_ENABLED=true,AUTH_ISSUER=${AUTH_ISSUER},AUTH_AUDIENCE=${AUTH_AUDIENCE},AUTH_REQUIRE_TENANT_CLAIM=true,AUTH_TENANT_CLAIMS=tenant\\,tenants,AUTH_ALGORITHMS=RS256"
+ESCAPED_TENANT_CLAIMS="${AUTH_TENANT_CLAIMS//,/\\,}"
+COMMON_ENV="AUTH_ENABLED=true,AUTH_ISSUER=${AUTH_ISSUER},AUTH_AUDIENCE=${AUTH_AUDIENCE},AUTH_REQUIRE_TENANT_CLAIM=${AUTH_REQUIRE_TENANT_CLAIM},AUTH_TENANT_CLAIMS=${ESCAPED_TENANT_CLAIMS},AUTH_ALGORITHMS=RS256"
 if [[ -n "$AUTH_JWKS_URL" ]]; then
   COMMON_ENV="${COMMON_ENV},AUTH_JWKS_URL=${AUTH_JWKS_URL}"
 fi
