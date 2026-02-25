@@ -69,7 +69,7 @@ def upsert_process_job(
     error: str | None = None,
     started_at: datetime | None = None,
     finished_at: datetime | None = None,
-) -> None:
+) -> str:
     cur.execute(
         """
         INSERT INTO jobs (doc_id, tenant, type, status, trace_id, started_at, finished_at, metrics, error, updated_at)
@@ -83,6 +83,7 @@ def upsert_process_job(
           metrics = EXCLUDED.metrics,
           error = EXCLUDED.error,
           updated_at = NOW()
+        RETURNING job_id
         """,
         (
             doc_id,
@@ -95,6 +96,10 @@ def upsert_process_job(
             error,
         ),
     )
+    row = cur.fetchone()
+    if not row:
+        raise RuntimeError("Unable to persist process job")
+    return str(row["job_id"])
 
 
 def fetch_document_status(cur: psycopg.Cursor, doc_id: str, tenant: str) -> dict[str, Any] | None:

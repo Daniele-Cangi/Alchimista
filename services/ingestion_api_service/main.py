@@ -109,6 +109,7 @@ async def ingest(request: Request) -> IngestResponse:
 def complete_ingest(request: IngestCompleteRequest) -> IngestResponse:
     _require_raw_bucket()
     trace_id = request.trace_id or str(uuid4())
+    job_id: str | None = None
 
     with get_connection(config.database_url) as conn:
         with conn.cursor() as cur:
@@ -144,7 +145,7 @@ def complete_ingest(request: IngestCompleteRequest) -> IngestResponse:
                 size_bytes=len(payload),
                 content_hash=content_hash,
             )
-            upsert_process_job(
+            job_id = upsert_process_job(
                 cur,
                 doc_id=request.doc_id,
                 tenant=request.tenant,
@@ -163,7 +164,7 @@ def complete_ingest(request: IngestCompleteRequest) -> IngestResponse:
         ts=now_iso8601(),
         trace_id=trace_id,
     )
-    message_id = _publish_ingest_message(message)
+    message_id = _publish_ingest_message(message, job_id=job_id)
     return IngestResponse(
         doc_id=request.doc_id,
         trace_id=trace_id,
@@ -295,6 +296,7 @@ async def _ingest_signed_url(request: Request) -> IngestResponse:
     payload = IngestSignedUrlRequest.model_validate(await request.json())
     doc_id = payload.doc_id or str(uuid4())
     trace_id = payload.trace_id or str(uuid4())
+    job_id: str | None = None
     object_name = f"raw/{payload.tenant}/{doc_id}/{safe_object_name(payload.filename)}"
     gcs_uri = f"gs://{config.raw_bucket}/{object_name}"
 
@@ -314,8 +316,9 @@ async def _ingest_signed_url(request: Request) -> IngestResponse:
             "warning",
             "signed_url_generation_failed",
             trace_id=trace_id,
-            error=str(exc),
             doc_id=doc_id,
+            tenant=payload.tenant,
+            error=str(exc),
         )
 
     with get_connection(config.database_url) as conn:
@@ -329,7 +332,7 @@ async def _ingest_signed_url(request: Request) -> IngestResponse:
                 size_bytes=payload.size,
                 content_hash=None,
             )
-            upsert_process_job(
+            job_id = upsert_process_job(
                 cur,
                 doc_id=doc_id,
                 tenant=payload.tenant,
@@ -344,6 +347,7 @@ async def _ingest_signed_url(request: Request) -> IngestResponse:
         "signed_url_created",
         trace_id=trace_id,
         doc_id=doc_id,
+        job_id=job_id,
         tenant=payload.tenant,
         gcs_uri=gcs_uri,
         signed_url_available=upload_url is not None,
@@ -371,6 +375,7 @@ async def _ingest_multipart(request: Request) -> IngestResponse:
     doc_id = str(form.get("doc_id") or uuid4())
     trace_id = str(form.get("trace_id") or uuid4())
     force_reprocess = str(form.get("force_reprocess") or "false").lower() == "true"
+    job_id: str | None = None
 
     filename = getattr(file, "filename", "document.bin")
     content_type = getattr(file, "content_type", None) or "application/octet-stream"
@@ -415,7 +420,7 @@ async def _ingest_multipart(request: Request) -> IngestResponse:
                 size_bytes=len(payload),
                 content_hash=content_hash,
             )
-            upsert_process_job(
+            job_id = upsert_process_job(
                 cur,
                 doc_id=doc_id,
                 tenant=tenant,
@@ -434,7 +439,7 @@ async def _ingest_multipart(request: Request) -> IngestResponse:
         ts=now_iso8601(),
         trace_id=trace_id,
     )
-    message_id = _publish_ingest_message(message)
+    message_id = _publish_ingest_message(message, job_id=job_id)
 
     return IngestResponse(
         doc_id=doc_id,
@@ -446,7 +451,7 @@ async def _ingest_multipart(request: Request) -> IngestResponse:
     )
 
 
-def _publish_ingest_message(message: IngestMessage) -> str:
+def _publish_ingest_message(message: IngestMessage, *, job_id: str | None = None) -> str:
     payload = message.model_dump(mode="json")
     message_id = publisher.publish_json(config.ingest_topic, payload)
     log_event(
@@ -454,6 +459,7 @@ def _publish_ingest_message(message: IngestMessage) -> str:
         "ingest_message_published",
         trace_id=message.trace_id,
         doc_id=message.id,
+        job_id=job_id,
         tenant=message.tenant,
         topic=config.ingest_topic,
         pubsub_message_id=message_id,

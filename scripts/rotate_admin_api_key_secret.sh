@@ -36,11 +36,34 @@ printf "%s" "$NEW_KEY" | gcloud secrets versions add "$SECRET_NAME" \
 unset NEW_KEY
 
 echo "Updating ${INGEST_SERVICE} to use Secret Manager env binding..."
-gcloud run services update "$INGEST_SERVICE" \
-  --project "$PROJECT_ID" \
-  --region "$REGION" \
-  --update-secrets "ADMIN_API_KEY=${SECRET_NAME}:latest" \
-  --quiet >/dev/null
+set +e
+UPDATE_OUTPUT="$(
+  gcloud run services update "$INGEST_SERVICE" \
+    --project "$PROJECT_ID" \
+    --region "$REGION" \
+    --update-secrets "ADMIN_API_KEY=${SECRET_NAME}:latest" \
+    --quiet 2>&1
+)"
+UPDATE_EXIT=$?
+set -e
+if [[ $UPDATE_EXIT -ne 0 ]]; then
+  if grep -q "different type" <<<"$UPDATE_OUTPUT"; then
+    echo "Converting ADMIN_API_KEY from plain env var to secret binding..."
+    gcloud run services update "$INGEST_SERVICE" \
+      --project "$PROJECT_ID" \
+      --region "$REGION" \
+      --remove-env-vars "ADMIN_API_KEY" \
+      --quiet >/dev/null
+    gcloud run services update "$INGEST_SERVICE" \
+      --project "$PROJECT_ID" \
+      --region "$REGION" \
+      --update-secrets "ADMIN_API_KEY=${SECRET_NAME}:latest" \
+      --quiet >/dev/null
+  else
+    echo "$UPDATE_OUTPUT" >&2
+    exit $UPDATE_EXIT
+  fi
+fi
 
 echo "ADMIN_API_KEY rotated and bound via Secret Manager."
 echo "secret_name=${SECRET_NAME}"

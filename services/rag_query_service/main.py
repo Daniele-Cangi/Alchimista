@@ -40,6 +40,8 @@ def readyz() -> dict:
 @app.post("/v1/query", response_model=QueryResponse)
 def query(payload: QueryRequest) -> QueryResponse:
     trace_id = payload.trace_id or str(uuid4())
+    query_job_id = f"rag-query:{trace_id}"
+    query_doc_id = payload.doc_ids[0] if payload.doc_ids and len(payload.doc_ids) == 1 else None
     query_embedding = deterministic_embedding(payload.query)
     hits: list[dict] = []
     backend_used = "sql_embedding_scan"
@@ -52,8 +54,10 @@ def query(payload: QueryRequest) -> QueryResponse:
             log_event(
                 "warning",
                 "rag_query_vertex_fallback_sql",
-                tenant=payload.tenant,
                 trace_id=trace_id,
+                doc_id=query_doc_id,
+                job_id=query_job_id,
+                tenant=payload.tenant,
                 error=str(exc),
             )
             hits = []
@@ -67,6 +71,8 @@ def query(payload: QueryRequest) -> QueryResponse:
             "info",
             "rag_query_no_chunks",
             trace_id=trace_id,
+            doc_id=query_doc_id,
+            job_id=query_job_id,
             tenant=payload.tenant,
             top_k=payload.top_k,
             backend=backend_used,
@@ -79,6 +85,8 @@ def query(payload: QueryRequest) -> QueryResponse:
         "info",
         "rag_query_completed",
         trace_id=trace_id,
+        doc_id=query_doc_id,
+        job_id=query_job_id,
         tenant=payload.tenant,
         top_k=payload.top_k,
         answers=1,

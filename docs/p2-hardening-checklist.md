@@ -19,4 +19,4 @@
 ## Observability
 - [x] Dashboard: backlog age, error rate, p95 processing time (`Alchimista P2 Operations`)
 - [x] Alerts: failed jobs spike, DLQ growth, SQL connection saturation (`scripts/apply_p2_observability.sh`)
-- [ ] Structured logs include `trace_id`, `doc_id`, `job_id`, `tenant`
+- [x] Structured logs include `trace_id`, `doc_id`, `job_id`, `tenant` (`services/shared/logging_utils.py`)

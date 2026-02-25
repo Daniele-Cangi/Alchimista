@@ -95,6 +95,7 @@ def _process_with_backpressure(message: IngestMessage) -> ProcessResponse:
             "processor_backpressure_reject",
             trace_id=message.trace_id,
             doc_id=message.id,
+            job_id=None,
             tenant=message.tenant,
             active=inflight_gate.active,
             max_inflight=inflight_gate.limit,
@@ -108,12 +109,13 @@ def _process_with_backpressure(message: IngestMessage) -> ProcessResponse:
 
 def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
     trace_id = message.trace_id or str(uuid4())
+    process_job_id: str | None = None
     started_at = utcnow()
     t0 = time.perf_counter()
 
     with get_connection(config.database_url) as conn:
         with conn.cursor() as cur:
-            upsert_process_job(
+            process_job_id = upsert_process_job(
                 cur,
                 doc_id=message.id,
                 tenant=message.tenant,
@@ -187,7 +189,7 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
 
         with get_connection(config.database_url) as conn:
             with conn.cursor() as cur:
-                upsert_process_job(
+                process_job_id = upsert_process_job(
                     cur,
                     doc_id=message.id,
                     tenant=message.tenant,
@@ -211,6 +213,7 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
             "document_processed",
             trace_id=trace_id,
             doc_id=message.id,
+            job_id=process_job_id,
             tenant=message.tenant,
             chunks=len(chunk_records),
             entities=len(entity_records),
@@ -232,7 +235,7 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
 
         with get_connection(config.database_url) as conn:
             with conn.cursor() as cur:
-                upsert_process_job(
+                process_job_id = upsert_process_job(
                     cur,
                     doc_id=message.id,
                     tenant=message.tenant,
@@ -245,12 +248,13 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
                 )
                 conn.commit()
 
-        _publish_dlq(message, trace_id, error_text)
+        _publish_dlq(message, trace_id, error_text, job_id=process_job_id)
         log_event(
             "error",
             "document_processing_failed",
             trace_id=trace_id,
             doc_id=message.id,
+            job_id=process_job_id,
             tenant=message.tenant,
             error=error_text,
         )
@@ -300,7 +304,7 @@ def _extract_image_text(payload: bytes) -> str:
         return pytesseract.image_to_string(img)
 
 
-def _publish_dlq(message: IngestMessage, trace_id: str, reason: str) -> None:
+def _publish_dlq(message: IngestMessage, trace_id: str, reason: str, job_id: str | None) -> None:
     payload = {
         "reason": reason,
         "trace_id": trace_id,
@@ -315,6 +319,8 @@ def _publish_dlq(message: IngestMessage, trace_id: str, reason: str) -> None:
             "dlq_publish_failed",
             trace_id=trace_id,
             doc_id=message.id,
+            job_id=job_id,
+            tenant=message.tenant,
             error=str(exc),
         )
 

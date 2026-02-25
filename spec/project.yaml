@@ -119,7 +119,7 @@ runtime_services:
   ingestion_api_service:
     target_name: ingestion-api-service
     deployed_url: https://ingestion-api-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: ingestion-api-service-00009-2nq
+    latest_ready_revision: ingestion-api-service-00010-fbv
     expected_endpoints:
       - POST /v1/ingest
       - POST /v1/ingest/complete
@@ -130,7 +130,7 @@ runtime_services:
   document_processor_service:
     target_name: document-processor-service
     deployed_url: https://document-processor-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: document-processor-service-00007-4mv
+    latest_ready_revision: document-processor-service-00008-wdl
     expected_endpoints:
       - POST /v1/process
       - POST /v1/process/pubsub
@@ -139,7 +139,7 @@ runtime_services:
   rag_query_service:
     target_name: rag-query-service
     deployed_url: https://rag-query-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: rag-query-service-00008-wj4
+    latest_ready_revision: rag-query-service-00009-kz9
     expected_endpoints:
       - POST /v1/query
       - GET /v1/healthz
@@ -207,7 +207,7 @@ contracts:
 p0_p1_progress:
   p0_direction_lock: done
   p1_vertical_slice: done
-  p2_hardening: in_progress
+  p2_hardening: done
 
 security_hardening:
   dedicated_service_accounts_enabled: true
@@ -240,10 +240,10 @@ observability:
       display_name: Cloud Run P95 Latency High
 
 validation:
-  last_smoke_test_at: "2026-02-25T13:33:28Z"
+  last_smoke_test_at: "2026-02-25T14:06:31Z"
   smoke_test_result: passed
   sample_doc_id: d4f5b676-e92d-4def-9d75-82e1f454f922
-  sample_trace_id: 7b86ce59-5234-477f-97f8-6e832828a495
+  sample_trace_id: 9a4de16c-5169-4afc-bb8b-0f551172e1a1
   ingest_subscription_push_endpoint: https://document-processor-service-pe7qslbcvq-ez.a.run.app/v1/process/pubsub
   runtime_vector_backend_active: vertex_ai_vector_search
   processor_runtime_limits:
@@ -267,3 +267,10 @@ validation:
     requested: 1
     pulled: 0
     replayed: 0
+  structured_logging_validation:
+    ingestion_trace_id: 9e9b3270-b594-4bda-b17b-b2de0686ce07
+    ingestion_job_id: a43546bc-53fc-45dc-8339-ed5396c62dfb
+    processor_trace_id: 9a4de16c-5169-4afc-bb8b-0f551172e1a1
+    processor_job_id: 4615523b-7095-445f-82d9-f432bff5759f
+    rag_trace_id: 9a4de16c-5169-4afc-bb8b-0f551172e1a1
+    rag_job_id: rag-query:9a4de16c-5169-4afc-bb8b-0f551172e1a1

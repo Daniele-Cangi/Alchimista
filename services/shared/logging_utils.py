@@ -12,9 +12,16 @@ logger = logging.getLogger("alchimista")
 
 
 def log_event(level: str, message: str, **kwargs: Any) -> None:
+    required_context = {
+        "trace_id": kwargs.pop("trace_id", None),
+        "doc_id": kwargs.pop("doc_id", None),
+        "job_id": kwargs.pop("job_id", None),
+        "tenant": kwargs.pop("tenant", None),
+    }
     payload = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "message": message,
+        **required_context,
         **kwargs,
     }
     line = json.dumps(payload, ensure_ascii=True)
