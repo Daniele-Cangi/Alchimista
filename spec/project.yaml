@@ -285,7 +285,7 @@ p0_p1_progress:
   p4_2_audit_export_gcs_and_advanced_filters: done
   p4_3_regulator_bundle_and_admin_cross_tenant: done
   p4_4_crypto_verify_and_regulator_package: done
-  p5_governance_retention_immutability_connectors: in_progress
+  p5_governance_retention_immutability_connectors: done
 
 p4_audit_trail_engine:
   status: p4_4_done
@@ -351,7 +351,7 @@ p4_audit_trail_engine:
     default_tenant_path_guard: true
 
 p5_governance_connectors:
-  status: in_progress
+  status: done
   connector_ingest:
     gcs_import_endpoint: POST /v1/connectors/gcs/import
     dedup_strategy: content_hash_unique_by_tenant

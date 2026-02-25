@@ -318,6 +318,7 @@ curl -sS "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/legal-h
   -H "x-admin-key: ${ADMIN_API_KEY}"
 ```
 - Artifact writes are immutable (write-once): reusing the same `object_name`/`object_prefix` now returns `409`.
+- Full P5 details: `docs/p5-governance-and-connectors.md`.
 - Optional signing (HMAC) for exported reports:
 ```bash
 AUDIT_REPORT_SIGNING_KEY='REPLACE_WITH_STRONG_SECRET'
