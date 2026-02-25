@@ -1,9 +1,16 @@
 # Alchimista Engine
 
-Alchimista is a Document Processing + RAG Engine (not a generic chatbot).
+Alchimista is an enterprise **Document Processing + RAG + AI Audit Trail Engine** (not a generic chatbot).
 
 ## North Star
-Upload a document, convert it into structured knowledge (chunks, entities, embeddings, metadata), and answer queries with mandatory citations (`doc_id`, `chunk_id`) and full auditability (`trace_id`, `job_id`).
+Upload documents and AI decisions, convert them into auditable knowledge (chunks, entities, embeddings, metadata), answer with mandatory citations (`doc_id`, `chunk_id`), and enforce governance controls (retention policies, legal holds, immutable artifacts, traceability via `trace_id`/`job_id`).
+
+## What The Software Does
+- Document intake and processing pipeline (`/v1/ingest` -> Pub/Sub -> processor -> SQL + vector index).
+- RAG query engine with mandatory citations (`/v1/query`).
+- AI decision trail ingestion/query/export/package (`/v1/decisions*`) for regulator-grade evidence.
+- Governance controls for retention policies and legal holds (`/v1/admin/retention-policies`, `/v1/admin/legal-holds`).
+- Retention enforcement engine (`/v1/admin/retention/enforce`) with dry-run, hold-aware deletion, and audit trail of deletion actions.
 
 ## Repository layout
 - `spec/project.yaml`: single source of truth for project direction and infrastructure contract
@@ -416,4 +423,23 @@ curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin
   - `dry_run` smoke: `HTTP 200`, trace_id `6ef64f51-fb5a-4539-b58a-9964bc4791e1`
   - `delete` smoke: `HTTP 200`, trace_id `52698ca4-3e2c-4971-b0ce-e0bfcd8ee094`
   - post-policy-seed dry-run: `HTTP 200`, trace_id `882ce2d8-e8dc-4bf9-a596-60cb8b6ad525`, `skipped_policy_missing=0`
+- Run from CLI with helper script:
+```bash
+TOKEN="${TOKEN}" ADMIN_API_KEY="${ADMIN_API_KEY}" \
+TENANT=default ARTIFACT_TYPE='' DRY_RUN=true LIMIT=200 \
+./scripts/run_p6_retention_enforcement.sh
+```
+- Scheduled automation:
+  - `.github/workflows/retention-enforce.yml` runs daily at `03:40 UTC` in `dry_run=true`.
+  - Manual delete run example:
+```bash
+gh workflow run retention-enforce.yml \
+  -f environment_name=test \
+  -f project_id=secure-electron-474908-k9 \
+  -f tenant=default \
+  -f artifact_type= \
+  -f dry_run=false \
+  -f limit=200 \
+  -f fail_on_errors=true
+```
 - Full P6 details: `docs/p6-retention-enforcement.md`.

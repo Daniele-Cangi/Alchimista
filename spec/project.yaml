@@ -1,8 +1,10 @@
 version: 1
 last_updated: "2026-02-25"
 north_star: >-
-  Enterprise Document Processing + RAG Engine: upload document, transform into
-  chunked and indexed knowledge, and answer queries with mandatory citations.
+  Enterprise Document Processing + RAG + AI Audit Trail Engine: upload
+  documents and AI decisions, transform into chunked/indexed auditable
+  knowledge, answer queries with mandatory citations, and enforce governance
+  controls (retention/legal-hold/immutability).
 
 project:
   id: secure-electron-474908-k9
@@ -288,6 +290,7 @@ p0_p1_progress:
   p4_4_crypto_verify_and_regulator_package: done
   p5_governance_retention_immutability_connectors: done
   p6_retention_enforcement_engine: done
+  p6_1_retention_scheduler_automation: done
 
 p4_audit_trail_engine:
   status: p4_4_done
@@ -425,6 +428,11 @@ p6_retention_enforcement:
     scanned: 3
     skipped_not_expired: 3
     skipped_policy_missing: 0
+  automation:
+    workflow: .github/workflows/retention-enforce.yml
+    helper_script: scripts/run_p6_retention_enforcement.sh
+    schedule_utc: "40 3 * * *"
+    default_scheduled_mode: dry_run
 
 p3_parallel_execution:
   p3_2_retrieval_real:
@@ -475,6 +483,7 @@ p3_parallel_execution:
       - .github/workflows/benchmark-gate.yml
       - .github/workflows/deploy-cloud-run.yml
       - .github/workflows/rotate-audit-signing-key.yml
+      - .github/workflows/retention-enforce.yml
     deploy_script: scripts/deploy_cloud_run_service.sh
     benchmark_gate_script: scripts/check_benchmark_gate.py
     github_environment: test
@@ -483,6 +492,8 @@ p3_parallel_execution:
       - GCP_DEPLOY_SERVICE_ACCOUNT
       - AUTH0_CLIENT_ID
       - AUTH0_CLIENT_SECRET
+    optional_environment_secrets:
+      - ADMIN_API_KEY
     deploy_service_account_requirements:
       project_roles:
         - roles/run.admin

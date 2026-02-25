@@ -53,3 +53,8 @@ Supported scope mapping:
 - `delete_job_id`
 
 Objects are deleted from GCS with generation precondition when generation metadata is available.
+
+## Automation
+- GitHub workflow: `.github/workflows/retention-enforce.yml`
+- Schedule: daily at `03:40 UTC` (`dry_run=true`)
+- Manual dispatch supports deletion mode (`dry_run=false`) for controlled maintenance windows.

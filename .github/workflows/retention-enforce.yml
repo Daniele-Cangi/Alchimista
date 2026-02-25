@@ -1,0 +1,141 @@
+name: retention-enforce
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment_name:
+        description: "GitHub Environment name"
+        required: true
+        default: test
+      project_id:
+        description: "GCP project id"
+        required: true
+        default: secure-electron-474908-k9
+      tenant:
+        description: "Tenant to enforce"
+        required: true
+        default: default
+      artifact_type:
+        description: "Optional artifact type (empty = all types)"
+        required: false
+        default: ""
+      dry_run:
+        description: "Run without deletion"
+        required: true
+        type: boolean
+        default: true
+      limit:
+        description: "Max artifacts scanned per run"
+        required: true
+        default: "200"
+      ingest_url:
+        description: "Ingestion service URL"
+        required: true
+        default: https://ingestion-api-service-pe7qslbcvq-ez.a.run.app
+      fail_on_errors:
+        description: "Fail workflow if API reports failed>0"
+        required: true
+        type: boolean
+        default: true
+  schedule:
+    - cron: "40 3 * * *"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  retention:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ github.event.inputs.environment_name || 'test' }}
+    env:
+      PROJECT_ID: ${{ github.event.inputs.project_id || 'secure-electron-474908-k9' }}
+      TENANT: ${{ github.event.inputs.tenant || 'default' }}
+      ARTIFACT_TYPE: ${{ github.event.inputs.artifact_type || '' }}
+      LIMIT: ${{ github.event.inputs.limit || '200' }}
+      INGEST_URL: ${{ github.event.inputs.ingest_url || 'https://ingestion-api-service-pe7qslbcvq-ez.a.run.app' }}
+      FAIL_ON_ERRORS: ${{ github.event.inputs.fail_on_errors || 'true' }}
+      AUTH0_DOMAIN: alchimista.eu.auth0.com
+      AUTH0_AUDIENCE: https://api.alchimista.ai
+      AUTH0_CLIENT_ID: ${{ secrets.AUTH0_CLIENT_ID }}
+      AUTH0_CLIENT_SECRET: ${{ secrets.AUTH0_CLIENT_SECRET }}
+      ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Validate required secrets
+        run: |
+          if [[ -z "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" || -z "${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}" ]]; then
+            echo "Missing GCP_WORKLOAD_IDENTITY_PROVIDER or GCP_DEPLOY_SERVICE_ACCOUNT in GitHub environment secrets"
+            exit 1
+          fi
+          if [[ -z "$AUTH0_CLIENT_ID" || -z "$AUTH0_CLIENT_SECRET" ]]; then
+            echo "Missing AUTH0_CLIENT_ID or AUTH0_CLIENT_SECRET in GitHub environment secrets"
+            exit 1
+          fi
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Resolve run mode
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "DRY_RUN=true" >> "$GITHUB_ENV"
+          else
+            echo "DRY_RUN=${{ github.event.inputs.dry_run || 'true' }}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Mint Auth0 M2M token
+        run: |
+          TOKEN="$(./scripts/get_auth0_m2m_token.sh "$AUTH0_DOMAIN" "$AUTH0_CLIENT_ID" "$AUTH0_CLIENT_SECRET" "$AUTH0_AUDIENCE")"
+          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Resolve ADMIN_API_KEY
+        run: |
+          if [[ -n "$ADMIN_API_KEY" ]]; then
+            echo "Using ADMIN_API_KEY from GitHub environment secret"
+            exit 0
+          fi
+          echo "ADMIN_API_KEY secret not set in GitHub environment; falling back to Secret Manager"
+          ADMIN_API_KEY="$(
+            gcloud secrets versions access latest \
+              --secret alchimista-admin-api-key \
+              --project "$PROJECT_ID"
+          )"
+          if [[ -z "$ADMIN_API_KEY" ]]; then
+            echo "Unable to resolve ADMIN_API_KEY from Secret Manager"
+            exit 1
+          fi
+          echo "ADMIN_API_KEY=$ADMIN_API_KEY" >> "$GITHUB_ENV"
+
+      - name: Execute retention enforcement
+        run: |
+          OUTPUT_JSON_PATH="/tmp/p6_retention_enforce.json" \
+          INGEST_URL="$INGEST_URL" \
+          TENANT="$TENANT" \
+          ARTIFACT_TYPE="$ARTIFACT_TYPE" \
+          DRY_RUN="$DRY_RUN" \
+          LIMIT="$LIMIT" \
+          FAIL_ON_ERRORS="$FAIL_ON_ERRORS" \
+          TOKEN="$TOKEN" \
+          ADMIN_API_KEY="$ADMIN_API_KEY" \
+          PROJECT_ID="$PROJECT_ID" \
+          ./scripts/run_p6_retention_enforcement.sh | tee /tmp/p6_retention_summary.json
+
+      - name: Upload retention artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: retention-enforce-${{ github.run_id }}
+          path: |
+            /tmp/p6_retention_enforce.json
+            /tmp/p6_retention_summary.json
