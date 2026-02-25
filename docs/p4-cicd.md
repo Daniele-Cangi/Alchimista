@@ -8,7 +8,9 @@ This stage introduces objective quality gates before release and controlled Clou
   - Validates benchmark gate config exists in `spec/project.yaml`.
 - `.github/workflows/benchmark-gate.yml`
   - Runs benchmark against deployed services (manual + nightly schedule).
-  - Uses GitHub Environment secrets (`environment=test` by default).
+  - Uses GitHub Environment secrets:
+    - scheduled runs resolve to `prod`
+    - manual runs use `environment_name` input (default `test`)
   - Enforces gate thresholds from `spec/project.yaml`.
   - Uploads `reports/benchmarks/latest.json` as artifact.
 - `.github/workflows/deploy-cloud-run.yml`

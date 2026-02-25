@@ -14,7 +14,7 @@ jobs:
   benchmark:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: ${{ github.event.inputs.environment_name || 'test' }}
+    environment: ${{ github.event_name == 'schedule' && 'prod' || (github.event.inputs.environment_name || 'test') }}
     env:
       AUTH0_DOMAIN: alchimista.eu.auth0.com
       AUTH0_AUDIENCE: https://api.alchimista.ai

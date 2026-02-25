@@ -155,7 +155,8 @@ BENCHMARK_BEARER_TOKEN='REPLACE_ME' ./scripts/run_p3_benchmark.py
   - `.github/workflows/benchmark-gate.yml`
   - `.github/workflows/deploy-cloud-run.yml`
 - GitHub Environment used for secrets:
-  - `test` (for benchmark + deploy workflows)
+  - `test` and `prod`
+  - benchmark-gate schedule resolves to `prod`; manual runs can target `test`/`prod`
 - Bootstrap deploy IAM prerequisites:
 ```bash
 ./scripts/bootstrap_github_deploy_iam.sh secure-electron-474908-k9
