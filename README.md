@@ -14,7 +14,10 @@ Upload documents and AI decisions, convert them into auditable knowledge (chunks
 
 ## License
 This repository is distributed under a proprietary commercial license.
-See `LICENSE`.
+See:
+- `LICENSE`
+- `NOTICE`
+- `TERMS.md`
 
 ## Repository layout
 - `spec/project.yaml`: single source of truth for project direction and infrastructure contract
