@@ -45,7 +45,36 @@ images:
 EOF
 
 echo "Building image for ${SERVICE}..."
-gcloud builds submit --project "$PROJECT_ID" --config "$TMP_CONFIG" --suppress-logs .
+BUILD_ID="$(gcloud builds submit \
+  --project "$PROJECT_ID" \
+  --config "$TMP_CONFIG" \
+  --async \
+  --format='value(metadata.build.id)' \
+  .)"
+
+if [[ -z "$BUILD_ID" ]]; then
+  echo "Failed to obtain Cloud Build ID for ${SERVICE}" >&2
+  exit 1
+fi
+
+echo "Build started for ${SERVICE}: ${BUILD_ID}"
+while true; do
+  STATUS="$(gcloud builds describe "$BUILD_ID" --project "$PROJECT_ID" --format='value(status)')"
+  case "$STATUS" in
+    SUCCESS)
+      echo "Build succeeded for ${SERVICE}"
+      break
+      ;;
+    QUEUED|PENDING|WORKING)
+      sleep 5
+      ;;
+    *)
+      LOG_URL="$(gcloud builds describe "$BUILD_ID" --project "$PROJECT_ID" --format='value(logUrl)')"
+      echo "Build failed for ${SERVICE}: status=${STATUS} log_url=${LOG_URL}" >&2
+      exit 1
+      ;;
+  esac
+done
 
 echo "Deploying ${SERVICE}..."
 gcloud run deploy "$SERVICE" \
