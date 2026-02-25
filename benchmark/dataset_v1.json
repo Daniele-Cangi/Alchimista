@@ -1,0 +1,66 @@
+{
+  "name": "alchimista_p3_1_baseline_v1",
+  "tenant": "benchmark",
+  "top_k": 3,
+  "documents": [
+    {
+      "alias": "alpha",
+      "doc_id": "bench-alpha-v1",
+      "filename": "alpha.txt",
+      "content_type": "text/plain",
+      "content": "Invoice code ALPHA-INV-001. Amount due: 1200 DKK. Contact: alpha@vendor.example."
+    },
+    {
+      "alias": "beta",
+      "doc_id": "bench-beta-v1",
+      "filename": "beta.txt",
+      "content_type": "text/plain",
+      "content": "Invoice code BETA-INV-002. Amount due: 640 EUR. Contact: beta@vendor.example."
+    },
+    {
+      "alias": "gamma",
+      "doc_id": "bench-gamma-v1",
+      "filename": "gamma.txt",
+      "content_type": "text/plain",
+      "content": "Invoice code GAMMA-INV-003. Amount due: 990 USD. Contact: gamma@vendor.example."
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q_alpha_amount",
+      "query": "What is the amount due for ALPHA-INV-001?",
+      "expected_doc_alias": "alpha",
+      "expected_keyword": "1200 DKK"
+    },
+    {
+      "query_id": "q_beta_amount",
+      "query": "What is the amount due for BETA-INV-002?",
+      "expected_doc_alias": "beta",
+      "expected_keyword": "640 EUR"
+    },
+    {
+      "query_id": "q_gamma_amount",
+      "query": "What is the amount due for GAMMA-INV-003?",
+      "expected_doc_alias": "gamma",
+      "expected_keyword": "990 USD"
+    },
+    {
+      "query_id": "q_alpha_contact",
+      "query": "Which contact email is tied to ALPHA-INV-001?",
+      "expected_doc_alias": "alpha",
+      "expected_keyword": "alpha@vendor.example"
+    },
+    {
+      "query_id": "q_beta_contact",
+      "query": "Which contact email is tied to BETA-INV-002?",
+      "expected_doc_alias": "beta",
+      "expected_keyword": "beta@vendor.example"
+    },
+    {
+      "query_id": "q_gamma_contact",
+      "query": "Which contact email is tied to GAMMA-INV-003?",
+      "expected_doc_alias": "gamma",
+      "expected_keyword": "gamma@vendor.example"
+    }
+  ]
+}

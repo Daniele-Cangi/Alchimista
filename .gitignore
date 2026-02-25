@@ -29,3 +29,6 @@ override.tf.json
 # Build artifacts
 coverage/
 dist/
+
+# Generated benchmark outputs
+reports/benchmarks/*.json

@@ -95,3 +95,10 @@ MAX_MESSAGES=25 ./scripts/replay_dlq.sh
 ./scripts/enable_vertex_backend.sh secure-electron-474908-k9 europe-west4 \
   3994068346873053184 5596857233007706112 alchimista_chunks_deployed_v3
 ```
+
+## P3.1 Benchmark
+- Dataset baseline: `benchmark/dataset_v1.json`
+- Run benchmark and generate report:
+```bash
+./scripts/run_p3_benchmark.py --dataset benchmark/dataset_v1.json --output-dir reports/benchmarks
+```

@@ -204,10 +204,39 @@ contracts:
         ]
       }
 
+benchmark:
+  p3_1_baseline:
+    name: alchimista_p3_1_baseline_v1
+    dataset_path: benchmark/dataset_v1.json
+    latest_report_path: reports/benchmarks/latest.json
+    baseline_run_id: "20260225T142209Z"
+    generated_at_utc: "2026-02-25T14:22:21.258487Z"
+    summary:
+      total_queries: 6
+      successful_queries: 6
+      failed_queries: 0
+      error_rate: 0.0
+      citation_coverage: 1.0
+      recall_at_k: 1.0
+      keyword_hit_rate: 1.0
+      mrr: 0.4166666666666667
+    interpretation:
+      - baseline_is_functional_but_ranking_quality_is_low_for_top1
+      - deterministic_hash_embedding_is_non_semantic_placeholder
+  gates:
+    min_success_rate: 0.99
+    min_citation_coverage: 1.0
+    min_recall_at_k: 0.95
+    min_mrr: 0.65
+
 p0_p1_progress:
   p0_direction_lock: done
   p1_vertical_slice: done
   p2_hardening: done
+  p3_1_benchmark: done
+  p3_2_retrieval_real: pending
+  p3_3_enterprise_auth: pending
+  p3_4_cicd_discipline: pending
 
 security_hardening:
   dedicated_service_accounts_enabled: true
