@@ -58,6 +58,15 @@ for ROLE in roles/storage.objectAdmin roles/storage.bucketViewer; do
     --quiet >/dev/null || true
 done
 
+# P4 export writes signed audit snapshots to reports bucket.
+for ROLE in roles/storage.objectAdmin roles/storage.bucketViewer; do
+  gcloud storage buckets add-iam-policy-binding "gs://${REPORTS_BUCKET}" \
+    --member="serviceAccount:${INGEST_SA}" \
+    --role="$ROLE" \
+    --project "$PROJECT_ID" \
+    --quiet >/dev/null || true
+done
+
 gcloud pubsub topics add-iam-policy-binding "$INGEST_TOPIC" \
   --project "$PROJECT_ID" \
   --member="serviceAccount:${INGEST_SA}" \
