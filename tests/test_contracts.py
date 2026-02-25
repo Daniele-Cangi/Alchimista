@@ -14,6 +14,8 @@ from services.shared.contracts import (
     IngestMessage,
     LegalHoldCreateRequest,
     QueryAnswer,
+    RetentionEnforcementRequest,
+    RetentionEnforcementResponse,
     RetentionPolicyUpsertRequest,
 )
 
@@ -208,6 +210,45 @@ def test_retention_policy_contract_defaults() -> None:
     assert model.artifact_type == "audit_artifacts"
     assert model.retain_days == 365
     assert model.immutable_required is True
+
+
+def test_retention_enforcement_contract_defaults() -> None:
+    model = RetentionEnforcementRequest.model_validate({})
+    assert model.artifact_type == "audit_artifacts"
+    assert model.dry_run is True
+    assert model.limit == 200
+
+
+def test_retention_enforcement_response_contract() -> None:
+    model = RetentionEnforcementResponse.model_validate(
+        {
+            "trace_id": "trace-1",
+            "dry_run": True,
+            "tenant": "default",
+            "artifact_type": "decision_export",
+            "scanned": 5,
+            "eligible": 2,
+            "deleted": 0,
+            "skipped_not_expired": 3,
+            "skipped_on_hold": 1,
+            "skipped_policy_missing": 0,
+            "failed": 0,
+            "items": [
+                {
+                    "artifact_id": "art-1",
+                    "tenant": "default",
+                    "artifact_type": "decision_export",
+                    "gs_uri": "gs://bucket/reports/default/audit/export.json",
+                    "created_at": "2026-02-01T00:00:00Z",
+                    "expires_at": "2027-02-01T00:00:00Z",
+                    "age_days": 24,
+                    "action": "SKIP_NOT_EXPIRED",
+                    "reason": "Retention period not expired",
+                }
+            ],
+        }
+    )
+    assert model.items[0].artifact_id == "art-1"
 
 
 def test_legal_hold_contract_requires_reason_length() -> None:

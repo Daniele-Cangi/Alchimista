@@ -5,6 +5,7 @@ from urllib.parse import quote
 
 import google.auth
 from google.auth.transport.requests import Request
+from google.api_core.exceptions import NotFound
 from google.cloud import storage
 
 
@@ -40,6 +41,18 @@ class StorageClient:
         bucket, object_name = parse_gs_uri(gs_uri)
         blob = self.client.bucket(bucket).blob(object_name)
         return blob.download_as_bytes()
+
+    def delete_gs_uri(self, gs_uri: str, if_generation_match: int | None = None) -> bool:
+        bucket_name, object_name = parse_gs_uri(gs_uri)
+        blob = self.client.bucket(bucket_name).blob(object_name)
+        kwargs: dict[str, int] = {}
+        if if_generation_match is not None and int(if_generation_match) > 0:
+            kwargs["if_generation_match"] = int(if_generation_match)
+        try:
+            blob.delete(**kwargs)
+            return True
+        except NotFound:
+            return False
 
     def get_blob_size(self, gs_uri: str) -> int:
         bucket, object_name = parse_gs_uri(gs_uri)

@@ -35,3 +35,8 @@ Endpoints:
 - `audit_artifacts`
 
 These are created by canonical migration (`sql/schema.sql`) and runtime safety net (`_ensure_ai_decision_schema`).
+
+## P6 follow-up
+- `POST /v1/admin/retention/enforce` applies retention policies in dry-run or delete mode.
+- Deletions are legal-hold aware and tracked in `audit_artifacts` soft-delete fields.
+- See `docs/p6-retention-enforcement.md`.

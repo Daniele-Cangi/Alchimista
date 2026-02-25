@@ -8,7 +8,7 @@ import mimetypes
 import os
 import posixpath
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -49,6 +49,9 @@ from services.shared.contracts import (
     LegalHoldResponse,
     RetentionPolicyRecord,
     RetentionPolicyListResponse,
+    RetentionEnforcementItem,
+    RetentionEnforcementRequest,
+    RetentionEnforcementResponse,
     RetentionPolicyResponse,
     RetentionPolicyUpsertRequest,
     now_iso8601,
@@ -1276,6 +1279,204 @@ def list_legal_holds(request: Request, tenant: str | None = None, active_only: b
     return LegalHoldListResponse(trace_id=trace_id, tenant=tenant, active_only=active_only, holds=holds)
 
 
+@app.post("/v1/admin/retention/enforce", response_model=RetentionEnforcementResponse)
+def enforce_retention(payload: RetentionEnforcementRequest, request: Request) -> RetentionEnforcementResponse:
+    principal = require_auth(request, config=config)
+    _require_admin_api_key(request)
+    trace_id = payload.trace_id or str(uuid4())
+    actor = principal.subject if principal else "anonymous"
+    now = datetime.now(timezone.utc)
+    job_id = f"retention-enforce:{trace_id}"
+
+    scanned = 0
+    eligible = 0
+    deleted = 0
+    skipped_not_expired = 0
+    skipped_on_hold = 0
+    skipped_policy_missing = 0
+    failed = 0
+    items: list[RetentionEnforcementItem] = []
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            candidates = _list_retention_candidates(
+                cur,
+                tenant=payload.tenant,
+                artifact_type=payload.artifact_type,
+                limit=payload.limit,
+            )
+            holds = _list_legal_holds(cur, tenant=payload.tenant, active_only=True)
+            scanned = len(candidates)
+
+            for row in candidates:
+                policy = _extract_retention_policy_from_candidate(row)
+                metadata = row.get("metadata") or {}
+                created_at = row["created_at"]
+
+                if policy is None:
+                    skipped_policy_missing += 1
+                    items.append(
+                        RetentionEnforcementItem(
+                            artifact_id=str(row["artifact_id"]),
+                            tenant=str(row["tenant"]),
+                            artifact_type=str(row["artifact_type"]),
+                            gs_uri=str(row["gs_uri"]),
+                            created_at=created_at,
+                            expires_at=created_at,
+                            age_days=max(0, int((now - created_at).total_seconds() // 86400)),
+                            action="SKIP_POLICY_MISSING",
+                            reason="No retention policy configured for tenant/artifact_type",
+                        )
+                    )
+                    continue
+
+                expires_at = created_at + timedelta(days=policy["retain_days"])
+                age_days = max(0, int((now - created_at).total_seconds() // 86400))
+                if expires_at > now:
+                    skipped_not_expired += 1
+                    items.append(
+                        RetentionEnforcementItem(
+                            artifact_id=str(row["artifact_id"]),
+                            tenant=str(row["tenant"]),
+                            artifact_type=str(row["artifact_type"]),
+                            gs_uri=str(row["gs_uri"]),
+                            created_at=created_at,
+                            expires_at=expires_at,
+                            age_days=age_days,
+                            action="SKIP_NOT_EXPIRED",
+                            reason="Retention period not expired",
+                        )
+                    )
+                    continue
+
+                eligible += 1
+                hold_ids = (
+                    _matching_legal_hold_ids_for_artifact(
+                        artifact_tenant=str(row["tenant"]),
+                        artifact_id=str(row["artifact_id"]),
+                        gs_uri=str(row["gs_uri"]),
+                        metadata=metadata,
+                        holds=holds,
+                    )
+                    if policy["legal_hold_enabled"]
+                    else []
+                )
+                if hold_ids:
+                    skipped_on_hold += 1
+                    items.append(
+                        RetentionEnforcementItem(
+                            artifact_id=str(row["artifact_id"]),
+                            tenant=str(row["tenant"]),
+                            artifact_type=str(row["artifact_type"]),
+                            gs_uri=str(row["gs_uri"]),
+                            created_at=created_at,
+                            expires_at=expires_at,
+                            age_days=age_days,
+                            action="SKIP_LEGAL_HOLD",
+                            reason="Active legal hold protects artifact",
+                            hold_ids=hold_ids,
+                        )
+                    )
+                    continue
+
+                if payload.dry_run:
+                    items.append(
+                        RetentionEnforcementItem(
+                            artifact_id=str(row["artifact_id"]),
+                            tenant=str(row["tenant"]),
+                            artifact_type=str(row["artifact_type"]),
+                            gs_uri=str(row["gs_uri"]),
+                            created_at=created_at,
+                            expires_at=expires_at,
+                            age_days=age_days,
+                            action="WOULD_DELETE",
+                            reason="Retention expired and no active legal hold",
+                        )
+                    )
+                    continue
+
+                try:
+                    storage_deleted = storage_client.delete_gs_uri(
+                        str(row["gs_uri"]),
+                        if_generation_match=row.get("object_generation"),
+                    )
+                    _mark_audit_artifact_deleted(
+                        cur,
+                        artifact_id=str(row["artifact_id"]),
+                        tenant=str(row["tenant"]),
+                        artifact_type=str(row["artifact_type"]),
+                        gs_uri=str(row["gs_uri"]),
+                        deletion_reason="retention_expired",
+                        deleted_by=actor,
+                        delete_job_id=job_id,
+                        storage_deleted=storage_deleted,
+                    )
+                    deleted += 1
+                    items.append(
+                        RetentionEnforcementItem(
+                            artifact_id=str(row["artifact_id"]),
+                            tenant=str(row["tenant"]),
+                            artifact_type=str(row["artifact_type"]),
+                            gs_uri=str(row["gs_uri"]),
+                            created_at=created_at,
+                            expires_at=expires_at,
+                            age_days=age_days,
+                            action="DELETED",
+                            reason="Retention expired and artifact removed",
+                        )
+                    )
+                except Exception as exc:
+                    failed += 1
+                    items.append(
+                        RetentionEnforcementItem(
+                            artifact_id=str(row["artifact_id"]),
+                            tenant=str(row["tenant"]),
+                            artifact_type=str(row["artifact_type"]),
+                            gs_uri=str(row["gs_uri"]),
+                            created_at=created_at,
+                            expires_at=expires_at,
+                            age_days=age_days,
+                            action="DELETE_FAILED",
+                            reason="Retention expired but deletion failed",
+                            error=str(exc),
+                        )
+                    )
+            conn.commit()
+
+    log_event(
+        "info",
+        "retention_enforcement_completed",
+        trace_id=trace_id,
+        doc_id=None,
+        job_id=job_id,
+        tenant=payload.tenant or "*",
+        actor=actor,
+        dry_run=payload.dry_run,
+        scanned=scanned,
+        eligible=eligible,
+        deleted=deleted,
+        skipped_not_expired=skipped_not_expired,
+        skipped_on_hold=skipped_on_hold,
+        skipped_policy_missing=skipped_policy_missing,
+        failed=failed,
+    )
+    return RetentionEnforcementResponse(
+        trace_id=trace_id,
+        dry_run=payload.dry_run,
+        tenant=payload.tenant,
+        artifact_type=payload.artifact_type,
+        scanned=scanned,
+        eligible=eligible,
+        deleted=deleted,
+        skipped_not_expired=skipped_not_expired,
+        skipped_on_hold=skipped_on_hold,
+        skipped_policy_missing=skipped_policy_missing,
+        failed=failed,
+        items=items,
+    )
+
+
 @app.post("/v1/admin/decisions/query", response_model=AIDecisionAdminQueryResponse)
 def query_decisions_admin(payload: AIDecisionAdminQueryRequest, request: Request) -> AIDecisionAdminQueryResponse:
     principal = require_auth(request, config=config)
@@ -1658,11 +1859,19 @@ def _ensure_ai_decision_schema(cur: Any) -> None:
               created_by TEXT NOT NULL,
               trace_id TEXT NOT NULL,
               metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
+              deleted_at TIMESTAMPTZ,
+              deleted_by TEXT,
+              deletion_reason TEXT,
+              delete_job_id TEXT,
               created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
               UNIQUE (tenant, artifact_type, gs_uri)
             )
             """
         )
+        cur.execute("ALTER TABLE audit_artifacts ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ")
+        cur.execute("ALTER TABLE audit_artifacts ADD COLUMN IF NOT EXISTS deleted_by TEXT")
+        cur.execute("ALTER TABLE audit_artifacts ADD COLUMN IF NOT EXISTS deletion_reason TEXT")
+        cur.execute("ALTER TABLE audit_artifacts ADD COLUMN IF NOT EXISTS delete_job_id TEXT")
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_model_created_at ON ai_decisions (tenant, model, created_at DESC)"
         )
@@ -1699,6 +1908,7 @@ def _ensure_ai_decision_schema(cur: Any) -> None:
             "CREATE INDEX IF NOT EXISTS idx_audit_artifacts_tenant_type_created_at ON audit_artifacts (tenant, artifact_type, created_at DESC)"
         )
         cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_artifacts_trace_id ON audit_artifacts (trace_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_artifacts_deleted_at ON audit_artifacts (deleted_at, created_at)")
         _ai_schema_initialized = True
 
 
@@ -2363,6 +2573,135 @@ def _list_legal_holds(cur: Any, *, tenant: str | None, active_only: bool) -> lis
         params,
     )
     return cur.fetchall()
+
+
+def _list_retention_candidates(
+    cur: Any,
+    *,
+    tenant: str | None,
+    artifact_type: str | None,
+    limit: int,
+) -> list[dict[str, Any]]:
+    conditions = ["a.deleted_at IS NULL"]
+    params: list[Any] = []
+    if tenant:
+        conditions.append("a.tenant = %s")
+        params.append(tenant)
+    if artifact_type:
+        conditions.append("a.artifact_type = %s")
+        params.append(artifact_type)
+    where_clause = f"WHERE {' AND '.join(conditions)}"
+    params.append(limit)
+    cur.execute(
+        f"""
+        SELECT
+          a.artifact_id,
+          a.tenant,
+          a.artifact_type,
+          a.gs_uri,
+          a.object_generation,
+          a.created_at,
+          a.metadata,
+          p.retain_days AS policy_retain_days,
+          p.legal_hold_enabled AS policy_legal_hold_enabled,
+          p.immutable_required AS policy_immutable_required
+        FROM audit_artifacts a
+        LEFT JOIN retention_policies p
+          ON p.tenant = a.tenant
+         AND p.artifact_type = a.artifact_type
+        {where_clause}
+        ORDER BY a.created_at ASC
+        LIMIT %s
+        """,
+        params,
+    )
+    return cur.fetchall()
+
+
+def _extract_retention_policy_from_candidate(row: dict[str, Any]) -> dict[str, Any] | None:
+    retain_days = row.get("policy_retain_days")
+    if retain_days is None:
+        return None
+    return {
+        "retain_days": int(retain_days),
+        "legal_hold_enabled": bool(row.get("policy_legal_hold_enabled")),
+        "immutable_required": bool(row.get("policy_immutable_required", True)),
+    }
+
+
+def _matching_legal_hold_ids_for_artifact(
+    *,
+    artifact_tenant: str,
+    artifact_id: str,
+    gs_uri: str,
+    metadata: dict[str, Any],
+    holds: list[dict[str, Any]],
+) -> list[str]:
+    hold_ids: list[str] = []
+    decision_id = str(metadata.get("decision_id") or "").strip()
+    case_id = str(metadata.get("case_id") or "").strip()
+    decision_ids = {str(item).strip() for item in (metadata.get("decision_ids") or []) if str(item).strip()}
+    context_docs = {str(item).strip() for item in (metadata.get("context_docs") or []) if str(item).strip()}
+
+    for hold in holds:
+        if str(hold["tenant"]) != artifact_tenant:
+            continue
+        scope_type = str(hold["scope_type"]).strip().lower()
+        scope_id = str(hold["scope_id"]).strip()
+        if not scope_type or not scope_id:
+            continue
+
+        matches = False
+        if scope_type == "tenant":
+            matches = scope_id in {artifact_tenant, "*"}
+        elif scope_type == "artifact":
+            matches = scope_id in {artifact_id, gs_uri}
+        elif scope_type == "decision":
+            matches = scope_id == decision_id or scope_id in decision_ids
+        elif scope_type == "document":
+            matches = scope_id in context_docs
+        elif scope_type == "case":
+            matches = scope_id == case_id
+
+        if matches:
+            hold_ids.append(str(hold["hold_id"]))
+    return hold_ids
+
+
+def _mark_audit_artifact_deleted(
+    cur: Any,
+    *,
+    artifact_id: str,
+    tenant: str,
+    artifact_type: str,
+    gs_uri: str,
+    deletion_reason: str,
+    deleted_by: str,
+    delete_job_id: str,
+    storage_deleted: bool,
+) -> None:
+    cur.execute(
+        """
+        UPDATE audit_artifacts
+        SET
+          deleted_at = COALESCE(deleted_at, NOW()),
+          deleted_by = %s,
+          deletion_reason = %s,
+          delete_job_id = %s,
+          metadata = jsonb_set(
+            COALESCE(metadata, '{}'::jsonb),
+            '{retention_delete,storage_deleted}',
+            to_jsonb(%s::boolean),
+            true
+          )
+        WHERE artifact_id = %s
+          AND tenant = %s
+          AND artifact_type = %s
+          AND gs_uri = %s
+          AND deleted_at IS NULL
+        """,
+        (deleted_by, deletion_reason, delete_job_id, storage_deleted, artifact_id, tenant, artifact_type, gs_uri),
+    )
 
 
 def _map_retention_policy_row(row: dict[str, Any]) -> RetentionPolicyRecord:

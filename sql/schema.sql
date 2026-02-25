@@ -176,12 +176,24 @@ CREATE TABLE IF NOT EXISTS audit_artifacts (
   created_by TEXT NOT NULL,
   trace_id TEXT NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
+  deleted_at TIMESTAMPTZ,
+  deleted_by TEXT,
+  deletion_reason TEXT,
+  delete_job_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (tenant, artifact_type, gs_uri)
 );
+
+ALTER TABLE audit_artifacts ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE audit_artifacts ADD COLUMN IF NOT EXISTS deleted_by TEXT;
+ALTER TABLE audit_artifacts ADD COLUMN IF NOT EXISTS deletion_reason TEXT;
+ALTER TABLE audit_artifacts ADD COLUMN IF NOT EXISTS delete_job_id TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_audit_artifacts_tenant_type_created_at
   ON audit_artifacts (tenant, artifact_type, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_audit_artifacts_trace_id
   ON audit_artifacts (trace_id);
+
+CREATE INDEX IF NOT EXISTS idx_audit_artifacts_deleted_at
+  ON audit_artifacts (deleted_at, created_at);

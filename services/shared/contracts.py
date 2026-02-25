@@ -387,6 +387,43 @@ class LegalHoldListResponse(BaseModel):
     holds: list[LegalHoldRecord]
 
 
+class RetentionEnforcementRequest(BaseModel):
+    tenant: str | None = Field(default=None, min_length=1)
+    artifact_type: str | None = Field(default="audit_artifacts", min_length=1)
+    dry_run: bool = True
+    limit: int = Field(default=200, ge=1, le=1000)
+    trace_id: str | None = None
+
+
+class RetentionEnforcementItem(BaseModel):
+    artifact_id: str
+    tenant: str
+    artifact_type: str
+    gs_uri: str
+    created_at: datetime
+    expires_at: datetime
+    age_days: int
+    action: str
+    reason: str
+    hold_ids: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class RetentionEnforcementResponse(BaseModel):
+    trace_id: str
+    dry_run: bool
+    tenant: str | None = None
+    artifact_type: str | None = None
+    scanned: int
+    eligible: int
+    deleted: int
+    skipped_not_expired: int
+    skipped_on_hold: int
+    skipped_policy_missing: int
+    failed: int
+    items: list[RetentionEnforcementItem] = Field(default_factory=list)
+
+
 class AIDecisionAdminQueryRequest(BaseModel):
     tenants: list[str] = Field(..., min_length=1, max_length=50)
     decision_id_prefix: str | None = None

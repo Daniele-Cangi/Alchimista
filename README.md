@@ -332,3 +332,37 @@ AUDIT_REPORT_SIGNING_KEY_ID='audit-key-v1'
 ```bash
 gh workflow run rotate-audit-signing-key.yml -f environment_name=test -f project_id=secure-electron-474908-k9 -f region=europe-west4
 ```
+
+## P6 Retention Enforcement
+- Execute retention enforcement in dry-run mode (admin endpoint, requires `x-admin-key`):
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/retention/enforce" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "x-admin-key: ${ADMIN_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":"default",
+    "artifact_type":"decision_export",
+    "dry_run":true,
+    "limit":200
+  }'
+```
+- Execute real retention deletion (expired artifacts only, legal-hold aware):
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/retention/enforce" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "x-admin-key: ${ADMIN_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":"default",
+    "artifact_type":"decision_export",
+    "dry_run":false,
+    "limit":200
+  }'
+```
+- Enforcement behavior:
+  - only artifacts with configured `retention_policies` are considered eligible
+  - active legal holds block deletion
+  - deleted artifacts are soft-marked in SQL (`deleted_at`, `deleted_by`, `deletion_reason`, `delete_job_id`)
+  - GCS object deletion is generation-aware when generation metadata exists
+- Full P6 details: `docs/p6-retention-enforcement.md`.
