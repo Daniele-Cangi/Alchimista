@@ -431,6 +431,7 @@ TENANT=default ARTIFACT_TYPE='' DRY_RUN=true LIMIT=200 \
 ```
 - Scheduled automation:
   - `.github/workflows/retention-enforce.yml` runs daily at `03:40 UTC` in `dry_run=true`.
+  - First validated run: `22417582060` (2026-02-25, status `success`).
   - Manual delete run example:
 ```bash
 gh workflow run retention-enforce.yml \
