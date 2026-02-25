@@ -17,6 +17,10 @@ from psycopg.types.json import Json
 from services.shared.auth import require_auth
 from services.shared.config import load_runtime_config
 from services.shared.contracts import (
+    AIDecisionAdminQueryRequest,
+    AIDecisionAdminQueryResponse,
+    AIDecisionBundleRequest,
+    AIDecisionBundleResponse,
     AIDecisionExportRequest,
     AIDecisionExportResponse,
     AIDecisionIngestRequest,
@@ -446,6 +450,149 @@ def export_decisions(payload: AIDecisionExportRequest, request: Request) -> AIDe
     )
 
 
+@app.post("/v1/decisions/bundle", response_model=AIDecisionBundleResponse)
+def bundle_decisions(payload: AIDecisionBundleRequest, request: Request) -> AIDecisionBundleResponse:
+    principal = require_auth(request, config=config, tenant=payload.tenant)
+    _require_reports_bucket()
+    trace_id = payload.trace_id or str(uuid4())
+    generated_at = datetime.now(timezone.utc)
+    bundle_id = f"bundle-{generated_at.strftime('%Y%m%dT%H%M%SZ')}-{trace_id[:8]}"
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            conn.commit()
+            rows, total = _query_ai_decisions(cur, payload=payload)
+            decisions = [_map_ai_decision_row(row) for row in rows]
+            decision_reports: list[dict[str, Any]] = []
+            for row, decision in zip(rows, decisions):
+                context_documents: list[dict[str, Any]] = []
+                context_chunks: list[dict[str, Any]] = []
+                if payload.include_context:
+                    context_documents = _fetch_ai_decision_context_documents(
+                        cur,
+                        tenant=payload.tenant,
+                        decision_ref_id=int(row["id"]),
+                    )
+                    context_chunks = _fetch_ai_decision_context_chunks(
+                        cur,
+                        tenant=payload.tenant,
+                        decision_ref_id=int(row["id"]),
+                    )
+
+                decision_report_payload = {
+                    "decision": decision.model_dump(mode="json"),
+                    "context_documents": context_documents,
+                    "context_chunks": context_chunks,
+                }
+                decision_reports.append(
+                    {
+                        **decision_report_payload,
+                        "report_hash_sha256": _sha256_json(decision_report_payload),
+                    }
+                )
+
+    policy_snapshot = None
+    if payload.include_policy_snapshot:
+        policy_snapshot = {
+            "auth_enabled": config.auth_enabled,
+            "auth_issuer": config.auth_issuer,
+            "auth_audiences": list(config.auth_audiences),
+            "auth_require_tenant_claim": config.auth_require_tenant_claim,
+            "enforce_storage_hardening": config.enforce_storage_hardening,
+            "pubsub_push_auth_enabled": config.pubsub_push_auth_enabled,
+            "cloud_run_revision": os.getenv("K_REVISION", ""),
+            "cloud_run_service": os.getenv("K_SERVICE", ""),
+        }
+
+    bundle_payload: dict[str, Any] = {
+        "bundle_id": bundle_id,
+        "trace_id": trace_id,
+        "generated_at": generated_at,
+        "tenant": payload.tenant,
+        "exported_by": principal.subject if principal else "anonymous",
+        "case_id": payload.case_id,
+        "regulator_ref": payload.regulator_ref,
+        "filters": payload.model_dump(
+            mode="json",
+            exclude={
+                "trace_id",
+                "include_context",
+                "object_name",
+                "case_id",
+                "regulator_ref",
+                "include_policy_snapshot",
+            },
+            exclude_none=True,
+        ),
+        "total": total,
+        "returned": len(decision_reports),
+        "decision_reports": decision_reports,
+    }
+    if policy_snapshot is not None:
+        bundle_payload["policy_snapshot"] = policy_snapshot
+
+    report_hash = _sha256_json(bundle_payload)
+    signature_alg = "none"
+    signature = None
+    signature_key_id = None
+    if config.audit_report_signing_key:
+        signature_alg = "hmac-sha256"
+        signature = _hmac_sha256_b64(config.audit_report_signing_key, bundle_payload)
+        signature_key_id = config.audit_report_signing_key_id or None
+
+    bundle_document = {
+        **bundle_payload,
+        "report_hash_sha256": report_hash,
+        "signature_alg": signature_alg,
+        "signature_key_id": signature_key_id,
+        "signature": signature,
+    }
+    object_name = _resolve_audit_bundle_object_name(
+        tenant=payload.tenant,
+        requested_object_name=payload.object_name,
+        trace_id=trace_id,
+        generated_at=generated_at,
+    )
+    gs_uri = storage_client.upload_bytes(
+        bucket_name=config.reports_bucket,
+        object_name=object_name,
+        payload=json.dumps(bundle_document, ensure_ascii=True, separators=(",", ":"), default=_json_default).encode(
+            "utf-8"
+        ),
+        content_type="application/json",
+    )
+
+    log_event(
+        "info",
+        "ai_decision_bundle_written",
+        trace_id=trace_id,
+        doc_id=decisions[0].context_docs[0] if decisions and decisions[0].context_docs else None,
+        job_id=f"ai-decision-bundle:{payload.tenant}:{trace_id}",
+        tenant=payload.tenant,
+        bundle_id=bundle_id,
+        total=total,
+        returned=len(decision_reports),
+        include_context=payload.include_context,
+        include_policy_snapshot=payload.include_policy_snapshot,
+        gs_uri=gs_uri,
+        signature_alg=signature_alg,
+    )
+    return AIDecisionBundleResponse(
+        trace_id=trace_id,
+        bundle_id=bundle_id,
+        generated_at=generated_at,
+        tenant=payload.tenant,
+        total=total,
+        returned=len(decision_reports),
+        gs_uri=gs_uri,
+        report_hash_sha256=report_hash,
+        signature_alg=signature_alg,
+        signature_key_id=signature_key_id,
+        signature=signature,
+    )
+
+
 @app.get("/v1/decisions/{decision_id}/report", response_model=AIDecisionReportResponse)
 def get_decision_report(request: Request, decision_id: str, tenant: str = config.default_tenant) -> AIDecisionReportResponse:
     require_auth(request, config=config, tenant=tenant)
@@ -498,6 +645,44 @@ def get_decision_report(request: Request, decision_id: str, tenant: str = config
         signature_alg=signature_alg,
         signature_key_id=signature_key_id,
         signature=signature,
+    )
+
+
+@app.post("/v1/admin/decisions/query", response_model=AIDecisionAdminQueryResponse)
+def query_decisions_admin(payload: AIDecisionAdminQueryRequest, request: Request) -> AIDecisionAdminQueryResponse:
+    principal = require_auth(request, config=config)
+    _require_admin_api_key(request)
+    trace_id = payload.trace_id or str(uuid4())
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            conn.commit()
+            rows, total = _query_ai_decisions_admin(cur, payload=payload)
+
+    decisions = [_map_ai_decision_row(row) for row in rows]
+    log_event(
+        "info",
+        "ai_decision_admin_query_completed",
+        trace_id=trace_id,
+        doc_id=decisions[0].context_docs[0] if decisions and decisions[0].context_docs else None,
+        job_id=f"ai-decision-admin-query:{trace_id}",
+        tenant="*",
+        subject=principal.subject if principal else None,
+        tenants=payload.tenants,
+        offset=payload.offset,
+        limit=payload.limit,
+        returned=len(decisions),
+        total=total,
+    )
+    return AIDecisionAdminQueryResponse(
+        trace_id=trace_id,
+        tenants=payload.tenants,
+        decisions=decisions,
+        total=total,
+        offset=payload.offset,
+        limit=payload.limit,
+        returned=len(decisions),
     )
 
 
@@ -933,6 +1118,115 @@ def _query_ai_decisions(cur: Any, *, payload: AIDecisionQueryRequest) -> tuple[l
     if payload.decision_id_prefix:
         conditions.append("d.decision_id ILIKE %s")
         params.append(f"{payload.decision_id_prefix.strip()}%")
+    if payload.decision_ids:
+        conditions.append("d.decision_id = ANY(%s)")
+        params.append(payload.decision_ids)
+    if payload.model:
+        conditions.append("d.model = %s")
+        params.append(payload.model)
+    if payload.model_version:
+        conditions.append("d.model_version = %s")
+        params.append(payload.model_version)
+    if payload.outputs:
+        conditions.append("d.output_text = ANY(%s)")
+        params.append(payload.outputs)
+    if payload.decision_trace_id:
+        conditions.append("d.trace_id = %s")
+        params.append(payload.decision_trace_id)
+    if payload.query:
+        pattern = f"%{payload.query.strip()}%"
+        conditions.append("(d.input_text ILIKE %s OR d.output_text ILIKE %s)")
+        params.extend([pattern, pattern])
+    if payload.min_confidence is not None:
+        conditions.append("d.confidence >= %s")
+        params.append(payload.min_confidence)
+    if payload.max_confidence is not None:
+        conditions.append("d.confidence <= %s")
+        params.append(payload.max_confidence)
+    if payload.confidence_band is not None:
+        if payload.confidence_band.value == "low":
+            conditions.append("d.confidence IS NOT NULL AND d.confidence < 0.40")
+        elif payload.confidence_band.value == "medium":
+            conditions.append("d.confidence >= 0.40 AND d.confidence < 0.70")
+        else:
+            conditions.append("d.confidence >= 0.70")
+    if payload.created_from is not None:
+        conditions.append("d.created_at >= %s")
+        params.append(payload.created_from)
+    if payload.created_to is not None:
+        conditions.append("d.created_at <= %s")
+        params.append(payload.created_to)
+    if payload.context_docs:
+        for doc_id in payload.context_docs:
+            conditions.append(
+                "EXISTS (SELECT 1 FROM ai_decision_context_docs filter_docs "
+                "WHERE filter_docs.decision_ref_id = d.id AND filter_docs.doc_id = %s)"
+            )
+            params.append(doc_id)
+    if payload.context_chunks:
+        for chunk_id in payload.context_chunks:
+            conditions.append(
+                "EXISTS (SELECT 1 FROM ai_decision_context_chunks filter_chunks "
+                "WHERE filter_chunks.decision_ref_id = d.id AND filter_chunks.chunk_id = %s)"
+            )
+            params.append(chunk_id)
+
+    where_clause = " AND ".join(conditions)
+    cur.execute(
+        f"""
+        SELECT COUNT(*) AS total
+        FROM ai_decisions d
+        WHERE {where_clause}
+        """,
+        params,
+    )
+    total_row = cur.fetchone() or {"total": 0}
+    total = int(total_row.get("total") or 0)
+    if total == 0:
+        return [], 0
+
+    order_sql = "ASC" if payload.order.value == "asc" else "DESC"
+    query_params = [*params, payload.limit, payload.offset]
+    cur.execute(
+        f"""
+        SELECT
+          d.id,
+          d.decision_id,
+          d.tenant,
+          d.model,
+          d.model_version,
+          d.input_text,
+          d.output_text,
+          d.confidence,
+          d.trace_id,
+          d.metadata,
+          d.created_at,
+          d.updated_at,
+          COALESCE(array_agg(DISTINCT cd.doc_id) FILTER (WHERE cd.doc_id IS NOT NULL), ARRAY[]::TEXT[]) AS context_docs,
+          COALESCE(array_agg(DISTINCT cc.chunk_id) FILTER (WHERE cc.chunk_id IS NOT NULL), ARRAY[]::TEXT[]) AS context_chunks
+        FROM ai_decisions d
+        LEFT JOIN ai_decision_context_docs cd ON cd.decision_ref_id = d.id
+        LEFT JOIN ai_decision_context_chunks cc ON cc.decision_ref_id = d.id
+        WHERE {where_clause}
+        GROUP BY d.id
+        ORDER BY d.created_at {order_sql}, d.id {order_sql}
+        LIMIT %s OFFSET %s
+        """,
+        query_params,
+    )
+    return cur.fetchall(), total
+
+
+def _query_ai_decisions_admin(cur: Any, *, payload: AIDecisionAdminQueryRequest) -> tuple[list[dict[str, Any]], int]:
+    conditions = ["d.tenant = ANY(%s)"]
+    params: list[Any] = [payload.tenants]
+
+    if payload.decision_id_prefix:
+        conditions.append("d.decision_id ILIKE %s")
+        params.append(f"{payload.decision_id_prefix.strip()}%")
+    if payload.decision_ids:
+        conditions.append("d.decision_id = ANY(%s)")
+        params.append(payload.decision_ids)
     if payload.model:
         conditions.append("d.model = %s")
         params.append(payload.model)
@@ -1146,6 +1440,22 @@ def _resolve_audit_export_object_name(
         return safe_object_name(value)
     stamp = generated_at.strftime("%Y%m%dT%H%M%SZ")
     return safe_object_name(f"reports/{tenant}/audit/decisions_export_{stamp}_{trace_id}.json")
+
+
+def _resolve_audit_bundle_object_name(
+    *,
+    tenant: str,
+    requested_object_name: str | None,
+    trace_id: str,
+    generated_at: datetime,
+) -> str:
+    if requested_object_name:
+        value = requested_object_name.strip().lstrip("/")
+        if not value:
+            raise HTTPException(status_code=400, detail="object_name cannot be empty")
+        return safe_object_name(value)
+    stamp = generated_at.strftime("%Y%m%dT%H%M%SZ")
+    return safe_object_name(f"reports/{tenant}/audit/bundles/decision_bundle_{stamp}_{trace_id}.json")
 
 
 def _publish_ingest_message(message: IngestMessage, *, job_id: str | None = None) -> str:

@@ -127,6 +127,8 @@ runtime_services:
       - POST /v1/decisions
       - POST /v1/decisions/query
       - POST /v1/decisions/export
+      - POST /v1/decisions/bundle
+      - POST /v1/admin/decisions/query
       - GET /v1/decisions/{id}/report
       - GET /v1/doc/{id}
       - GET /v1/healthz
@@ -273,12 +275,15 @@ p0_p1_progress:
   p4_0_ai_decision_trail: done
   p4_1_audit_query_export_signing: done
   p4_2_audit_export_gcs_and_advanced_filters: done
+  p4_3_regulator_bundle_and_admin_cross_tenant: in_progress
 
 p4_audit_trail_engine:
-  status: p4_2_done
+  status: p4_3_in_progress
   write_endpoint: POST /v1/decisions
   query_endpoint: POST /v1/decisions/query
   export_endpoint: POST /v1/decisions/export
+  bundle_endpoint: POST /v1/decisions/bundle
+  admin_query_endpoint: POST /v1/admin/decisions/query
   report_endpoint: GET /v1/decisions/{id}/report
   sql_tables:
     - ai_decisions
@@ -290,6 +295,7 @@ p4_audit_trail_engine:
     - optional_context_chunks_must_belong_to_context_docs
   query_capabilities:
     - decision_id_prefix_filter
+    - decision_ids_filter
     - model_and_model_version_filters
     - outputs_filter
     - decision_trace_id_filter
@@ -301,6 +307,9 @@ p4_audit_trail_engine:
     - context_docs_all_match_filter
     - offset_limit_pagination
     - asc_desc_ordering
+  admin_controls:
+    - admin_cross_tenant_query_requires_jwt_and_admin_api_key
+    - admin_query_accepts_tenants_list
   report_export:
     gcs_bucket_env: REPORTS_BUCKET
     object_prefix: reports/{tenant}/audit/
@@ -309,6 +318,10 @@ p4_audit_trail_engine:
       alg: hmac-sha256
       key_env: AUDIT_REPORT_SIGNING_KEY
       key_id_env: AUDIT_REPORT_SIGNING_KEY_ID
+  regulator_bundle:
+    object_prefix: reports/{tenant}/audit/bundles/
+    supports_case_id_and_regulator_ref: true
+    includes_per_decision_report_hashes: true
 
 p3_parallel_execution:
   p3_2_retrieval_real:

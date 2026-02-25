@@ -23,6 +23,19 @@ P4 extends Alchimista with auditable AI decision trails linked to document conte
     - `include_context` to embed full context document/chunk snapshots in the export
     - optional `object_name` to control destination path (`reports/<tenant>/audit/...` default)
   - Returns `gs_uri`, `total`, `returned`, `report_hash_sha256`, `signature_*`.
+- `POST /v1/decisions/bundle`
+  - Produces a regulator-oriented signed bundle in `REPORTS_BUCKET`.
+  - Supports explicit `decision_ids` selection and optional controls:
+    - `case_id`
+    - `regulator_ref`
+    - `include_policy_snapshot`
+  - Stores per-decision `report_hash_sha256` entries and one top-level signed bundle hash.
+- `POST /v1/admin/decisions/query`
+  - Cross-tenant search endpoint for operations/compliance teams.
+  - Requires both:
+    - valid JWT/OIDC bearer token
+    - `x-admin-key` (same control used by `/v1/admin/replay-dlq`)
+  - Accepts `tenants[]` + full advanced filter set.
 
 ## SQL tables
 - `ai_decisions`
@@ -38,6 +51,7 @@ P4 extends Alchimista with auditable AI decision trails linked to document conte
 - Report signing key is injected from Secret Manager and can be rotated with:
   - `scripts/rotate_audit_report_signing_key_secret.sh`
   - `.github/workflows/rotate-audit-signing-key.yml` (manual + schedule)
+- Admin cross-tenant query is intentionally isolated behind JWT + `x-admin-key` dual control.
 
 ## Notes
 - Current database still has global `documents.doc_id` primary key.

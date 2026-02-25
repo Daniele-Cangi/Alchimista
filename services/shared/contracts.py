@@ -132,6 +132,7 @@ class AIDecisionRecord(BaseModel):
 class AIDecisionQueryRequest(BaseModel):
     tenant: str = Field(default="default", min_length=1)
     decision_id_prefix: str | None = None
+    decision_ids: list[str] | None = None
     model: str | None = None
     model_version: str | None = None
     outputs: list[str] | None = None
@@ -149,7 +150,7 @@ class AIDecisionQueryRequest(BaseModel):
     order: DecisionOrder = Field(default=DecisionOrder.DESC)
     trace_id: str | None = None
 
-    @field_validator("context_docs", "context_chunks", "outputs")
+    @field_validator("context_docs", "context_chunks", "outputs", "decision_ids")
     @classmethod
     def normalize_optional_string_list(cls, value: list[str] | None) -> list[str] | None:
         if value is None:
@@ -203,6 +204,85 @@ class AIDecisionExportResponse(BaseModel):
     signature_alg: str
     signature_key_id: str | None = None
     signature: str | None = None
+
+
+class AIDecisionBundleRequest(AIDecisionExportRequest):
+    case_id: str | None = None
+    regulator_ref: str | None = None
+    include_policy_snapshot: bool = True
+
+
+class AIDecisionBundleResponse(BaseModel):
+    trace_id: str
+    bundle_id: str
+    generated_at: datetime
+    tenant: str
+    total: int
+    returned: int
+    gs_uri: str
+    report_hash_sha256: str
+    signature_alg: str
+    signature_key_id: str | None = None
+    signature: str | None = None
+
+
+class AIDecisionAdminQueryRequest(BaseModel):
+    tenants: list[str] = Field(..., min_length=1, max_length=50)
+    decision_id_prefix: str | None = None
+    decision_ids: list[str] | None = None
+    model: str | None = None
+    model_version: str | None = None
+    outputs: list[str] | None = None
+    decision_trace_id: str | None = None
+    query: str | None = None
+    context_docs: list[str] | None = None
+    context_chunks: list[str] | None = None
+    confidence_band: ConfidenceBand | None = None
+    min_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    max_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    created_from: datetime | None = None
+    created_to: datetime | None = None
+    offset: int = Field(default=0, ge=0, le=10000)
+    limit: int = Field(default=50, ge=1, le=500)
+    order: DecisionOrder = Field(default=DecisionOrder.DESC)
+    trace_id: str | None = None
+
+    @field_validator("tenants", "context_docs", "context_chunks", "outputs", "decision_ids")
+    @classmethod
+    def normalize_optional_string_list(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            candidate = str(item).strip()
+            if not candidate:
+                raise ValueError("list items must not be empty")
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            normalized.append(candidate)
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_ranges(self) -> AIDecisionAdminQueryRequest:
+        if self.min_confidence is not None and self.max_confidence is not None:
+            if self.min_confidence > self.max_confidence:
+                raise ValueError("min_confidence cannot be greater than max_confidence")
+        if self.created_from is not None and self.created_to is not None:
+            if self.created_from > self.created_to:
+                raise ValueError("created_from cannot be greater than created_to")
+        return self
+
+
+class AIDecisionAdminQueryResponse(BaseModel):
+    trace_id: str
+    tenants: list[str]
+    decisions: list[AIDecisionRecord]
+    total: int
+    offset: int
+    limit: int
+    returned: int
 
 
 class AIDecisionReportResponse(BaseModel):

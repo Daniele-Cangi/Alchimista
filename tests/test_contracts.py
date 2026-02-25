@@ -1,6 +1,8 @@
 import pytest
 
 from services.shared.contracts import (
+    AIDecisionAdminQueryRequest,
+    AIDecisionBundleRequest,
     AIDecisionExportRequest,
     AIDecisionIngestRequest,
     AIDecisionQueryRequest,
@@ -81,12 +83,14 @@ def test_ai_decision_query_contract_normalizes_advanced_lists() -> None:
             "outputs": ["approved", " approved ", "rejected"],
             "context_docs": ["doc-1", "doc-1"],
             "context_chunks": ["chunk-1", " chunk-1 ", "chunk-2"],
+            "decision_ids": ["d-001", " d-001 ", "d-002"],
             "confidence_band": "high",
         }
     )
     assert model.outputs == ["approved", "rejected"]
     assert model.context_docs == ["doc-1"]
     assert model.context_chunks == ["chunk-1", "chunk-2"]
+    assert model.decision_ids == ["d-001", "d-002"]
     assert model.confidence_band == ConfidenceBand.HIGH
 
 
@@ -106,3 +110,34 @@ def test_ai_decision_export_contract_defaults() -> None:
     assert model.limit == 200
     assert model.offset == 0
     assert model.include_context is False
+
+
+def test_ai_decision_bundle_contract_defaults() -> None:
+    model = AIDecisionBundleRequest.model_validate({"tenant": "default"})
+    assert model.include_policy_snapshot is True
+    assert model.include_context is False
+
+
+def test_ai_decision_admin_query_contract_defaults_and_normalization() -> None:
+    model = AIDecisionAdminQueryRequest.model_validate(
+        {
+            "tenants": ["default", " default ", "vendor-x"],
+            "decision_ids": ["d-001", " d-001 ", "d-002"],
+            "outputs": ["approved", " approved "],
+        }
+    )
+    assert model.tenants == ["default", "vendor-x"]
+    assert model.decision_ids == ["d-001", "d-002"]
+    assert model.outputs == ["approved"]
+    assert model.limit == 50
+
+
+def test_ai_decision_admin_query_contract_rejects_invalid_ranges() -> None:
+    with pytest.raises(ValueError):
+        AIDecisionAdminQueryRequest.model_validate(
+            {
+                "tenants": ["default"],
+                "created_from": "2026-02-28T00:00:00Z",
+                "created_to": "2026-02-01T00:00:00Z",
+            }
+        )

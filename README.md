@@ -164,7 +164,7 @@ python scripts/check_benchmark_gate.py --spec spec/project.yaml --report reports
 - Full operational details:
   - `docs/p4-cicd.md`
 
-## P4 Audit Trail Engine (P4.2)
+## P4 Audit Trail Engine (P4.3)
 - Register an AI decision linked to existing context documents/chunks:
 ```bash
 curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions" \
@@ -219,6 +219,33 @@ curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decis
     "min_confidence":0.8,
     "limit":200,
     "include_context":true
+  }'
+```
+- Build a regulator-ready signed bundle (decision reports + optional policy snapshot):
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/bundle" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":"default",
+    "decision_ids":["d-001"],
+    "case_id":"kyc-case-001",
+    "regulator_ref":"eu-ai-act-art-12",
+    "include_context":true,
+    "include_policy_snapshot":true
+  }'
+```
+- Admin-only cross-tenant decision query (requires `x-admin-key`):
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/decisions/query" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "x-admin-key: ${ADMIN_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenants":["default","vendor-x"],
+    "model":"gpt-4",
+    "outputs":["approved"],
+    "limit":50
   }'
 ```
 - Optional signing (HMAC) for exported reports:
