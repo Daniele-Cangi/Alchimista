@@ -90,15 +90,30 @@ MAX_MESSAGES=25 ./scripts/replay_dlq.sh
 ```bash
 ./scripts/setup_vertex_vector_search.sh secure-electron-474908-k9 europe-west4
 ```
-- Switch processor + rag services from SQL fallback to Vertex backend:
+- Switch processor + rag services to Vertex retrieval + Vertex text embeddings:
 ```bash
 ./scripts/enable_vertex_backend.sh secure-electron-474908-k9 europe-west4 \
   3994068346873053184 5596857233007706112 alchimista_chunks_deployed_v3
 ```
+
+## P3.3 OIDC/JWT auth rollout
+- Apply OIDC verification settings to runtime services:
+```bash
+./scripts/apply_p3_auth_oidc.sh \
+  secure-electron-474908-k9 europe-west4 \
+  'https://YOUR_ISSUER' 'YOUR_AUDIENCE'
+```
+- Current transitional behavior:
+  - `/v1/healthz` and `/v1/readyz` remain open.
+  - `/v1/process/pubsub` can remain unauthenticated until Pub/Sub push OIDC is configured.
 
 ## P3.1 Benchmark
 - Dataset baseline: `benchmark/dataset_v1.json`
 - Run benchmark and generate report:
 ```bash
 ./scripts/run_p3_benchmark.py --dataset benchmark/dataset_v1.json --output-dir reports/benchmarks
+```
+- If auth is enabled, pass token:
+```bash
+BENCHMARK_BEARER_TOKEN='REPLACE_ME' ./scripts/run_p3_benchmark.py
 ```

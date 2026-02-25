@@ -30,6 +30,12 @@ RAG_URL='https://rag-query-service-pe7qslbcvq-ez.a.run.app' \
 ./scripts/run_p3_benchmark.py
 ```
 
+Optional bearer token (for P3.3 JWT/OIDC protected endpoints):
+```bash
+BENCHMARK_BEARER_TOKEN='REPLACE_ME' \
+./scripts/run_p3_benchmark.py
+```
+
 ## Output
 - `reports/benchmarks/benchmark_<timestamp>.json`
 - `reports/benchmarks/latest.json`

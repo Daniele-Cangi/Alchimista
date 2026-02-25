@@ -234,9 +234,29 @@ p0_p1_progress:
   p1_vertical_slice: done
   p2_hardening: done
   p3_1_benchmark: done
-  p3_2_retrieval_real: pending
-  p3_3_enterprise_auth: pending
+  p3_2_retrieval_real: in_progress
+  p3_3_enterprise_auth: in_progress
   p3_4_cicd_discipline: pending
+
+p3_parallel_execution:
+  p3_2_retrieval_real:
+    status: in_progress
+    embedding_backend: vertex_text_embedding_with_dimension_projection
+    target_embedding_dimensions: 128
+    rollout_script: scripts/enable_vertex_backend.sh
+    success_gate: benchmark.gates.min_mrr >= 0.65
+  p3_3_enterprise_auth:
+    status: in_progress
+    mode: jwt_oidc_bearer_verification
+    rollout_script: scripts/apply_p3_auth_oidc.sh
+    protected_endpoints:
+      - ingestion-api-service: /v1/ingest /v1/ingest/complete /v1/doc/{id} /v1/admin/replay-dlq
+      - rag-query-service: /v1/query
+      - document-processor-service: /v1/process
+    transitional_exceptions:
+      - /v1/healthz
+      - /v1/readyz
+      - /v1/process/pubsub (until Pub/Sub push OIDC token is configured)
 
 security_hardening:
   dedicated_service_accounts_enabled: true

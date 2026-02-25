@@ -3,12 +3,13 @@ from __future__ import annotations
 import os
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 
+from services.shared.auth import require_auth
 from services.shared.config import get_env_int, load_runtime_config
 from services.shared.contracts import Citation, QueryAnswer, QueryRequest, QueryResponse
 from services.shared.db import fetch_chunks_by_ids, get_connection
-from services.shared.embeddings import deterministic_embedding
+from services.shared.embeddings import build_embedder
 from services.shared.logging_utils import log_event
 from services.shared.vector_search import rank_chunks
 from services.shared.vertex_vector_search import build_vertex_client
@@ -18,6 +19,7 @@ config = load_runtime_config()
 app = FastAPI(title="rag-query-service", version="0.1.0")
 MAX_CANDIDATES = get_env_int("RAG_MAX_CANDIDATES", 5000)
 vertex_client = build_vertex_client(config)
+embed_text = build_embedder(config)
 
 
 @app.get("/v1/healthz")
@@ -38,11 +40,12 @@ def readyz() -> dict:
 
 
 @app.post("/v1/query", response_model=QueryResponse)
-def query(payload: QueryRequest) -> QueryResponse:
+def query(payload: QueryRequest, request: Request) -> QueryResponse:
+    require_auth(request, config=config, tenant=payload.tenant)
     trace_id = payload.trace_id or str(uuid4())
     query_job_id = f"rag-query:{trace_id}"
     query_doc_id = payload.doc_ids[0] if payload.doc_ids and len(payload.doc_ids) == 1 else None
-    query_embedding = deterministic_embedding(payload.query)
+    query_embedding = embed_text(payload.query)
     hits: list[dict] = []
     backend_used = "sql_embedding_scan"
 

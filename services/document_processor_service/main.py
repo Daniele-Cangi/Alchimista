@@ -7,10 +7,11 @@ import time
 from io import BytesIO
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from pypdf import PdfReader
 
+from services.shared.auth import require_auth
 from services.shared.backpressure import InflightGate
 from services.shared.chunking import chunk_text
 from services.shared.config import load_runtime_config
@@ -24,7 +25,7 @@ from services.shared.db import (
     upsert_process_job,
     utcnow,
 )
-from services.shared.embeddings import deterministic_embedding
+from services.shared.embeddings import build_embedder
 from services.shared.entities import extract_entities
 from services.shared.hashing import sha256_bytes
 from services.shared.logging_utils import log_event
@@ -39,6 +40,7 @@ storage_client = StorageClient(config.project_id)
 publisher = PubSubPublisher(config.project_id)
 vertex_client = build_vertex_client(config)
 inflight_gate = InflightGate(config.processor_max_inflight)
+embed_text = build_embedder(config)
 
 
 class ProcessResponse(BaseModel):
@@ -72,18 +74,23 @@ def readyz() -> HealthResponse:
 
 
 @app.post("/v1/process", response_model=ProcessResponse)
-def process_direct(message: IngestMessage) -> ProcessResponse:
+def process_direct(message: IngestMessage, request: Request) -> ProcessResponse:
+    require_auth(request, config=config, tenant=message.tenant)
     return _process_with_backpressure(message)
 
 
 @app.post("/v1/process/pubsub", response_model=ProcessResponse)
-def process_pubsub(envelope: PubSubPushEnvelope) -> ProcessResponse:
+def process_pubsub(envelope: PubSubPushEnvelope, request: Request) -> ProcessResponse:
     try:
         decoded = base64.b64decode(envelope.message.data).decode("utf-8")
         payload = json.loads(decoded)
         message = IngestMessage.model_validate(payload)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid Pub/Sub envelope: {exc}") from exc
+
+    auth_header = request.headers.get("authorization", "")
+    if config.auth_enabled and (not config.auth_allow_unauthenticated_pubsub or auth_header):
+        require_auth(request, config=config, tenant=message.tenant)
 
     return _process_with_backpressure(message)
 
@@ -139,7 +146,7 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
 
         for idx, chunk in enumerate(text_chunks):
             chunk_id = f"{message.id}:{idx:05d}"
-            embedding = deterministic_embedding(chunk)
+            embedding = embed_text(chunk)
             chunk_records.append(
                 {
                     "chunk_id": chunk_id,

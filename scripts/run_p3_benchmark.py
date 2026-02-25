@@ -33,6 +33,7 @@ def main() -> int:
     parser.add_argument("--ingest-url", default=os.getenv("INGEST_URL", DEFAULT_INGEST_URL))
     parser.add_argument("--processor-url", default=os.getenv("PROCESSOR_URL", DEFAULT_PROCESSOR_URL))
     parser.add_argument("--rag-url", default=os.getenv("RAG_URL", DEFAULT_RAG_URL))
+    parser.add_argument("--bearer-token", default=os.getenv("BENCHMARK_BEARER_TOKEN", ""))
     parser.add_argument("--timeout-seconds", type=int, default=60)
     args = parser.parse_args()
 
@@ -59,6 +60,7 @@ def main() -> int:
             filename=filename,
             content_type=content_type,
             content=content.encode("utf-8"),
+            bearer_token=args.bearer_token,
             timeout=args.timeout_seconds,
         )
         process = _direct_process(
@@ -72,12 +74,14 @@ def main() -> int:
                 "ts": datetime.now(timezone.utc).isoformat(),
                 "trace_id": ingest["trace_id"],
             },
+            bearer_token=args.bearer_token,
             timeout=args.timeout_seconds,
         )
         status = _document_status(
             ingest_url=args.ingest_url,
             doc_id=ingest["doc_id"],
             tenant=tenant,
+            bearer_token=args.bearer_token,
             timeout=args.timeout_seconds,
         )
 
@@ -113,6 +117,7 @@ def main() -> int:
                     "top_k": top_k,
                     "trace_id": trace_id,
                 },
+                bearer_token=args.bearer_token,
                 timeout=args.timeout_seconds,
             )
             elapsed_ms = int((time.perf_counter() - started) * 1000)
@@ -235,6 +240,7 @@ def _multipart_ingest(
     filename: str,
     content_type: str,
     content: bytes,
+    bearer_token: str,
     timeout: int,
 ) -> dict[str, Any]:
     with NamedTemporaryFile("wb", delete=True) as tmp:
@@ -243,7 +249,13 @@ def _multipart_ingest(
         with open(tmp.name, "rb") as fh:
             files = {"file": (filename, fh, content_type)}
             data = {"tenant": tenant, "doc_id": doc_id, "force_reprocess": "true"}
-            response = requests.post(f"{ingest_url}/v1/ingest", files=files, data=data, timeout=timeout)
+            response = requests.post(
+                f"{ingest_url}/v1/ingest",
+                files=files,
+                data=data,
+                headers=_auth_headers(bearer_token),
+                timeout=timeout,
+            )
     _raise_for_status(response)
     body = response.json()
     if "doc_id" not in body or "gcs_uri" not in body or "trace_id" not in body:
@@ -251,20 +263,35 @@ def _multipart_ingest(
     return body
 
 
-def _direct_process(*, processor_url: str, message: dict[str, Any], timeout: int) -> dict[str, Any]:
-    response = requests.post(f"{processor_url}/v1/process", json=message, timeout=timeout)
+def _direct_process(*, processor_url: str, message: dict[str, Any], bearer_token: str, timeout: int) -> dict[str, Any]:
+    response = requests.post(
+        f"{processor_url}/v1/process",
+        json=message,
+        headers=_auth_headers(bearer_token),
+        timeout=timeout,
+    )
     _raise_for_status(response)
     return response.json()
 
 
-def _document_status(*, ingest_url: str, doc_id: str, tenant: str, timeout: int) -> dict[str, Any]:
-    response = requests.get(f"{ingest_url}/v1/doc/{doc_id}", params={"tenant": tenant}, timeout=timeout)
+def _document_status(*, ingest_url: str, doc_id: str, tenant: str, bearer_token: str, timeout: int) -> dict[str, Any]:
+    response = requests.get(
+        f"{ingest_url}/v1/doc/{doc_id}",
+        params={"tenant": tenant},
+        headers=_auth_headers(bearer_token),
+        timeout=timeout,
+    )
     _raise_for_status(response)
     return response.json()
 
 
-def _query_rag(*, rag_url: str, payload: dict[str, Any], timeout: int) -> dict[str, Any]:
-    response = requests.post(f"{rag_url}/v1/query", json=payload, timeout=timeout)
+def _query_rag(*, rag_url: str, payload: dict[str, Any], bearer_token: str, timeout: int) -> dict[str, Any]:
+    response = requests.post(
+        f"{rag_url}/v1/query",
+        json=payload,
+        headers=_auth_headers(bearer_token),
+        timeout=timeout,
+    )
     _raise_for_status(response)
     return response.json()
 
@@ -273,6 +300,12 @@ def _raise_for_status(response: requests.Response) -> None:
     if response.status_code < 400:
         return
     raise RuntimeError(f"HTTP {response.status_code}: {response.text}")
+
+
+def _auth_headers(bearer_token: str) -> dict[str, str]:
+    if not bearer_token:
+        return {}
+    return {"Authorization": f"Bearer {bearer_token}"}
 
 
 if __name__ == "__main__":

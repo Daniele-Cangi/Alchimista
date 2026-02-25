@@ -10,6 +10,7 @@ from uuid import uuid4
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from services.shared.auth import require_auth
 from services.shared.config import load_runtime_config
 from services.shared.contracts import DocumentStatusResponse, IngestMessage, JobRecord, JobStatus, now_iso8601
 from services.shared.db import (
@@ -106,8 +107,9 @@ async def ingest(request: Request) -> IngestResponse:
 
 
 @app.post("/v1/ingest/complete", response_model=IngestResponse)
-def complete_ingest(request: IngestCompleteRequest) -> IngestResponse:
+def complete_ingest(request: IngestCompleteRequest, raw_request: Request) -> IngestResponse:
     _require_raw_bucket()
+    require_auth(raw_request, config=config, tenant=request.tenant)
     trace_id = request.trace_id or str(uuid4())
     job_id: str | None = None
 
@@ -176,7 +178,8 @@ def complete_ingest(request: IngestCompleteRequest) -> IngestResponse:
 
 
 @app.get("/v1/doc/{doc_id}", response_model=DocumentStatusResponse)
-def get_document_status(doc_id: str, tenant: str = config.default_tenant) -> DocumentStatusResponse:
+def get_document_status(request: Request, doc_id: str, tenant: str = config.default_tenant) -> DocumentStatusResponse:
+    require_auth(request, config=config, tenant=tenant)
     with get_connection(config.database_url) as conn:
         with conn.cursor() as cur:
             row = fetch_document_status(cur, doc_id, tenant)
@@ -213,6 +216,7 @@ def get_document_status(doc_id: str, tenant: str = config.default_tenant) -> Doc
 
 @app.post("/v1/admin/replay-dlq", response_model=DlqReplayResponse)
 def replay_dlq(request: DlqReplayRequest, raw_request: Request) -> DlqReplayResponse:
+    require_auth(raw_request, config=config)
     _require_admin_api_key(raw_request)
     trace_id = str(uuid4())
     try:
@@ -294,6 +298,7 @@ def replay_dlq(request: DlqReplayRequest, raw_request: Request) -> DlqReplayResp
 async def _ingest_signed_url(request: Request) -> IngestResponse:
     _require_raw_bucket()
     payload = IngestSignedUrlRequest.model_validate(await request.json())
+    require_auth(request, config=config, tenant=payload.tenant)
     doc_id = payload.doc_id or str(uuid4())
     trace_id = payload.trace_id or str(uuid4())
     job_id: str | None = None
@@ -372,6 +377,7 @@ async def _ingest_multipart(request: Request) -> IngestResponse:
         raise HTTPException(status_code=400, detail="multipart form must include 'file'")
 
     tenant = str(form.get("tenant") or config.default_tenant)
+    require_auth(request, config=config, tenant=tenant)
     doc_id = str(form.get("doc_id") or uuid4())
     trace_id = str(form.get("trace_id") or uuid4())
     force_reprocess = str(form.get("force_reprocess") or "false").lower() == "true"
