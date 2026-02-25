@@ -40,6 +40,8 @@ The service account referenced by `GCP_DEPLOY_SERVICE_ACCOUNT` must have at leas
   - `document-processor-sa@<project>.iam.gserviceaccount.com`
   - `rag-query-sa@<project>.iam.gserviceaccount.com`
   - Cloud Build execution SA used by your project (often `<PROJECT_NUMBER>-compute@developer.gserviceaccount.com`)
+- Secret-level role for rotation workflow:
+  - `roles/secretmanager.secretVersionAdder` on `alchimista-audit-report-signing-key`
 
 ## Helper scripts
 - `scripts/deploy_cloud_run_service.sh`: build + deploy one service.

@@ -7,26 +7,31 @@ SECRET_NAME="${SECRET_NAME:-alchimista-audit-report-signing-key}"
 INGEST_SERVICE="${INGEST_SERVICE:-ingestion-api-service}"
 INGEST_SA="${INGEST_SA:-ingestion-api-sa@${PROJECT_ID}.iam.gserviceaccount.com}"
 KEY_ID_PREFIX="${KEY_ID_PREFIX:-audit-key}"
+SKIP_SECRET_BOOTSTRAP="${SKIP_SECRET_BOOTSTRAP:-false}"
 
 if ! command -v openssl >/dev/null 2>&1; then
   echo "openssl is required" >&2
   exit 1
 fi
 
-echo "Ensuring secret ${SECRET_NAME} exists..."
-if ! gcloud secrets describe "${SECRET_NAME}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
-  gcloud secrets create "${SECRET_NAME}" \
-    --project "${PROJECT_ID}" \
-    --replication-policy="automatic" \
-    --quiet >/dev/null
-fi
+if [[ "${SKIP_SECRET_BOOTSTRAP}" != "true" ]]; then
+  echo "Ensuring secret ${SECRET_NAME} exists..."
+  if ! gcloud secrets describe "${SECRET_NAME}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
+    gcloud secrets create "${SECRET_NAME}" \
+      --project "${PROJECT_ID}" \
+      --replication-policy="automatic" \
+      --quiet >/dev/null
+  fi
 
-echo "Granting Secret Manager access to ${INGEST_SA}..."
-gcloud secrets add-iam-policy-binding "${SECRET_NAME}" \
-  --project "${PROJECT_ID}" \
-  --member="serviceAccount:${INGEST_SA}" \
-  --role="roles/secretmanager.secretAccessor" \
-  --quiet >/dev/null || true
+  echo "Granting Secret Manager access to ${INGEST_SA}..."
+  gcloud secrets add-iam-policy-binding "${SECRET_NAME}" \
+    --project "${PROJECT_ID}" \
+    --member="serviceAccount:${INGEST_SA}" \
+    --role="roles/secretmanager.secretAccessor" \
+    --quiet >/dev/null || true
+else
+  echo "Skipping secret bootstrap (SKIP_SECRET_BOOTSTRAP=true)"
+fi
 
 echo "Rotating AUDIT_REPORT_SIGNING_KEY secret version..."
 NEW_KEY="$(openssl rand -hex 32)"

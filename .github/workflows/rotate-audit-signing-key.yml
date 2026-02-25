@@ -54,7 +54,7 @@ jobs:
 
       - name: Rotate signing key and update ingestion service
         run: |
-          ./scripts/rotate_audit_report_signing_key_secret.sh "$PROJECT_ID" "$REGION"
+          SKIP_SECRET_BOOTSTRAP=true ./scripts/rotate_audit_report_signing_key_secret.sh "$PROJECT_ID" "$REGION"
 
       - name: Show effective signing key config
         run: |

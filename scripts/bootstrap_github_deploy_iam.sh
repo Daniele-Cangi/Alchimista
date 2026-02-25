@@ -6,6 +6,7 @@ DEPLOY_SA="${2:-github-deploy-sa@${PROJECT_ID}.iam.gserviceaccount.com}"
 INGEST_SA_ID="${INGEST_SA_ID:-ingestion-api-sa}"
 PROCESSOR_SA_ID="${PROCESSOR_SA_ID:-document-processor-sa}"
 RAG_SA_ID="${RAG_SA_ID:-rag-query-sa}"
+AUDIT_SIGNING_SECRET="${AUDIT_SIGNING_SECRET:-alchimista-audit-report-signing-key}"
 
 if [[ -z "${PROJECT_ID}" ]]; then
   echo "Usage: $0 <project_id> [deploy_service_account_email]" >&2
@@ -49,5 +50,17 @@ for TARGET_SA in "${INGEST_SA}" "${PROCESSOR_SA}" "${RAG_SA}" "${CLOUD_BUILD_EXE
     --quiet >/dev/null
   echo "  granted roles/iam.serviceAccountUser on ${TARGET_SA}"
 done
+
+echo "Configuring Secret Manager rotation permission"
+if gcloud secrets describe "${AUDIT_SIGNING_SECRET}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
+  gcloud secrets add-iam-policy-binding "${AUDIT_SIGNING_SECRET}" \
+    --project "${PROJECT_ID}" \
+    --member="serviceAccount:${DEPLOY_SA}" \
+    --role="roles/secretmanager.secretVersionAdder" \
+    --quiet >/dev/null
+  echo "  granted roles/secretmanager.secretVersionAdder on ${AUDIT_SIGNING_SECRET}"
+else
+  echo "  skip ${AUDIT_SIGNING_SECRET} (secret not found)"
+fi
 
 echo "Done."

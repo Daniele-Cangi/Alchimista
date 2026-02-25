@@ -374,6 +374,9 @@ p3_parallel_execution:
         - roles/artifactregistry.reader
         - roles/serviceusage.serviceUsageConsumer
         - roles/storage.objectAdmin
+      secret_level_roles:
+        - secret: alchimista-audit-report-signing-key
+          role: roles/secretmanager.secretVersionAdder
       service_account_user_on:
         - ingestion-api-sa@secure-electron-474908-k9.iam.gserviceaccount.com
         - document-processor-sa@secure-electron-474908-k9.iam.gserviceaccount.com
