@@ -130,7 +130,7 @@ runtime_services:
   document_processor_service:
     target_name: document-processor-service
     deployed_url: https://document-processor-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: document-processor-service-00011-grp
+    latest_ready_revision: document-processor-service-00014-cqb
     expected_endpoints:
       - POST /v1/process
       - POST /v1/process/pubsub
@@ -282,12 +282,20 @@ p3_parallel_execution:
     transitional_exceptions:
       - /v1/healthz
       - /v1/readyz
-      - /v1/process/pubsub (until Pub/Sub push OIDC token is configured)
+    pubsub_push_oidc:
+      status: enforced
+      subscription: doc-ingest-sub
+      push_endpoint: https://document-processor-service-pe7qslbcvq-ez.a.run.app/v1/process/pubsub
+      oidc_service_account: ingestion-api-sa@secure-electron-474908-k9.iam.gserviceaccount.com
+      oidc_audience: https://document-processor-service-pe7qslbcvq-ez.a.run.app/v1/process/pubsub
+      allow_unauthenticated_pubsub: false
     validation:
-      checked_at_utc: "2026-02-25T15:00:00Z"
+      checked_at_utc: "2026-02-25T19:47:28Z"
       readyz_ingestion_http: 200
       noauth_rag_query_http: 401
       noauth_ingestion_doc_http: 401
+      benchmark_gate_run_id_after_pubsub_oidc: "22413130015"
+      benchmark_gate_status_after_pubsub_oidc: success
   p3_4_cicd_discipline:
     status: done
     workflows:
