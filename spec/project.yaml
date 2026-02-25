@@ -311,6 +311,7 @@ p3_parallel_execution:
         - ingestion-api-sa@secure-electron-474908-k9.iam.gserviceaccount.com
         - document-processor-sa@secure-electron-474908-k9.iam.gserviceaccount.com
         - rag-query-sa@secure-electron-474908-k9.iam.gserviceaccount.com
+        - 994021588311-compute@developer.gserviceaccount.com
 
 security_hardening:
   dedicated_service_accounts_enabled: true

@@ -16,9 +16,11 @@ if [[ "${DEPLOY_SA}" != *@* ]]; then
   DEPLOY_SA="${DEPLOY_SA}@${PROJECT_ID}.iam.gserviceaccount.com"
 fi
 
+PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
 INGEST_SA="${INGEST_SA_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
 PROCESSOR_SA="${PROCESSOR_SA_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
 RAG_SA="${RAG_SA_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
+CLOUD_BUILD_EXEC_SA="${CLOUD_BUILD_EXEC_SA:-${PROJECT_NUMBER}-compute@developer.gserviceaccount.com}"
 
 echo "Configuring project roles for ${DEPLOY_SA}"
 for ROLE in \
@@ -34,7 +36,11 @@ for ROLE in \
 done
 
 echo "Configuring serviceAccountUser bindings"
-for TARGET_SA in "${INGEST_SA}" "${PROCESSOR_SA}" "${RAG_SA}"; do
+for TARGET_SA in "${INGEST_SA}" "${PROCESSOR_SA}" "${RAG_SA}" "${CLOUD_BUILD_EXEC_SA}"; do
+  if ! gcloud iam service-accounts describe "${TARGET_SA}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+    echo "  skip ${TARGET_SA} (not found)"
+    continue
+  fi
   gcloud iam service-accounts add-iam-policy-binding "${TARGET_SA}" \
     --member="serviceAccount:${DEPLOY_SA}" \
     --role="roles/iam.serviceAccountUser" \

@@ -45,7 +45,7 @@ images:
 EOF
 
 echo "Building image for ${SERVICE}..."
-gcloud builds submit --project "$PROJECT_ID" --config "$TMP_CONFIG" .
+gcloud builds submit --project "$PROJECT_ID" --config "$TMP_CONFIG" --suppress-logs .
 
 echo "Deploying ${SERVICE}..."
 gcloud run deploy "$SERVICE" \
