@@ -2,6 +2,11 @@ name: benchmark-gate
 
 on:
   workflow_dispatch:
+    inputs:
+      environment_name:
+        description: "GitHub Environment name"
+        required: true
+        default: test
   schedule:
     - cron: "15 5 * * *"
 
@@ -9,6 +14,7 @@ jobs:
   benchmark:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: ${{ github.event.inputs.environment_name || 'test' }}
     env:
       AUTH0_DOMAIN: alchimista.eu.auth0.com
       AUTH0_AUDIENCE: https://api.alchimista.ai
@@ -35,7 +41,7 @@ jobs:
       - name: Validate required secrets
         run: |
           if [[ -z "$AUTH0_CLIENT_ID" || -z "$AUTH0_CLIENT_SECRET" ]]; then
-            echo "Missing AUTH0_CLIENT_ID or AUTH0_CLIENT_SECRET repository secrets"
+            echo "Missing AUTH0_CLIENT_ID or AUTH0_CLIENT_SECRET in GitHub environment secrets"
             exit 1
           fi
 

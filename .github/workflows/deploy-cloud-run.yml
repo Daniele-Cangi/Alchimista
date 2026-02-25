@@ -16,6 +16,10 @@ on:
         description: "GCP project id"
         required: true
         default: secure-electron-474908-k9
+      environment_name:
+        description: "GitHub Environment name"
+        required: true
+        default: test
       region:
         description: "Cloud Run region"
         required: true
@@ -32,6 +36,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment: ${{ inputs.environment_name }}
     env:
       PROJECT_ID: ${{ inputs.project_id }}
       REGION: ${{ inputs.region }}
@@ -44,6 +49,13 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}
+
+      - name: Validate required secrets
+        run: |
+          if [[ -z "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" || -z "${{ secrets.GCP_DEPLOY_SERVICE_ACCOUNT }}" ]]; then
+            echo "Missing GCP_WORKLOAD_IDENTITY_PROVIDER or GCP_DEPLOY_SERVICE_ACCOUNT in GitHub environment secrets"
+            exit 1
+          fi
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2

@@ -136,6 +136,8 @@ BENCHMARK_BEARER_TOKEN='REPLACE_ME' ./scripts/run_p3_benchmark.py
   - `.github/workflows/ci.yml`
   - `.github/workflows/benchmark-gate.yml`
   - `.github/workflows/deploy-cloud-run.yml`
+- GitHub Environment used for secrets:
+  - `test` (for benchmark + deploy workflows)
 - Deploy one service from terminal:
 ```bash
 ./scripts/deploy_cloud_run_service.sh ingestion-api-service secure-electron-474908-k9 europe-west4

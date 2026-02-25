@@ -8,14 +8,17 @@ This stage introduces objective quality gates before release and controlled Clou
   - Validates benchmark gate config exists in `spec/project.yaml`.
 - `.github/workflows/benchmark-gate.yml`
   - Runs benchmark against deployed services (manual + nightly schedule).
+  - Uses GitHub Environment secrets (`environment=test` by default).
   - Enforces gate thresholds from `spec/project.yaml`.
   - Uploads `reports/benchmarks/latest.json` as artifact.
 - `.github/workflows/deploy-cloud-run.yml`
   - Manual deploy workflow (`workflow_dispatch`).
+  - Uses GitHub Environment secrets (`environment_name` input, default `test`).
   - Builds each service image with Cloud Build and deploys to Cloud Run.
   - Executes `/v1/readyz` checks after deployment.
 
-## Required GitHub secrets
+## Required GitHub environment secrets
+- Environment: `test`
 - `GCP_WORKLOAD_IDENTITY_PROVIDER`
 - `GCP_DEPLOY_SERVICE_ACCOUNT`
 - `AUTH0_CLIENT_ID` (M2M app authorized on `https://api.alchimista.ai`)
