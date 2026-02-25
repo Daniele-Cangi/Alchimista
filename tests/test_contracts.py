@@ -8,9 +8,13 @@ from services.shared.contracts import (
     AIDecisionPackageRequest,
     AIDecisionQueryRequest,
     AIDecisionVerifyRequest,
+    ConnectorIngestResponse,
     ConfidenceBand,
+    GCSConnectorImportRequest,
     IngestMessage,
+    LegalHoldCreateRequest,
     QueryAnswer,
+    RetentionPolicyUpsertRequest,
 )
 
 
@@ -169,5 +173,50 @@ def test_ai_decision_verify_contract_rejects_non_gs_uri() -> None:
             {
                 "tenant": "default",
                 "gs_uri": "https://example.com/file.json",
+            }
+        )
+
+
+def test_gcs_connector_contract_rejects_invalid_uri() -> None:
+    with pytest.raises(ValueError):
+        GCSConnectorImportRequest.model_validate(
+            {
+                "source_gcs_uri": "/tmp/local.txt",
+                "tenant": "default",
+            }
+        )
+
+
+def test_gcs_connector_response_contract() -> None:
+    model = ConnectorIngestResponse.model_validate(
+        {
+            "connector": "gcs",
+            "tenant": "default",
+            "doc_id": "d1",
+            "trace_id": "t1",
+            "status": "QUEUED",
+            "source_gcs_uri": "gs://src/path/a.pdf",
+            "raw_gcs_uri": "gs://raw/path/a.pdf",
+            "published": True,
+        }
+    )
+    assert model.connector == "gcs"
+
+
+def test_retention_policy_contract_defaults() -> None:
+    model = RetentionPolicyUpsertRequest.model_validate({"tenant": "default"})
+    assert model.artifact_type == "audit_artifacts"
+    assert model.retain_days == 365
+    assert model.immutable_required is True
+
+
+def test_legal_hold_contract_requires_reason_length() -> None:
+    with pytest.raises(ValueError):
+        LegalHoldCreateRequest.model_validate(
+            {
+                "tenant": "default",
+                "scope_type": "document",
+                "scope_id": "doc-1",
+                "reason": "x",
             }
         )

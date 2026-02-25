@@ -164,7 +164,7 @@ python scripts/check_benchmark_gate.py --spec spec/project.yaml --report reports
 - Full operational details:
   - `docs/p4-cicd.md`
 
-## P4 Audit Trail Engine (P4.4)
+## P5 Governance + Connectors
 - Register an AI decision linked to existing context documents/chunks:
 ```bash
 curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions" \
@@ -273,6 +273,51 @@ curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin
     "limit":50
   }'
 ```
+- Import document via enterprise connector (`gs://` source -> `raw/` + optional publish):
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/connectors/gcs/import" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_gcs_uri":"gs://external-vendor-dropzone/kyc/case-001.pdf",
+    "tenant":"default",
+    "publish":true
+  }'
+```
+- Upsert retention policy (admin endpoint, requires `x-admin-key`):
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/retention-policies" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "x-admin-key: ${ADMIN_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":"default",
+    "artifact_type":"audit_artifacts",
+    "retain_days":3650,
+    "legal_hold_enabled":true,
+    "immutable_required":true
+  }'
+```
+- Create legal hold (admin endpoint, requires `x-admin-key`):
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/legal-holds" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "x-admin-key: ${ADMIN_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":"default",
+    "scope_type":"document",
+    "scope_id":"default::bench-alpha-v1",
+    "reason":"regulatory_audit_open"
+  }'
+```
+- List active legal holds:
+```bash
+curl -sS "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/legal-holds?tenant=default&active_only=true" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "x-admin-key: ${ADMIN_API_KEY}"
+```
+- Artifact writes are immutable (write-once): reusing the same `object_name`/`object_prefix` now returns `409`.
 - Optional signing (HMAC) for exported reports:
 ```bash
 AUDIT_REPORT_SIGNING_KEY='REPLACE_WITH_STRONG_SECRET'

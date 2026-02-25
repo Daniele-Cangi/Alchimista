@@ -71,3 +71,5 @@ P4 extends Alchimista with auditable AI decision trails linked to document conte
 - Report signing config:
   - `AUDIT_REPORT_SIGNING_KEY`
   - `AUDIT_REPORT_SIGNING_KEY_ID`
+- P5 governance/connectors follow-up:
+  - `docs/p5-governance-and-connectors.md`

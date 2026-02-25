@@ -19,6 +19,23 @@ class StorageClient:
         blob.upload_from_string(payload, content_type=content_type)
         return f"gs://{bucket_name}/{object_name}"
 
+    def upload_bytes_immutable(
+        self,
+        *,
+        bucket_name: str,
+        object_name: str,
+        payload: bytes,
+        content_type: str,
+    ) -> dict[str, str | int]:
+        bucket = self.client.bucket(bucket_name)
+        blob = bucket.blob(object_name)
+        blob.upload_from_string(payload, content_type=content_type, if_generation_match=0)
+        return {
+            "gs_uri": f"gs://{bucket_name}/{object_name}",
+            "generation": int(blob.generation or 0),
+            "metageneration": int(blob.metageneration or 0),
+        }
+
     def download_bytes(self, gs_uri: str) -> bytes:
         bucket, object_name = parse_gs_uri(gs_uri)
         blob = self.client.bucket(bucket).blob(object_name)

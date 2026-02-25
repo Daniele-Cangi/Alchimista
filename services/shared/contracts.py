@@ -285,6 +285,108 @@ class AIDecisionVerifyResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class GCSConnectorImportRequest(BaseModel):
+    source_gcs_uri: str = Field(..., min_length=1)
+    tenant: str = Field(default="default", min_length=1)
+    doc_id: str | None = None
+    trace_id: str | None = None
+    force_reprocess: bool = False
+    publish: bool = True
+
+    @field_validator("source_gcs_uri")
+    @classmethod
+    def validate_source_gcs_uri(cls, value: str) -> str:
+        candidate = value.strip()
+        if not candidate.startswith("gs://"):
+            raise ValueError("source_gcs_uri must start with gs://")
+        return candidate
+
+
+class ConnectorIngestResponse(BaseModel):
+    connector: str
+    tenant: str
+    doc_id: str
+    trace_id: str
+    status: str
+    source_gcs_uri: str
+    raw_gcs_uri: str
+    published: bool
+    pubsub_message_id: str | None = None
+    deduplicated_to_doc_id: str | None = None
+
+
+class RetentionPolicyUpsertRequest(BaseModel):
+    tenant: str = Field(..., min_length=1)
+    artifact_type: str = Field(default="audit_artifacts", min_length=1)
+    retain_days: int = Field(default=365, ge=1, le=3650)
+    legal_hold_enabled: bool = True
+    immutable_required: bool = True
+    trace_id: str | None = None
+
+
+class RetentionPolicyRecord(BaseModel):
+    tenant: str
+    artifact_type: str
+    retain_days: int
+    legal_hold_enabled: bool
+    immutable_required: bool
+    created_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class RetentionPolicyResponse(BaseModel):
+    trace_id: str
+    policy: RetentionPolicyRecord
+
+
+class RetentionPolicyListResponse(BaseModel):
+    trace_id: str
+    tenant: str | None = None
+    policies: list[RetentionPolicyRecord]
+
+
+class LegalHoldCreateRequest(BaseModel):
+    tenant: str = Field(..., min_length=1)
+    scope_type: str = Field(..., min_length=1)
+    scope_id: str = Field(..., min_length=1)
+    reason: str = Field(..., min_length=3)
+    case_id: str | None = None
+    regulator_ref: str | None = None
+    trace_id: str | None = None
+
+
+class LegalHoldReleaseRequest(BaseModel):
+    hold_id: str = Field(..., min_length=1)
+    trace_id: str | None = None
+
+
+class LegalHoldRecord(BaseModel):
+    hold_id: str
+    tenant: str
+    scope_type: str
+    scope_id: str
+    reason: str
+    case_id: str | None = None
+    regulator_ref: str | None = None
+    created_by: str
+    created_at: datetime
+    released_at: datetime | None = None
+    active: bool
+
+
+class LegalHoldResponse(BaseModel):
+    trace_id: str
+    hold: LegalHoldRecord
+
+
+class LegalHoldListResponse(BaseModel):
+    trace_id: str
+    tenant: str | None = None
+    active_only: bool
+    holds: list[LegalHoldRecord]
+
+
 class AIDecisionAdminQueryRequest(BaseModel):
     tenants: list[str] = Field(..., min_length=1, max_length=50)
     decision_id_prefix: str | None = None

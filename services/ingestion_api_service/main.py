@@ -4,12 +4,15 @@ import base64
 import hashlib
 import hmac
 import json
+import mimetypes
 import os
+import posixpath
 import threading
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
+from google.api_core.exceptions import PreconditionFailed
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 from psycopg.types.json import Json
@@ -33,10 +36,21 @@ from services.shared.contracts import (
     AIDecisionReportResponse,
     AIDecisionVerifyRequest,
     AIDecisionVerifyResponse,
+    ConnectorIngestResponse,
     DocumentStatusResponse,
+    GCSConnectorImportRequest,
     IngestMessage,
     JobRecord,
     JobStatus,
+    LegalHoldCreateRequest,
+    LegalHoldListResponse,
+    LegalHoldRecord,
+    LegalHoldReleaseRequest,
+    LegalHoldResponse,
+    RetentionPolicyRecord,
+    RetentionPolicyListResponse,
+    RetentionPolicyResponse,
+    RetentionPolicyUpsertRequest,
     now_iso8601,
 )
 from services.shared.db import (
@@ -242,6 +256,114 @@ def get_document_status(request: Request, doc_id: str, tenant: str = config.defa
     )
 
 
+@app.post("/v1/connectors/gcs/import", response_model=ConnectorIngestResponse)
+def connector_import_gcs(payload: GCSConnectorImportRequest, request: Request) -> ConnectorIngestResponse:
+    _require_raw_bucket()
+    require_auth(request, config=config, tenant=payload.tenant)
+    trace_id = payload.trace_id or str(uuid4())
+    doc_id = payload.doc_id or str(uuid4())
+    job_id: str | None = None
+
+    try:
+        source_bytes = storage_client.download_bytes(payload.source_gcs_uri)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Unable to read source_gcs_uri: {exc}") from exc
+    if not source_bytes:
+        raise HTTPException(status_code=400, detail="Source object is empty")
+
+    _, source_object_name = parse_gs_uri(payload.source_gcs_uri)
+    filename = posixpath.basename(source_object_name) or f"{doc_id}.bin"
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    content_hash = sha256_bytes(source_bytes)
+
+    if config.enforce_storage_hardening:
+        _assert_bucket_hardening(config.raw_bucket)
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            duplicate = get_document_by_hash(cur, payload.tenant, content_hash)
+            if duplicate and not payload.force_reprocess:
+                row = fetch_document_status(cur, duplicate["doc_id"], payload.tenant)
+                conn.commit()
+                return ConnectorIngestResponse(
+                    connector="gcs",
+                    tenant=payload.tenant,
+                    doc_id=duplicate["doc_id"],
+                    trace_id=trace_id,
+                    status="DEDUPLICATED",
+                    source_gcs_uri=payload.source_gcs_uri,
+                    raw_gcs_uri=row["source_uri"] if row else duplicate["source_uri"],
+                    published=False,
+                    deduplicated_to_doc_id=duplicate["doc_id"],
+                )
+            if duplicate:
+                doc_id = duplicate["doc_id"]
+
+            object_name = f"raw/{payload.tenant}/{doc_id}/{safe_object_name(filename)}"
+            raw_gcs_uri = storage_client.upload_bytes(
+                bucket_name=config.raw_bucket,
+                object_name=object_name,
+                payload=source_bytes,
+                content_type=content_type,
+            )
+            upsert_document(
+                cur,
+                doc_id=doc_id,
+                tenant=payload.tenant,
+                source_uri=raw_gcs_uri,
+                mime_type=content_type,
+                size_bytes=len(source_bytes),
+                content_hash=content_hash,
+            )
+            job_id = upsert_process_job(
+                cur,
+                doc_id=doc_id,
+                tenant=payload.tenant,
+                trace_id=trace_id,
+                status=JobStatus.QUEUED,
+                metrics={"source": "connector:gcs-import", "source_gcs_uri": payload.source_gcs_uri},
+            )
+            conn.commit()
+
+    message_id = None
+    published = False
+    if payload.publish:
+        message = IngestMessage(
+            id=doc_id,
+            uri=raw_gcs_uri,
+            type=content_type,
+            size=len(source_bytes),
+            tenant=payload.tenant,
+            ts=now_iso8601(),
+            trace_id=trace_id,
+        )
+        message_id = _publish_ingest_message(message, job_id=job_id)
+        published = True
+
+    log_event(
+        "info",
+        "connector_gcs_import_completed",
+        trace_id=trace_id,
+        doc_id=doc_id,
+        job_id=job_id,
+        tenant=payload.tenant,
+        source_gcs_uri=payload.source_gcs_uri,
+        raw_gcs_uri=raw_gcs_uri,
+        published=published,
+    )
+    return ConnectorIngestResponse(
+        connector="gcs",
+        tenant=payload.tenant,
+        doc_id=doc_id,
+        trace_id=trace_id,
+        status=JobStatus.QUEUED.value if published else "STAGED",
+        source_gcs_uri=payload.source_gcs_uri,
+        raw_gcs_uri=raw_gcs_uri,
+        published=published,
+        pubsub_message_id=message_id,
+    )
+
+
 @app.post("/v1/decisions", response_model=AIDecisionIngestResponse)
 def ingest_decision(payload: AIDecisionIngestRequest, request: Request) -> AIDecisionIngestResponse:
     require_auth(request, config=config, tenant=payload.tenant)
@@ -354,7 +476,7 @@ def query_decisions(payload: AIDecisionQueryRequest, request: Request) -> AIDeci
 
 @app.post("/v1/decisions/export", response_model=AIDecisionExportResponse)
 def export_decisions(payload: AIDecisionExportRequest, request: Request) -> AIDecisionExportResponse:
-    require_auth(request, config=config, tenant=payload.tenant)
+    principal = require_auth(request, config=config, tenant=payload.tenant)
     _require_reports_bucket()
     trace_id = payload.trace_id or str(uuid4())
     generated_at = datetime.now(timezone.utc)
@@ -420,11 +542,33 @@ def export_decisions(payload: AIDecisionExportRequest, request: Request) -> AIDe
         trace_id=trace_id,
         generated_at=generated_at,
     )
-    gs_uri = storage_client.upload_bytes(
+    upload_result = _upload_json_artifact_immutable(
         bucket_name=config.reports_bucket,
         object_name=object_name,
-        payload=json.dumps(export_document, ensure_ascii=True, separators=(",", ":"), default=_json_default).encode("utf-8"),
-        content_type="application/json",
+        payload=export_document,
+    )
+    gs_uri = str(upload_result["gs_uri"])
+    _insert_audit_artifact_records(
+        [
+            {
+                "artifact_id": f"export-{trace_id}",
+                "tenant": payload.tenant,
+                "artifact_type": "decision_export",
+                "gs_uri": gs_uri,
+                "object_generation": int(upload_result.get("generation") or 0),
+                "metageneration": int(upload_result.get("metageneration") or 0),
+                "report_hash_sha256": report_hash,
+                "signature_alg": signature_alg,
+                "signature_key_id": signature_key_id,
+                "created_by": principal.subject if principal else "anonymous",
+                "trace_id": trace_id,
+                "metadata": {
+                    "total": total,
+                    "returned": len(decisions),
+                    "include_context": payload.include_context,
+                },
+            }
+        ]
     )
 
     log_event(
@@ -547,13 +691,35 @@ def bundle_decisions(payload: AIDecisionBundleRequest, request: Request) -> AIDe
         trace_id=trace_id,
         generated_at=generated_at,
     )
-    gs_uri = storage_client.upload_bytes(
+    upload_result = _upload_json_artifact_immutable(
         bucket_name=config.reports_bucket,
         object_name=object_name,
-        payload=json.dumps(bundle_document, ensure_ascii=True, separators=(",", ":"), default=_json_default).encode(
-            "utf-8"
-        ),
-        content_type="application/json",
+        payload=bundle_document,
+    )
+    gs_uri = str(upload_result["gs_uri"])
+    _insert_audit_artifact_records(
+        [
+            {
+                "artifact_id": f"bundle-{bundle_id}",
+                "tenant": payload.tenant,
+                "artifact_type": "decision_bundle",
+                "gs_uri": gs_uri,
+                "object_generation": int(upload_result.get("generation") or 0),
+                "metageneration": int(upload_result.get("metageneration") or 0),
+                "report_hash_sha256": report_hash,
+                "signature_alg": signature_alg,
+                "signature_key_id": signature_key_id,
+                "created_by": principal.subject if principal else "anonymous",
+                "trace_id": trace_id,
+                "metadata": {
+                    "bundle_id": bundle_id,
+                    "total": total,
+                    "returned": len(decision_reports),
+                    "case_id": payload.case_id,
+                    "regulator_ref": payload.regulator_ref,
+                },
+            }
+        ]
     )
 
     log_event(
@@ -598,6 +764,7 @@ def package_decisions(payload: AIDecisionPackageRequest, request: Request) -> AI
         requested_object_prefix=payload.object_prefix,
         package_id=package_id,
     )
+    artifact_records: list[dict[str, Any]] = []
 
     with get_connection(config.database_url) as conn:
         with conn.cursor() as cur:
@@ -645,16 +812,27 @@ def package_decisions(payload: AIDecisionPackageRequest, request: Request) -> AI
                 }
                 decision_file_id = decision.decision_id.replace("/", "_")
                 decision_object_name = safe_object_name(f"{object_prefix}/decision_reports/{decision_file_id}.json")
-                decision_gs_uri = storage_client.upload_bytes(
+                decision_upload = _upload_json_artifact_immutable(
                     bucket_name=config.reports_bucket,
                     object_name=decision_object_name,
-                    payload=json.dumps(
-                        decision_report_document,
-                        ensure_ascii=True,
-                        separators=(",", ":"),
-                        default=_json_default,
-                    ).encode("utf-8"),
-                    content_type="application/json",
+                    payload=decision_report_document,
+                )
+                decision_gs_uri = str(decision_upload["gs_uri"])
+                artifact_records.append(
+                    {
+                        "artifact_id": f"pkg-report-{package_id}-{decision.decision_id}",
+                        "tenant": payload.tenant,
+                        "artifact_type": "decision_report",
+                        "gs_uri": decision_gs_uri,
+                        "object_generation": int(decision_upload.get("generation") or 0),
+                        "metageneration": int(decision_upload.get("metageneration") or 0),
+                        "report_hash_sha256": decision_report_hash,
+                        "signature_alg": decision_signature_alg,
+                        "signature_key_id": decision_signature_key_id,
+                        "created_by": principal.subject if principal else "anonymous",
+                        "trace_id": trace_id,
+                        "metadata": {"package_id": package_id, "decision_id": decision.decision_id},
+                    }
                 )
                 files.append(
                     {
@@ -686,13 +864,27 @@ def package_decisions(payload: AIDecisionPackageRequest, request: Request) -> AI
             "signature": policy_signature,
         }
         policy_object_name = safe_object_name(f"{object_prefix}/policy_snapshot.json")
-        policy_gs_uri = storage_client.upload_bytes(
+        policy_upload = _upload_json_artifact_immutable(
             bucket_name=config.reports_bucket,
             object_name=policy_object_name,
-            payload=json.dumps(policy_document, ensure_ascii=True, separators=(",", ":"), default=_json_default).encode(
-                "utf-8"
-            ),
-            content_type="application/json",
+            payload=policy_document,
+        )
+        policy_gs_uri = str(policy_upload["gs_uri"])
+        artifact_records.append(
+            {
+                "artifact_id": f"pkg-policy-{package_id}",
+                "tenant": payload.tenant,
+                "artifact_type": "policy_snapshot",
+                "gs_uri": policy_gs_uri,
+                "object_generation": int(policy_upload.get("generation") or 0),
+                "metageneration": int(policy_upload.get("metageneration") or 0),
+                "report_hash_sha256": policy_report_hash,
+                "signature_alg": policy_signature_alg,
+                "signature_key_id": policy_signature_key_id,
+                "created_by": principal.subject if principal else "anonymous",
+                "trace_id": trace_id,
+                "metadata": {"package_id": package_id},
+            }
         )
         files.append(
             {
@@ -739,14 +931,29 @@ def package_decisions(payload: AIDecisionPackageRequest, request: Request) -> AI
         "signature": manifest_signature,
     }
     manifest_object_name = safe_object_name(f"{object_prefix}/manifest.json")
-    manifest_gs_uri = storage_client.upload_bytes(
+    manifest_upload = _upload_json_artifact_immutable(
         bucket_name=config.reports_bucket,
         object_name=manifest_object_name,
-        payload=json.dumps(manifest_document, ensure_ascii=True, separators=(",", ":"), default=_json_default).encode(
-            "utf-8"
-        ),
-        content_type="application/json",
+        payload=manifest_document,
     )
+    manifest_gs_uri = str(manifest_upload["gs_uri"])
+    artifact_records.append(
+        {
+            "artifact_id": f"pkg-manifest-{package_id}",
+            "tenant": payload.tenant,
+            "artifact_type": "regulator_package_manifest",
+            "gs_uri": manifest_gs_uri,
+            "object_generation": int(manifest_upload.get("generation") or 0),
+            "metageneration": int(manifest_upload.get("metageneration") or 0),
+            "report_hash_sha256": manifest_hash,
+            "signature_alg": manifest_signature_alg,
+            "signature_key_id": manifest_signature_key_id,
+            "created_by": principal.subject if principal else "anonymous",
+            "trace_id": trace_id,
+            "metadata": {"package_id": package_id, "files_count": len(files) + 1},
+        }
+    )
+    _insert_audit_artifact_records(artifact_records)
 
     log_event(
         "info",
@@ -937,6 +1144,136 @@ def verify_decision_artifact(payload: AIDecisionVerifyRequest, request: Request)
         verified=verified,
         errors=errors,
     )
+
+
+@app.post("/v1/admin/retention-policies", response_model=RetentionPolicyResponse)
+def upsert_retention_policy(payload: RetentionPolicyUpsertRequest, request: Request) -> RetentionPolicyResponse:
+    principal = require_auth(request, config=config)
+    _require_admin_api_key(request)
+    trace_id = payload.trace_id or str(uuid4())
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            row = _upsert_retention_policy(
+                cur,
+                tenant=payload.tenant,
+                artifact_type=payload.artifact_type,
+                retain_days=payload.retain_days,
+                legal_hold_enabled=payload.legal_hold_enabled,
+                immutable_required=payload.immutable_required,
+                created_by=principal.subject if principal else "anonymous",
+            )
+            conn.commit()
+
+    policy = _map_retention_policy_row(row)
+    log_event(
+        "info",
+        "retention_policy_upserted",
+        trace_id=trace_id,
+        doc_id=None,
+        job_id=f"retention-policy:{payload.tenant}:{payload.artifact_type}",
+        tenant=payload.tenant,
+        subject=principal.subject if principal else None,
+        retain_days=policy.retain_days,
+        immutable_required=policy.immutable_required,
+    )
+    return RetentionPolicyResponse(trace_id=trace_id, policy=policy)
+
+
+@app.get("/v1/admin/retention-policies", response_model=RetentionPolicyListResponse)
+def list_retention_policies(request: Request, tenant: str | None = None) -> RetentionPolicyListResponse:
+    require_auth(request, config=config)
+    _require_admin_api_key(request)
+    trace_id = str(uuid4())
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            rows = _list_retention_policies(cur, tenant=tenant)
+
+    policies = [_map_retention_policy_row(row) for row in rows]
+    return RetentionPolicyListResponse(trace_id=trace_id, tenant=tenant, policies=policies)
+
+
+@app.post("/v1/admin/legal-holds", response_model=LegalHoldResponse)
+def create_legal_hold(payload: LegalHoldCreateRequest, request: Request) -> LegalHoldResponse:
+    principal = require_auth(request, config=config)
+    _require_admin_api_key(request)
+    trace_id = payload.trace_id or str(uuid4())
+    hold_id = f"lh-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{str(uuid4())[:8]}"
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            row = _create_legal_hold(
+                cur,
+                hold_id=hold_id,
+                tenant=payload.tenant,
+                scope_type=payload.scope_type,
+                scope_id=payload.scope_id,
+                reason=payload.reason,
+                case_id=payload.case_id,
+                regulator_ref=payload.regulator_ref,
+                created_by=principal.subject if principal else "anonymous",
+            )
+            conn.commit()
+
+    hold = _map_legal_hold_row(row)
+    log_event(
+        "info",
+        "legal_hold_created",
+        trace_id=trace_id,
+        doc_id=payload.scope_id if payload.scope_type == "document" else None,
+        job_id=f"legal-hold:{hold.hold_id}",
+        tenant=payload.tenant,
+        subject=principal.subject if principal else None,
+        scope_type=payload.scope_type,
+    )
+    return LegalHoldResponse(trace_id=trace_id, hold=hold)
+
+
+@app.post("/v1/admin/legal-holds/release", response_model=LegalHoldResponse)
+def release_legal_hold(payload: LegalHoldReleaseRequest, request: Request) -> LegalHoldResponse:
+    principal = require_auth(request, config=config)
+    _require_admin_api_key(request)
+    trace_id = payload.trace_id or str(uuid4())
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            row = _release_legal_hold(cur, hold_id=payload.hold_id)
+            if not row:
+                raise HTTPException(status_code=404, detail="Legal hold not found")
+            conn.commit()
+
+    hold = _map_legal_hold_row(row)
+    log_event(
+        "info",
+        "legal_hold_released",
+        trace_id=trace_id,
+        doc_id=hold.scope_id if hold.scope_type == "document" else None,
+        job_id=f"legal-hold:{hold.hold_id}",
+        tenant=hold.tenant,
+        subject=principal.subject if principal else None,
+        scope_type=hold.scope_type,
+    )
+    return LegalHoldResponse(trace_id=trace_id, hold=hold)
+
+
+@app.get("/v1/admin/legal-holds", response_model=LegalHoldListResponse)
+def list_legal_holds(request: Request, tenant: str | None = None, active_only: bool = True) -> LegalHoldListResponse:
+    require_auth(request, config=config)
+    _require_admin_api_key(request)
+    trace_id = str(uuid4())
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            rows = _list_legal_holds(cur, tenant=tenant, active_only=active_only)
+
+    holds = [_map_legal_hold_row(row) for row in rows]
+    return LegalHoldListResponse(trace_id=trace_id, tenant=tenant, active_only=active_only, holds=holds)
 
 
 @app.post("/v1/admin/decisions/query", response_model=AIDecisionAdminQueryResponse)
@@ -1272,6 +1609,61 @@ def _ensure_ai_decision_schema(cur: Any) -> None:
             """
         )
         cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS retention_policies (
+              id BIGSERIAL PRIMARY KEY,
+              tenant TEXT NOT NULL,
+              artifact_type TEXT NOT NULL,
+              retain_days INTEGER NOT NULL CHECK (retain_days > 0),
+              legal_hold_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+              immutable_required BOOLEAN NOT NULL DEFAULT TRUE,
+              created_by TEXT NOT NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              UNIQUE (tenant, artifact_type)
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS legal_holds (
+              id BIGSERIAL PRIMARY KEY,
+              hold_id TEXT NOT NULL UNIQUE,
+              tenant TEXT NOT NULL,
+              scope_type TEXT NOT NULL,
+              scope_id TEXT NOT NULL,
+              reason TEXT NOT NULL,
+              case_id TEXT,
+              regulator_ref TEXT,
+              created_by TEXT NOT NULL,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              released_at TIMESTAMPTZ
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS audit_artifacts (
+              id BIGSERIAL PRIMARY KEY,
+              artifact_id TEXT NOT NULL,
+              tenant TEXT NOT NULL,
+              artifact_type TEXT NOT NULL,
+              gs_uri TEXT NOT NULL,
+              object_generation BIGINT,
+              metageneration BIGINT,
+              report_hash_sha256 TEXT NOT NULL,
+              signature_alg TEXT NOT NULL,
+              signature_key_id TEXT,
+              immutable_write BOOLEAN NOT NULL DEFAULT TRUE,
+              created_by TEXT NOT NULL,
+              trace_id TEXT NOT NULL,
+              metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              UNIQUE (tenant, artifact_type, gs_uri)
+            )
+            """
+        )
+        cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_model_created_at ON ai_decisions (tenant, model, created_at DESC)"
         )
         cur.execute(
@@ -1294,6 +1686,19 @@ def _ensure_ai_decision_schema(cur: Any) -> None:
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_ai_decision_context_chunks_tenant_chunk ON ai_decision_context_chunks (tenant, chunk_id, decision_ref_id)"
         )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_retention_policies_tenant_artifact_type ON retention_policies (tenant, artifact_type)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_legal_holds_tenant_active_created_at ON legal_holds (tenant, released_at, created_at DESC)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_legal_holds_scope ON legal_holds (tenant, scope_type, scope_id, released_at)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_audit_artifacts_tenant_type_created_at ON audit_artifacts (tenant, artifact_type, created_at DESC)"
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_artifacts_trace_id ON audit_artifacts (trace_id)")
         _ai_schema_initialized = True
 
 
@@ -1783,6 +2188,211 @@ def _infer_decision_artifact_type(payload: dict[str, Any]) -> str:
     if "auth_enabled" in payload and "cloud_run_revision" in payload:
         return "policy_snapshot"
     return "unknown"
+
+
+def _serialize_json_payload(payload: dict[str, Any]) -> bytes:
+    return json.dumps(payload, ensure_ascii=True, separators=(",", ":"), default=_json_default).encode("utf-8")
+
+
+def _upload_json_artifact_immutable(
+    *,
+    bucket_name: str,
+    object_name: str,
+    payload: dict[str, Any],
+) -> dict[str, str | int]:
+    try:
+        return storage_client.upload_bytes_immutable(
+            bucket_name=bucket_name,
+            object_name=object_name,
+            payload=_serialize_json_payload(payload),
+            content_type="application/json",
+        )
+    except PreconditionFailed as exc:
+        raise HTTPException(status_code=409, detail=f"Artifact already exists at gs://{bucket_name}/{object_name}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Unable to write artifact: {exc}") from exc
+
+
+def _insert_audit_artifact_records(records: list[dict[str, Any]]) -> None:
+    if not records:
+        return
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            for item in records:
+                cur.execute(
+                    """
+                    INSERT INTO audit_artifacts (
+                      artifact_id, tenant, artifact_type, gs_uri, object_generation, metageneration,
+                      report_hash_sha256, signature_alg, signature_key_id, immutable_write,
+                      created_by, trace_id, metadata
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s, %s, %s)
+                    ON CONFLICT (tenant, artifact_type, gs_uri) DO NOTHING
+                    """,
+                    (
+                        item["artifact_id"],
+                        item["tenant"],
+                        item["artifact_type"],
+                        item["gs_uri"],
+                        item.get("object_generation"),
+                        item.get("metageneration"),
+                        item["report_hash_sha256"],
+                        item["signature_alg"],
+                        item.get("signature_key_id"),
+                        item["created_by"],
+                        item["trace_id"],
+                        Json(item.get("metadata") or {}),
+                    ),
+                )
+            conn.commit()
+
+
+def _upsert_retention_policy(
+    cur: Any,
+    *,
+    tenant: str,
+    artifact_type: str,
+    retain_days: int,
+    legal_hold_enabled: bool,
+    immutable_required: bool,
+    created_by: str,
+) -> dict[str, Any]:
+    cur.execute(
+        """
+        INSERT INTO retention_policies (
+          tenant, artifact_type, retain_days, legal_hold_enabled, immutable_required, created_by, created_at, updated_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
+        ON CONFLICT (tenant, artifact_type)
+        DO UPDATE SET
+          retain_days = EXCLUDED.retain_days,
+          legal_hold_enabled = EXCLUDED.legal_hold_enabled,
+          immutable_required = EXCLUDED.immutable_required,
+          created_by = EXCLUDED.created_by,
+          updated_at = NOW()
+        RETURNING tenant, artifact_type, retain_days, legal_hold_enabled, immutable_required, created_by, created_at, updated_at
+        """,
+        (tenant, artifact_type, retain_days, legal_hold_enabled, immutable_required, created_by),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise RuntimeError("Unable to upsert retention policy")
+    return row
+
+
+def _list_retention_policies(cur: Any, *, tenant: str | None = None) -> list[dict[str, Any]]:
+    if tenant:
+        cur.execute(
+            """
+            SELECT tenant, artifact_type, retain_days, legal_hold_enabled, immutable_required, created_by, created_at, updated_at
+            FROM retention_policies
+            WHERE tenant = %s
+            ORDER BY artifact_type ASC
+            """,
+            (tenant,),
+        )
+    else:
+        cur.execute(
+            """
+            SELECT tenant, artifact_type, retain_days, legal_hold_enabled, immutable_required, created_by, created_at, updated_at
+            FROM retention_policies
+            ORDER BY tenant ASC, artifact_type ASC
+            """
+        )
+    return cur.fetchall()
+
+
+def _create_legal_hold(
+    cur: Any,
+    *,
+    hold_id: str,
+    tenant: str,
+    scope_type: str,
+    scope_id: str,
+    reason: str,
+    case_id: str | None,
+    regulator_ref: str | None,
+    created_by: str,
+) -> dict[str, Any]:
+    cur.execute(
+        """
+        INSERT INTO legal_holds (
+          hold_id, tenant, scope_type, scope_id, reason, case_id, regulator_ref, created_by, created_at, released_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NULL)
+        RETURNING hold_id, tenant, scope_type, scope_id, reason, case_id, regulator_ref, created_by, created_at, released_at
+        """,
+        (hold_id, tenant, scope_type, scope_id, reason, case_id, regulator_ref, created_by),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise RuntimeError("Unable to create legal hold")
+    return row
+
+
+def _release_legal_hold(cur: Any, *, hold_id: str) -> dict[str, Any] | None:
+    cur.execute(
+        """
+        UPDATE legal_holds
+        SET released_at = COALESCE(released_at, NOW())
+        WHERE hold_id = %s
+        RETURNING hold_id, tenant, scope_type, scope_id, reason, case_id, regulator_ref, created_by, created_at, released_at
+        """,
+        (hold_id,),
+    )
+    return cur.fetchone()
+
+
+def _list_legal_holds(cur: Any, *, tenant: str | None, active_only: bool) -> list[dict[str, Any]]:
+    conditions: list[str] = []
+    params: list[Any] = []
+    if tenant:
+        conditions.append("tenant = %s")
+        params.append(tenant)
+    if active_only:
+        conditions.append("released_at IS NULL")
+    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    cur.execute(
+        f"""
+        SELECT hold_id, tenant, scope_type, scope_id, reason, case_id, regulator_ref, created_by, created_at, released_at
+        FROM legal_holds
+        {where_clause}
+        ORDER BY created_at DESC
+        """,
+        params,
+    )
+    return cur.fetchall()
+
+
+def _map_retention_policy_row(row: dict[str, Any]) -> RetentionPolicyRecord:
+    return RetentionPolicyRecord(
+        tenant=str(row["tenant"]),
+        artifact_type=str(row["artifact_type"]),
+        retain_days=int(row["retain_days"]),
+        legal_hold_enabled=bool(row["legal_hold_enabled"]),
+        immutable_required=bool(row["immutable_required"]),
+        created_by=str(row["created_by"]),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _map_legal_hold_row(row: dict[str, Any]) -> LegalHoldRecord:
+    released_at = row.get("released_at")
+    return LegalHoldRecord(
+        hold_id=str(row["hold_id"]),
+        tenant=str(row["tenant"]),
+        scope_type=str(row["scope_type"]),
+        scope_id=str(row["scope_id"]),
+        reason=str(row["reason"]),
+        case_id=row.get("case_id"),
+        regulator_ref=row.get("regulator_ref"),
+        created_by=str(row["created_by"]),
+        created_at=row["created_at"],
+        released_at=released_at,
+        active=released_at is None,
+    )
 
 
 def _publish_ingest_message(message: IngestMessage, *, job_id: str | None = None) -> str:

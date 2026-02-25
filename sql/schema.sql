@@ -124,3 +124,64 @@ CREATE TABLE IF NOT EXISTS ai_decision_context_chunks (
 
 CREATE INDEX IF NOT EXISTS idx_ai_decision_context_chunks_tenant_chunk
   ON ai_decision_context_chunks (tenant, chunk_id, decision_ref_id);
+
+CREATE TABLE IF NOT EXISTS retention_policies (
+  id BIGSERIAL PRIMARY KEY,
+  tenant TEXT NOT NULL,
+  artifact_type TEXT NOT NULL,
+  retain_days INTEGER NOT NULL CHECK (retain_days > 0),
+  legal_hold_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  immutable_required BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (tenant, artifact_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_retention_policies_tenant_artifact_type
+  ON retention_policies (tenant, artifact_type);
+
+CREATE TABLE IF NOT EXISTS legal_holds (
+  id BIGSERIAL PRIMARY KEY,
+  hold_id TEXT NOT NULL UNIQUE,
+  tenant TEXT NOT NULL,
+  scope_type TEXT NOT NULL,
+  scope_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  case_id TEXT,
+  regulator_ref TEXT,
+  created_by TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  released_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_legal_holds_tenant_active_created_at
+  ON legal_holds (tenant, released_at, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_legal_holds_scope
+  ON legal_holds (tenant, scope_type, scope_id, released_at);
+
+CREATE TABLE IF NOT EXISTS audit_artifacts (
+  id BIGSERIAL PRIMARY KEY,
+  artifact_id TEXT NOT NULL,
+  tenant TEXT NOT NULL,
+  artifact_type TEXT NOT NULL,
+  gs_uri TEXT NOT NULL,
+  object_generation BIGINT,
+  metageneration BIGINT,
+  report_hash_sha256 TEXT NOT NULL,
+  signature_alg TEXT NOT NULL,
+  signature_key_id TEXT,
+  immutable_write BOOLEAN NOT NULL DEFAULT TRUE,
+  created_by TEXT NOT NULL,
+  trace_id TEXT NOT NULL,
+  metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (tenant, artifact_type, gs_uri)
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_artifacts_tenant_type_created_at
+  ON audit_artifacts (tenant, artifact_type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_audit_artifacts_trace_id
+  ON audit_artifacts (trace_id);
