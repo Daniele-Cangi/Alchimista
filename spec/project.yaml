@@ -110,7 +110,7 @@ runtime_services:
   ingestion_api_service:
     target_name: ingestion-api-service
     deployed_url: https://ingestion-api-service-pe7qslbcvq-ez.a.run.app
-    latest_ready_revision: ingestion-api-service-00002-4kc
+    latest_ready_revision: ingestion-api-service-00003-smt
     expected_endpoints:
       - POST /v1/ingest
       - POST /v1/ingest/complete
@@ -203,10 +203,11 @@ security_hardening:
   core_services_using_default_compute_sa: false
   db_credentials_in_secret_manager: true
   buckets_cmek_ubla_enforced: true
+  signed_url_runtime_signing_mode: iam_signblob_via_access_token
 
 validation:
-  last_smoke_test_at: "2026-02-25T11:39:48Z"
+  last_smoke_test_at: "2026-02-25T11:51:11Z"
   smoke_test_result: passed
-  sample_doc_id: 552cc1a5-25dd-4b5e-8a88-c9134a04ec6f
-  sample_trace_id: 56bfb790-9e9b-4ccb-a99b-43ba77d5c5d2
+  sample_doc_id: d4f5b676-e92d-4def-9d75-82e1f454f922
+  sample_trace_id: e825747d-95e3-4471-85e5-e5ee845f9c0c
   ingest_subscription_push_endpoint: https://document-processor-service-pe7qslbcvq-ez.a.run.app/v1/process/pubsub

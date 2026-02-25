@@ -3,12 +3,15 @@ from __future__ import annotations
 from datetime import timedelta
 from urllib.parse import quote
 
+import google.auth
+from google.auth.transport.requests import Request
 from google.cloud import storage
 
 
 class StorageClient:
     def __init__(self, project_id: str):
         self.client = storage.Client(project=project_id)
+        self._auth_request = Request()
 
     def upload_bytes(self, bucket_name: str, object_name: str, payload: bytes, content_type: str) -> str:
         bucket = self.client.bucket(bucket_name)
@@ -37,6 +40,22 @@ class StorageClient:
     ) -> str:
         bucket = self.client.bucket(bucket_name)
         blob = bucket.blob(object_name)
+        credentials, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        credentials.refresh(self._auth_request)
+        signer_email = getattr(credentials, "service_account_email", None)
+
+        # Cloud Run metadata credentials do not carry a private key. Using
+        # access token + service account email lets Cloud Storage sign via IAM.
+        if signer_email and credentials.token:
+            return blob.generate_signed_url(
+                version="v4",
+                expiration=timedelta(minutes=expiration_minutes),
+                method="PUT",
+                content_type=content_type,
+                service_account_email=signer_email,
+                access_token=credentials.token,
+            )
+
         return blob.generate_signed_url(
             version="v4",
             expiration=timedelta(minutes=expiration_minutes),
