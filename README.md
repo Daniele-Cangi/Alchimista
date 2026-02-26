@@ -156,6 +156,10 @@ TOKEN="$(./scripts/get_auth0_m2m_token.sh \
 ```bash
 ./scripts/run_p3_benchmark.py --dataset benchmark/dataset_v2.json --output-dir reports/benchmarks
 ```
+- Override tenant at runtime (useful when JWT tenant claim is `default`):
+```bash
+./scripts/run_p3_benchmark.py --dataset benchmark/dataset_v2.json --tenant default --output-dir reports/benchmarks
+```
 - Core KPI tracked in `summary`: `error_rate`, `citation_coverage`, `recall_at_k`, `mrr`, `p95_latency_ms` (plus `p50_latency_ms`/`max_latency_ms`).
 - Processing defaults to `event-driven` (no direct `/v1/process` call; waits for terminal job status via `/v1/doc/{id}`).
 - Optional explicit processing controls:

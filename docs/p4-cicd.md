@@ -14,6 +14,7 @@ This stage introduces objective quality gates before release and controlled Clou
   - Manual inputs for controlled benchmark experiments:
     - `dataset_path` (default `benchmark/dataset_v1.json`)
     - `benchmark_tenant` (default `default`)
+  - Workflow passes `benchmark_tenant` to `run_p3_benchmark.py --tenant` (no dataset rewrite needed).
   - Verifies auth boundary before benchmark metrics (`scripts/smoke_p3_auth_enforcement.sh`).
   - Enforces gate thresholds from `spec/project.yaml`.
   - Uploads `reports/benchmarks/latest.json` as artifact.

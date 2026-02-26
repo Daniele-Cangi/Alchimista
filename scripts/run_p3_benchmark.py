@@ -29,6 +29,7 @@ DEFAULT_RAG_URL = "https://rag-query-service-pe7qslbcvq-ez.a.run.app"
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run P3.1 benchmark for Alchimista.")
     parser.add_argument("--dataset", default="benchmark/dataset_v1.json")
+    parser.add_argument("--tenant", default=os.getenv("BENCHMARK_TENANT", ""))
     parser.add_argument("--output-dir", default="reports/benchmarks")
     parser.add_argument("--ingest-url", default=os.getenv("INGEST_URL", DEFAULT_INGEST_URL))
     parser.add_argument("--processor-url", default=os.getenv("PROCESSOR_URL", DEFAULT_PROCESSOR_URL))
@@ -47,7 +48,10 @@ def main() -> int:
     dataset_path = Path(args.dataset)
     dataset = json.loads(dataset_path.read_text(encoding="utf-8"))
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    tenant = str(dataset.get("tenant", "benchmark"))
+    dataset_tenant = str(dataset.get("tenant", "benchmark"))
+    tenant = str(args.tenant or dataset_tenant)
+    if not tenant:
+        raise RuntimeError("Benchmark tenant must not be empty")
     top_k = int(dataset.get("top_k", 3))
 
     alias_to_doc_id: dict[str, str] = {}
@@ -225,6 +229,7 @@ def main() -> int:
         "run_id": run_id,
         "dataset": dataset.get("name"),
         "dataset_path": str(dataset_path),
+        "dataset_tenant": dataset_tenant,
         "tenant": tenant,
         "top_k": top_k,
         "service_urls": {

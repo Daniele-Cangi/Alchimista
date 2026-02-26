@@ -70,22 +70,14 @@ jobs:
         env:
           BENCHMARK_BEARER_TOKEN: ${{ steps.auth.outputs.token }}
         run: |
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          source = Path(os.environ["DATASET_PATH"])
-          if not source.exists():
-              raise SystemExit(f"Dataset not found: {source}")
-          target = Path("/tmp/benchmark_dataset_runtime.json")
-          data = json.loads(source.read_text(encoding="utf-8"))
-          data["tenant"] = os.environ.get("BENCHMARK_TENANT", "default")
-          target.write_text(json.dumps(data, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
-          PY
+          if [[ ! -f "$DATASET_PATH" ]]; then
+            echo "Dataset not found: $DATASET_PATH"
+            exit 1
+          fi
 
           ./scripts/run_p3_benchmark.py \
-            --dataset /tmp/benchmark_dataset_runtime.json \
+            --dataset "$DATASET_PATH" \
+            --tenant "$BENCHMARK_TENANT" \
             --output-dir reports/benchmarks \
             --ingest-url "$INGEST_URL" \
             --processor-url "$PROCESSOR_URL" \

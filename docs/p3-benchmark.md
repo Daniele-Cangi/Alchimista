@@ -34,6 +34,14 @@ Quality run:
   --output-dir reports/benchmarks
 ```
 
+Tenant override (recommended when auth tenant claim differs from dataset tenant):
+```bash
+./scripts/run_p3_benchmark.py \
+  --dataset benchmark/dataset_v2.json \
+  --tenant default \
+  --output-dir reports/benchmarks
+```
+
 Optional URLs:
 ```bash
 INGEST_URL='https://ingestion-api-service-pe7qslbcvq-ez.a.run.app' \
