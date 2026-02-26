@@ -219,11 +219,16 @@ TOKEN="$(./scripts/get_auth0_m2m_token.sh \
 - Optional UI one-click token mode for test/demo environments (do not enable on hardened public environments):
 ```bash
 DASHBOARD_ENABLE_TEST_TOKEN=true
+DASHBOARD_DEPLOY_ENV=development
+DASHBOARD_ALLOW_TEST_TOKEN_IN_PROD=false
 AUTH0_TEST_DOMAIN=alchimista.eu.auth0.com
 AUTH0_TEST_AUDIENCE=https://api.alchimista.ai
 AUTH0_TEST_CLIENT_ID=<AUTH0_CLIENT_ID>
 AUTH0_TEST_CLIENT_SECRET=<AUTH0_CLIENT_SECRET>
 ```
+- Production hardening rule:
+  - if `DASHBOARD_DEPLOY_ENV=production`, endpoint `/api/v1/auth/test-token` stays hard-disabled unless `DASHBOARD_ALLOW_TEST_TOKEN_IN_PROD=true`.
+  - service startup logs an explicit warning whenever test-token mode is requested/enabled.
 
 ## P3.1 Benchmark
 - Datasets:

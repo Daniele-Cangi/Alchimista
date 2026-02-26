@@ -31,6 +31,24 @@ DASHBOARD_ENABLE_TEST_TOKEN = os.getenv("DASHBOARD_ENABLE_TEST_TOKEN", "false").
     "yes",
     "on",
 }
+DASHBOARD_DEPLOY_ENV = (
+    os.getenv("DASHBOARD_DEPLOY_ENV")
+    or os.getenv("VERCEL_ENV")
+    or os.getenv("ENVIRONMENT")
+    or "unknown"
+).strip().lower()
+DASHBOARD_ALLOW_TEST_TOKEN_IN_PROD = os.getenv("DASHBOARD_ALLOW_TEST_TOKEN_IN_PROD", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+_DASHBOARD_TEST_TOKEN_PROD_BLOCKED = (
+    DASHBOARD_ENABLE_TEST_TOKEN
+    and DASHBOARD_DEPLOY_ENV == "production"
+    and not DASHBOARD_ALLOW_TEST_TOKEN_IN_PROD
+)
+DASHBOARD_TEST_TOKEN_ENABLED = DASHBOARD_ENABLE_TEST_TOKEN and not _DASHBOARD_TEST_TOKEN_PROD_BLOCKED
 AUTH0_TEST_DOMAIN = os.getenv("AUTH0_TEST_DOMAIN", "alchimista.eu.auth0.com").strip()
 AUTH0_TEST_AUDIENCE = os.getenv("AUTH0_TEST_AUDIENCE", "https://api.alchimista.ai").strip()
 AUTH0_TEST_CLIENT_ID = os.getenv("AUTH0_TEST_CLIENT_ID", "").strip()
@@ -49,6 +67,20 @@ app = FastAPI(
 DASHBOARD_DIR = Path(__file__).parent
 TEMPLATES_DIR = DASHBOARD_DIR / "templates"
 app.mount("/static", StaticFiles(directory=DASHBOARD_DIR / "static"), name="static")
+
+
+@app.on_event("startup")
+async def startup_security_checks() -> None:
+    if _DASHBOARD_TEST_TOKEN_PROD_BLOCKED:
+        logger.warning(
+            "Security check: DASHBOARD_ENABLE_TEST_TOKEN=true but endpoint is HARD-DISABLED in production "
+            "(set DASHBOARD_ALLOW_TEST_TOKEN_IN_PROD=true only for controlled demos)."
+        )
+    if DASHBOARD_TEST_TOKEN_ENABLED:
+        logger.warning(
+            "Security check: test token endpoint is ENABLED in env=%s. Intended for test/demo only.",
+            DASHBOARD_DEPLOY_ENV,
+        )
 
 
 # ==================== PROXY HELPERS ====================
@@ -120,10 +152,13 @@ def _effective_admin_key(x_admin_key: str | None) -> str | None:
 
 
 def _mint_auth0_test_token() -> dict[str, Any]:
-    if not DASHBOARD_ENABLE_TEST_TOKEN:
+    if not DASHBOARD_TEST_TOKEN_ENABLED:
         raise HTTPException(
             status_code=403,
-            detail="Test token endpoint is disabled. Enable DASHBOARD_ENABLE_TEST_TOKEN=true for test environments.",
+            detail=(
+                "Test token endpoint is disabled. "
+                "In production it requires DASHBOARD_ALLOW_TEST_TOKEN_IN_PROD=true in addition to DASHBOARD_ENABLE_TEST_TOKEN=true."
+            ),
         )
     if not AUTH0_TEST_CLIENT_ID or not AUTH0_TEST_CLIENT_SECRET:
         raise HTTPException(
@@ -1020,7 +1055,9 @@ async def api_get_settings():
         "rag_url": RAG_URL,
         "decisions_and_governance_url": INGEST_URL,
         "admin_key_configured": bool(ADMIN_KEY),
-        "test_token_enabled": DASHBOARD_ENABLE_TEST_TOKEN,
+        "deploy_env": DASHBOARD_DEPLOY_ENV,
+        "test_token_requested": DASHBOARD_ENABLE_TEST_TOKEN,
+        "test_token_enabled": DASHBOARD_TEST_TOKEN_ENABLED,
     }
 
 
