@@ -1,0 +1,92 @@
+{
+  "name": "alchimista_p3_2_quality_v2",
+  "tenant": "benchmark",
+  "top_k": 5,
+  "documents": [
+    {
+      "alias": "alpha_case",
+      "doc_id": "bench-alpha-case-v2",
+      "filename": "alpha_case.txt",
+      "content_type": "text/plain",
+      "content": "Case ACME-7421 for vendor Northwind. Risk decision: denied. Reason: sanctions exposure in restricted jurisdiction. Reviewer: Marta Olsen. Confidence 0.91."
+    },
+    {
+      "alias": "beta_case",
+      "doc_id": "bench-beta-case-v2",
+      "filename": "beta_case.txt",
+      "content_type": "text/plain",
+      "content": "Case ACME-7422 for vendor Northwind. Risk decision: approved. Reason: no sanctions and complete KYC records. Reviewer: Luca Berg. Confidence 0.88."
+    },
+    {
+      "alias": "gamma_case",
+      "doc_id": "bench-gamma-case-v2",
+      "filename": "gamma_case.txt",
+      "content_type": "text/plain",
+      "content": "Case ACME-7423 for vendor Bluefin. Risk decision: manual-review. Reason: beneficial owner mismatch across filings. Reviewer: Sara Holm. Confidence 0.79."
+    },
+    {
+      "alias": "policy_sanctions",
+      "doc_id": "bench-policy-sanctions-v2",
+      "filename": "policy_sanctions.txt",
+      "content_type": "text/plain",
+      "content": "Policy section SAN-17: deny onboarding when sanctions exposure is confirmed in restricted jurisdictions. Keep evidence references and reviewer trace_id."
+    },
+    {
+      "alias": "policy_kyc",
+      "doc_id": "bench-policy-kyc-v2",
+      "filename": "policy_kyc.txt",
+      "content_type": "text/plain",
+      "content": "Policy section KYC-04: approve onboarding when identity, ownership, and transaction profile are complete and consistent."
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "q_case_7421_decision",
+      "query": "What was the risk decision for case ACME-7421?",
+      "expected_doc_alias": "alpha_case",
+      "expected_keyword": "denied"
+    },
+    {
+      "query_id": "q_case_7422_reason",
+      "query": "Why was ACME-7422 approved?",
+      "expected_doc_alias": "beta_case",
+      "expected_keyword": "complete KYC records"
+    },
+    {
+      "query_id": "q_case_7423_status",
+      "query": "Which status was assigned to ACME-7423?",
+      "expected_doc_alias": "gamma_case",
+      "expected_keyword": "manual-review"
+    },
+    {
+      "query_id": "q_policy_sanctions_rule",
+      "query": "Which policy section says to deny onboarding for sanctions exposure?",
+      "expected_doc_alias": "policy_sanctions",
+      "expected_keyword": "SAN-17"
+    },
+    {
+      "query_id": "q_policy_kyc_rule",
+      "query": "Which policy section allows approval when KYC data is complete and consistent?",
+      "expected_doc_alias": "policy_kyc",
+      "expected_keyword": "KYC-04"
+    },
+    {
+      "query_id": "q_alpha_reviewer",
+      "query": "Who reviewed case ACME-7421?",
+      "expected_doc_alias": "alpha_case",
+      "expected_keyword": "Marta Olsen"
+    },
+    {
+      "query_id": "q_beta_confidence",
+      "query": "What confidence value was recorded for ACME-7422?",
+      "expected_doc_alias": "beta_case",
+      "expected_keyword": "0.88"
+    },
+    {
+      "query_id": "q_gamma_reason",
+      "query": "What caused manual review for ACME-7423?",
+      "expected_doc_alias": "gamma_case",
+      "expected_keyword": "beneficial owner mismatch"
+    }
+  ]
+}

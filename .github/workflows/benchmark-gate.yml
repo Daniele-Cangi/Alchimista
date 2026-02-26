@@ -7,6 +7,14 @@ on:
         description: "GitHub Environment name"
         required: true
         default: test
+      dataset_path:
+        description: "Benchmark dataset path"
+        required: false
+        default: benchmark/dataset_v1.json
+      benchmark_tenant:
+        description: "Tenant used for benchmark data and auth smoke"
+        required: false
+        default: default
   schedule:
     - cron: "15 5 * * *"
 
@@ -18,7 +26,8 @@ jobs:
     env:
       AUTH0_DOMAIN: alchimista.eu.auth0.com
       AUTH0_AUDIENCE: https://api.alchimista.ai
-      BENCHMARK_TENANT: default
+      BENCHMARK_TENANT: ${{ github.event.inputs.benchmark_tenant || 'default' }}
+      DATASET_PATH: ${{ github.event.inputs.dataset_path || 'benchmark/dataset_v1.json' }}
       INGEST_URL: https://ingestion-api-service-pe7qslbcvq-ez.a.run.app
       PROCESSOR_URL: https://document-processor-service-pe7qslbcvq-ez.a.run.app
       RAG_URL: https://rag-query-service-pe7qslbcvq-ez.a.run.app
@@ -51,18 +60,27 @@ jobs:
           TOKEN="$(./scripts/get_auth0_m2m_token.sh "$AUTH0_DOMAIN" "$AUTH0_CLIENT_ID" "$AUTH0_CLIENT_SECRET" "$AUTH0_AUDIENCE")"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
+      - name: Verify auth boundary
+        env:
+          BENCHMARK_BEARER_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          ./scripts/smoke_p3_auth_enforcement.sh "$BENCHMARK_BEARER_TOKEN" "$BENCHMARK_TENANT"
+
       - name: Run benchmark
         env:
           BENCHMARK_BEARER_TOKEN: ${{ steps.auth.outputs.token }}
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
-          source = Path("benchmark/dataset_v1.json")
+          source = Path(os.environ["DATASET_PATH"])
+          if not source.exists():
+              raise SystemExit(f"Dataset not found: {source}")
           target = Path("/tmp/benchmark_dataset_runtime.json")
           data = json.loads(source.read_text(encoding="utf-8"))
-          data["tenant"] = "default"
+          data["tenant"] = os.environ.get("BENCHMARK_TENANT", "default")
           target.write_text(json.dumps(data, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
           PY
 

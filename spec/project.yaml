@@ -497,6 +497,9 @@ p3_parallel_execution:
     embedding_backend: vertex_text_embedding_with_dimension_projection
     target_embedding_dimensions: 128
     rollout_script: scripts/enable_vertex_backend.sh
+    benchmark_datasets:
+      baseline_gate: benchmark/dataset_v1.json
+      quality_suite: benchmark/dataset_v2.json
     success_gate: benchmark.gates.min_mrr >= 0.65
     last_validation_run: "20260225T144807Z"
     latest_mrr: 0.8333333333333334
@@ -505,6 +508,7 @@ p3_parallel_execution:
     mode: jwt_oidc_bearer_verification
     rollout_script: scripts/apply_p3_auth_oidc.sh
     pubsub_push_oidc_rollout_script: scripts/apply_p3_pubsub_push_oidc.sh
+    auth_enforcement_smoke_script: scripts/smoke_p3_auth_enforcement.sh
     issuer: https://alchimista.eu.auth0.com/
     audience: https://api.alchimista.ai
     tenant_claims:
@@ -543,8 +547,12 @@ p3_parallel_execution:
       - .github/workflows/retention-enforce.yml
     deploy_script: scripts/deploy_cloud_run_service.sh
     benchmark_gate_script: scripts/check_benchmark_gate.py
+    benchmark_auth_smoke_script: scripts/smoke_p3_auth_enforcement.sh
     benchmark_gate_schedule_environment: prod
     benchmark_gate_manual_default_environment: test
+    benchmark_gate_manual_inputs:
+      dataset_path_default: benchmark/dataset_v1.json
+      benchmark_tenant_default: default
     benchmark_gate_latest_prod_validation:
       run_id: "22418800003"
       completed_at_utc: "2026-02-25T22:31:20Z"

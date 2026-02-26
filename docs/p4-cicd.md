@@ -11,6 +11,10 @@ This stage introduces objective quality gates before release and controlled Clou
   - Uses GitHub Environment secrets:
     - scheduled runs resolve to `prod`
     - manual runs use `environment_name` input (default `test`)
+  - Manual inputs for controlled benchmark experiments:
+    - `dataset_path` (default `benchmark/dataset_v1.json`)
+    - `benchmark_tenant` (default `default`)
+  - Verifies auth boundary before benchmark metrics (`scripts/smoke_p3_auth_enforcement.sh`).
   - Enforces gate thresholds from `spec/project.yaml`.
   - Uploads `reports/benchmarks/latest.json` as artifact.
 - `.github/workflows/deploy-cloud-run.yml`
@@ -55,6 +59,7 @@ The service account referenced by `GCP_DEPLOY_SERVICE_ACCOUNT` must have at leas
 ## Helper scripts
 - `scripts/deploy_cloud_run_service.sh`: build + deploy one service.
 - `scripts/check_benchmark_gate.py`: validates benchmark metrics against spec gates.
+- `scripts/smoke_p3_auth_enforcement.sh`: validates protected endpoints reject unauthenticated requests.
 - `scripts/bootstrap_github_deploy_iam.sh`: grants IAM roles required by `deploy-cloud-run`.
 - `scripts/rotate_audit_report_signing_key_secret.sh`: rotates HMAC signing key in Secret Manager and rebinds ingestion service.
 - `scripts/run_p6_retention_enforcement.sh`: executes retention enforcement with consistent payload, summary output, and error gate.

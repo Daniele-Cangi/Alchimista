@@ -139,12 +139,22 @@ TOKEN="$(./scripts/get_auth0_m2m_token.sh \
 ```bash
 ./scripts/smoke_p3_auth.sh "$TOKEN" default
 ```
+- Verify auth boundary (`healthz` open, protected endpoints denied without token, allowed with token):
+```bash
+./scripts/smoke_p3_auth_enforcement.sh "$TOKEN" default
+```
 
 ## P3.1 Benchmark
-- Dataset baseline: `benchmark/dataset_v1.json`
+- Datasets:
+  - baseline: `benchmark/dataset_v1.json`
+  - quality suite: `benchmark/dataset_v2.json`
 - Run benchmark and generate report:
 ```bash
 ./scripts/run_p3_benchmark.py --dataset benchmark/dataset_v1.json --output-dir reports/benchmarks
+```
+- Run quality-oriented benchmark (`v2`):
+```bash
+./scripts/run_p3_benchmark.py --dataset benchmark/dataset_v2.json --output-dir reports/benchmarks
 ```
 - Core KPI tracked in `summary`: `error_rate`, `citation_coverage`, `recall_at_k`, `mrr`, `p95_latency_ms` (plus `p50_latency_ms`/`max_latency_ms`).
 - Processing defaults to `event-driven` (no direct `/v1/process` call; waits for terminal job status via `/v1/doc/{id}`).
@@ -168,6 +178,10 @@ BENCHMARK_BEARER_TOKEN='REPLACE_ME' ./scripts/run_p3_benchmark.py
 - GitHub Environment used for secrets:
   - `test` and `prod`
   - benchmark-gate schedule resolves to `prod`; manual runs can target `test`/`prod`
+  - benchmark-gate manual inputs:
+    - `dataset_path` (default `benchmark/dataset_v1.json`)
+    - `benchmark_tenant` (default `default`)
+- benchmark-gate also enforces auth boundary via `scripts/smoke_p3_auth_enforcement.sh` before running benchmark metrics.
 - Bootstrap deploy IAM prerequisites:
 ```bash
 ./scripts/bootstrap_github_deploy_iam.sh secure-electron-474908-k9

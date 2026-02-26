@@ -3,7 +3,9 @@
 This benchmark is the objective baseline for retrieval and citation quality.
 
 ## Scope
-- Fixed dataset in `benchmark/dataset_v1.json`
+- Datasets:
+  - `benchmark/dataset_v1.json` (baseline gate)
+  - `benchmark/dataset_v2.json` (harder retrieval quality checks)
 - End-to-end flow:
   1. ingest docs
   2. processor completion (`QUEUED/RUNNING` -> `SUCCEEDED`)
@@ -22,6 +24,13 @@ This benchmark is the objective baseline for retrieval and citation quality.
 ```bash
 ./scripts/run_p3_benchmark.py \
   --dataset benchmark/dataset_v1.json \
+  --output-dir reports/benchmarks
+```
+
+Quality run:
+```bash
+./scripts/run_p3_benchmark.py \
+  --dataset benchmark/dataset_v2.json \
   --output-dir reports/benchmarks
 ```
 
@@ -48,6 +57,11 @@ Optional bearer token (for P3.3 JWT/OIDC protected endpoints):
 ```bash
 BENCHMARK_BEARER_TOKEN='REPLACE_ME' \
 ./scripts/run_p3_benchmark.py
+```
+
+Auth boundary smoke (recommended before benchmark in protected environments):
+```bash
+TOKEN='REPLACE_ME' ./scripts/smoke_p3_auth_enforcement.sh "$TOKEN" default
 ```
 
 ## Output
