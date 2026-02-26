@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchimista - Audit Quality</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dux-minimal.css">
+</head>
+<body>
+    <header class="dux-header">
+        <a href="/" class="dux-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height:32px;width:auto;">
+            <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#111827;letter-spacing:-0.5px;">Alchimista</span>
+        </a>
+        <nav class="dux-nav">
+            <a href="/dashboard" class="dux-nav-item">Dashboard</a>
+            <a href="/ingest" class="dux-nav-item">Ingest</a>
+            <a href="/connectors" class="dux-nav-item">Connectors</a>
+            <a href="/query" class="dux-nav-item">Query</a>
+            <a href="/decisions" class="dux-nav-item">Decisions</a>
+            <a href="/governance" class="dux-nav-item">Governance</a>
+            <a href="/monitoring" class="dux-nav-item">Monitoring</a>
+            <a href="/quality" class="dux-nav-item active">Quality</a>
+            <a href="/settings" class="dux-nav-item">Settings</a>
+            <a href="/guide" class="dux-nav-item">Guide</a>
+        </nav>
+    </header>
+
+    <div class="dux-container">
+        <div class="dux-page-title dux-fade-in">
+            <h1>Audit Quality</h1>
+            <p>Evaluate citation coverage from RAG responses, test query quality, and verify EU AI Act compliance readiness.</p>
+        </div>
+
+        <!-- Citation Coverage Test -->
+        <div class="dux-card dux-fade-in" style="margin-bottom:24px;">
+            <div class="dux-card-header">
+                <h2 class="dux-card-title">Citation Coverage Test</h2>
+                <p class="dux-card-subtitle">Run a RAG query and measure citation quality — score, count, and source diversity</p>
+            </div>
+            <div class="dux-card-body">
+                <div class="dux-grid" style="grid-template-columns:1fr 1fr;gap:20px;">
+                    <div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Tenant ID <span style="color:#ef4444;">*</span></label>
+                            <input id="cov-tenant" class="dux-input" type="text" placeholder="acme-corp">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Test Query <span style="color:#ef4444;">*</span></label>
+                            <textarea id="cov-query" class="dux-textarea" rows="3" placeholder="e.g. What are the transparency obligations under Article 13 EU AI Act?"></textarea>
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Top-K</label>
+                            <input id="cov-k" class="dux-input" type="number" value="5" min="1" max="20">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Bearer Token (optional)</label>
+                            <input id="cov-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                        </div>
+                        <button class="dux-btn dux-btn-primary" onclick="runCoverageTest()" style="width:100%;" id="cov-btn">Run Coverage Test</button>
+                        <div id="cov-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
+                    </div>
+                    <div id="cov-results" style="display:none;">
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+                            <div class="quality-metric">
+                                <div class="quality-metric-label">Citations Returned</div>
+                                <div id="cov-count" class="quality-metric-value">—</div>
+                            </div>
+                            <div class="quality-metric">
+                                <div class="quality-metric-label">Top Score</div>
+                                <div id="cov-top-score" class="quality-metric-value">—</div>
+                            </div>
+                            <div class="quality-metric">
+                                <div class="quality-metric-label">Avg Score</div>
+                                <div id="cov-avg-score" class="quality-metric-value">—</div>
+                            </div>
+                            <div class="quality-metric">
+                                <div class="quality-metric-label">Unique Docs</div>
+                                <div id="cov-unique-docs" class="quality-metric-value">—</div>
+                            </div>
+                        </div>
+                        <div style="background:#f9fafb;border-radius:8px;padding:12px;">
+                            <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;font-weight:600;margin-bottom:8px;">Answer Preview</div>
+                            <div id="cov-answer-preview" style="font-size:13px;color:#374151;line-height:1.6;"></div>
+                        </div>
+                    </div>
+                    <div id="cov-idle" style="display:flex;align-items:center;justify-content:center;color:#9ca3af;padding:40px;">
+                        <div style="text-align:center;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;margin:0 auto 12px;display:block;opacity:0.4;"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <p>Run a test to see citation metrics</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Compliance Checklist -->
+        <div class="dux-card dux-fade-in" style="margin-bottom:24px;">
+            <div class="dux-card-header">
+                <h2 class="dux-card-title">EU AI Act Compliance Checklist</h2>
+                <p class="dux-card-subtitle">Self-assessment for high-risk AI system audit trail requirements</p>
+            </div>
+            <div class="dux-card-body">
+                <div style="display:flex;flex-direction:column;gap:8px;" id="checklist">
+                    <!-- Populated by JS -->
+                </div>
+                <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f3f4f6;display:flex;align-items:center;gap:16px;">
+                    <div style="font-size:14px;color:#374151;">Score: <strong id="checklist-score">—</strong></div>
+                    <div class="dux-badge" id="checklist-badge">—</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Benchmark Queries -->
+        <div class="dux-card dux-fade-in">
+            <div class="dux-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h2 class="dux-card-title">Benchmark Queries</h2>
+                    <p class="dux-card-subtitle">Run a set of standard compliance queries and evaluate citation quality across all</p>
+                </div>
+                <button class="dux-btn dux-btn-secondary" onclick="runBenchmark()">Run Benchmark</button>
+            </div>
+            <div class="dux-card-body" style="padding:0;">
+                <div id="benchmark-empty" style="text-align:center;padding:32px;color:#9ca3af;">Configure tenant ID above, then click Run Benchmark</div>
+                <table class="dux-table" id="benchmark-table" style="display:none;">
+                    <thead>
+                        <tr><th>#</th><th>Query</th><th>Citations</th><th>Top Score</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="benchmark-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .dux-textarea { width:100%;padding:10px 14px;border:1px solid #e5e7eb;border-radius:8px;font-family:'Inter',sans-serif;font-size:14px;resize:vertical;color:#111827;box-sizing:border-box; }
+        .dux-textarea:focus { outline:none;border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
+        .quality-metric { background:#f9fafb;border-radius:8px;padding:12px; }
+        .quality-metric-label { font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin-bottom:4px; }
+        .quality-metric-value { font-size:26px;font-weight:700;color:#111827; }
+        .checklist-item { display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-radius:8px;background:#f9fafb; }
+        .checklist-check { width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;margin-top:1px; }
+        .check-yes { background:#d1fae5;color:#065f46; }
+        .check-no  { background:#fee2e2;color:#991b1b; }
+        .check-manual { background:#fef3c7;color:#92400e; }
+    </style>
+
+    <script>
+        const CHECKLIST_ITEMS = [
+            { id: 'audit-trail',    label: 'Immutable audit trail for AI decisions', ref: 'Art. 9, 12', check: 'auto',   desc: 'POST /v1/decisions stores write-once records with trace_id.' },
+            { id: 'citations',      label: 'Every answer includes source citations',   ref: 'Art. 13',   check: 'auto',   desc: 'POST /v1/query always returns citations[].' },
+            { id: 'trace-id',       label: 'Unique trace_id per decision',             ref: 'Art. 9',    check: 'auto',   desc: 'duplicate trace_id returns HTTP 409.' },
+            { id: 'retention',      label: 'Data retention policy configured',          ref: 'Art. 17',   check: 'manual', desc: 'Configure via POST /v1/admin/retention-policies.' },
+            { id: 'legal-hold',     label: 'Legal hold mechanism available',           ref: 'Art. 17',   check: 'auto',   desc: 'POST /v1/admin/legal-holds prevents retention deletion.' },
+            { id: 'export',         label: 'Compliance bundle export capability',       ref: 'Art. 20',   check: 'auto',   desc: 'POST /v1/decisions/bundle creates signed artifact.' },
+            { id: 'verify',         label: 'Artifact integrity verification',           ref: 'Art. 12',   check: 'auto',   desc: 'POST /v1/decisions/verify checks checksum.' },
+            { id: 'health',         label: 'Service health monitoring active',          ref: 'Art. 9',    check: 'manual', desc: 'All services expose GET /v1/healthz.' },
+        ];
+
+        function renderChecklist() {
+            const container = document.getElementById('checklist');
+            const manualItems = CHECKLIST_ITEMS.filter(i => i.check === 'manual').length;
+            const autoItems = CHECKLIST_ITEMS.filter(i => i.check === 'auto').length;
+
+            container.innerHTML = CHECKLIST_ITEMS.map(item => {
+                const cssClass = item.check === 'auto' ? 'check-yes' : 'check-manual';
+                const icon = item.check === 'auto' ? '✓' : '!';
+                return `
+                    <div class="checklist-item">
+                        <div class="checklist-check ${cssClass}">${icon}</div>
+                        <div style="flex:1;">
+                            <div style="font-size:14px;font-weight:600;color:#111827;">${item.label}</div>
+                            <div style="font-size:12px;color:#6b7280;margin-top:2px;">${item.desc}</div>
+                        </div>
+                        <div style="text-align:right;flex-shrink:0;">
+                            <span class="dux-badge" style="font-size:10px;">${item.ref}</span>
+                            <div style="font-size:11px;color:#9ca3af;margin-top:4px;">${item.check === 'auto' ? 'automated' : 'manual config'}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            const score = `${autoItems}/${CHECKLIST_ITEMS.length} automated`;
+            document.getElementById('checklist-score').textContent = score;
+            const badge = document.getElementById('checklist-badge');
+            badge.textContent = manualItems === 0 ? 'Fully Automated' : `${manualItems} Manual Steps`;
+            badge.style.background = manualItems === 0 ? '#d1fae5' : '#fef3c7';
+            badge.style.color = manualItems === 0 ? '#065f46' : '#92400e';
+        }
+
+        const BENCHMARK_QUERIES = [
+            "What are the transparency obligations under Article 13 of the EU AI Act?",
+            "What does Article 9 require for risk management in high-risk AI systems?",
+            "What are the human oversight requirements under Article 14?",
+            "What logging and record-keeping obligations exist under Article 12?",
+            "What post-market monitoring obligations apply under Article 17?",
+        ];
+
+        async function runCoverageTest() {
+            const tenant = document.getElementById('cov-tenant').value.trim();
+            const query  = document.getElementById('cov-query').value.trim();
+            const k      = parseInt(document.getElementById('cov-k').value) || 5;
+            const token  = document.getElementById('cov-token').value.trim();
+            const errBox = document.getElementById('cov-error');
+
+            if (!tenant || !query) { errBox.textContent = 'Tenant and query are required.'; errBox.style.display = 'block'; return; }
+            errBox.style.display = 'none';
+
+            const btn = document.getElementById('cov-btn');
+            btn.disabled = true;
+            document.getElementById('cov-idle').style.display = 'none';
+            document.getElementById('cov-results').style.display = 'none';
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            try {
+                const resp = await fetch('/api/v1/query', { method:'POST', headers, body: JSON.stringify({ tenant, query, k }) });
+                if (!resp.ok) throw new Error(await resp.text());
+                const data = await resp.json();
+
+                const citations = data.citations || [];
+                const scores = citations.map(c => c.score || 0).filter(s => s > 0);
+                const topScore = scores.length ? Math.max(...scores) : 0;
+                const avgScore = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+                const uniqueDocs = new Set(citations.map(c => c.doc_id)).size;
+
+                document.getElementById('cov-count').textContent = citations.length;
+                document.getElementById('cov-top-score').textContent = topScore ? (topScore * 100).toFixed(1) + '%' : '—';
+                document.getElementById('cov-avg-score').textContent = avgScore ? (avgScore * 100).toFixed(1) + '%' : '—';
+                document.getElementById('cov-unique-docs').textContent = uniqueDocs;
+                document.getElementById('cov-answer-preview').textContent = (data.answer || '').substring(0, 300) + (data.answer?.length > 300 ? '…' : '');
+                document.getElementById('cov-results').style.display = 'block';
+            } catch(e) {
+                errBox.textContent = `Error: ${e.message}`;
+                errBox.style.display = 'block';
+                document.getElementById('cov-idle').style.display = 'flex';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function runBenchmark() {
+            const tenant = document.getElementById('cov-tenant').value.trim();
+            const token  = document.getElementById('cov-token').value.trim();
+            if (!tenant) { alert('Enter a Tenant ID first.'); return; }
+
+            document.getElementById('benchmark-empty').style.display = 'none';
+            const table = document.getElementById('benchmark-table');
+            table.style.display = 'table';
+            const tbody = document.getElementById('benchmark-tbody');
+
+            tbody.innerHTML = BENCHMARK_QUERIES.map((q, i) => `
+                <tr id="brow-${i}">
+                    <td>${i + 1}</td>
+                    <td style="max-width:300px;font-size:13px;">${q}</td>
+                    <td>—</td><td>—</td>
+                    <td><span class="dux-badge" style="background:#fef3c7;color:#92400e;">running…</span></td>
+                </tr>
+            `).join('');
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            for (let i = 0; i < BENCHMARK_QUERIES.length; i++) {
+                try {
+                    const resp = await fetch('/api/v1/query', {
+                        method:'POST', headers,
+                        body: JSON.stringify({ tenant, query: BENCHMARK_QUERIES[i], k: 5 }),
+                    });
+                    const row = document.getElementById(`brow-${i}`);
+                    if (!resp.ok) {
+                        row.cells[4].innerHTML = '<span class="dux-badge" style="background:#fee2e2;color:#991b1b;">error</span>';
+                        continue;
+                    }
+                    const data = await resp.json();
+                    const cits = data.citations || [];
+                    const scores = cits.map(c => c.score || 0).filter(s => s > 0);
+                    const top = scores.length ? (Math.max(...scores) * 100).toFixed(1) + '%' : '—';
+                    row.cells[2].textContent = cits.length;
+                    row.cells[3].textContent = top;
+                    row.cells[4].innerHTML = `<span class="dux-badge" style="background:#d1fae5;color:#065f46;">ok</span>`;
+                } catch(e) {
+                    const row = document.getElementById(`brow-${i}`);
+                    row.cells[4].innerHTML = '<span class="dux-badge" style="background:#fee2e2;color:#991b1b;">failed</span>';
+                }
+            }
+        }
+
+        renderChecklist();
+    </script>
+</body>
+</html>

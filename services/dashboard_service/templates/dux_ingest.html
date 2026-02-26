@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchimista - Ingest Documents</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dux-minimal.css">
+</head>
+<body>
+    <header class="dux-header">
+        <a href="/" class="dux-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height:32px;width:auto;">
+            <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#111827;letter-spacing:-0.5px;">Alchimista</span>
+        </a>
+        <nav class="dux-nav">
+            <a href="/dashboard" class="dux-nav-item">Dashboard</a>
+            <a href="/ingest" class="dux-nav-item active">Ingest</a>
+            <a href="/connectors" class="dux-nav-item">Connectors</a>
+            <a href="/query" class="dux-nav-item">Query</a>
+            <a href="/decisions" class="dux-nav-item">Decisions</a>
+            <a href="/governance" class="dux-nav-item">Governance</a>
+            <a href="/monitoring" class="dux-nav-item">Monitoring</a>
+            <a href="/quality" class="dux-nav-item">Quality</a>
+            <a href="/settings" class="dux-nav-item">Settings</a>
+            <a href="/guide" class="dux-nav-item">Guide</a>
+        </nav>
+    </header>
+
+    <div class="dux-container">
+        <div class="dux-page-title dux-fade-in">
+            <h1>Ingest Documents</h1>
+            <p>Submit a document to the ingestion pipeline. The job is queued via Pub/Sub, processed (chunk + embed), and stored in PostgreSQL + Vertex Vector Search.</p>
+        </div>
+
+        <div class="dux-grid" style="grid-template-columns:1fr 1fr;gap:24px;">
+
+            <!-- Ingest Form -->
+            <div class="dux-card dux-fade-in">
+                <div class="dux-card-header">
+                    <h2 class="dux-card-title">New Ingest Job</h2>
+                    <p class="dux-card-subtitle">POST /v1/ingest</p>
+                </div>
+                <div class="dux-card-body">
+                    <div class="dux-form-group">
+                        <label class="dux-label">Tenant ID <span style="color:#ef4444;">*</span></label>
+                        <input id="ingest-tenant" class="dux-input" type="text" placeholder="e.g. acme-corp" required>
+                    </div>
+                    <div class="dux-form-group">
+                        <label class="dux-label">Source URI <span style="color:#ef4444;">*</span></label>
+                        <input id="ingest-uri" class="dux-input" type="text" placeholder="gs://bucket/path/document.pdf or https://...">
+                        <small style="color:#6b7280;font-size:12px;">GCS URI (gs://…) or HTTPS URL</small>
+                    </div>
+                    <div class="dux-form-group">
+                        <label class="dux-label">Document Type</label>
+                        <select id="ingest-doctype" class="dux-select">
+                            <option value="">— auto-detect —</option>
+                            <option value="regulation">Regulation</option>
+                            <option value="directive">Directive</option>
+                            <option value="ruling">Court Ruling</option>
+                            <option value="policy">Policy</option>
+                            <option value="contract">Contract</option>
+                            <option value="report">Report</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="dux-form-group">
+                        <label class="dux-label">Bearer Token (optional)</label>
+                        <input id="ingest-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                    </div>
+                    <button class="dux-btn dux-btn-primary" onclick="submitIngest()" style="width:100%;">
+                        Submit Ingest Job
+                    </button>
+                    <div id="ingest-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
+                </div>
+            </div>
+
+            <!-- Job Status -->
+            <div class="dux-card dux-fade-in">
+                <div class="dux-card-header">
+                    <h2 class="dux-card-title">Job Status</h2>
+                    <p class="dux-card-subtitle">GET /v1/doc/{id}</p>
+                </div>
+                <div class="dux-card-body">
+                    <div id="job-idle" style="text-align:center;padding:40px 0;color:#9ca3af;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;margin:0 auto 16px;display:block;opacity:0.4;">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        <p>Submit a job to track its status</p>
+                    </div>
+
+                    <div id="job-active" style="display:none;">
+                        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+                            <div id="job-spinner" class="dux-spinner" style="display:none;"></div>
+                            <div>
+                                <div style="font-size:13px;color:#6b7280;">Job ID</div>
+                                <div id="job-id-display" style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;color:#111827;"></div>
+                            </div>
+                        </div>
+
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+                            <div class="dux-stat-mini">
+                                <div class="dux-stat-mini-label">Status</div>
+                                <div id="job-status-badge" class="dux-badge">—</div>
+                            </div>
+                            <div class="dux-stat-mini">
+                                <div class="dux-stat-mini-label">Tenant</div>
+                                <div id="job-tenant-display" style="font-size:14px;font-weight:500;">—</div>
+                            </div>
+                            <div class="dux-stat-mini">
+                                <div class="dux-stat-mini-label">Chunks</div>
+                                <div id="job-chunks" style="font-size:14px;font-weight:500;">—</div>
+                            </div>
+                            <div class="dux-stat-mini">
+                                <div class="dux-stat-mini-label">Updated</div>
+                                <div id="job-updated" style="font-size:13px;color:#6b7280;">—</div>
+                            </div>
+                        </div>
+
+                        <div id="job-error-box" class="dux-alert dux-alert-error" style="display:none;"></div>
+
+                        <div style="display:flex;gap:8px;">
+                            <div class="dux-form-group" style="flex:1;margin:0;">
+                                <input id="poll-job-id" class="dux-input" type="text" placeholder="job_id to poll">
+                            </div>
+                            <button class="dux-btn dux-btn-secondary" onclick="pollStatus()">Poll</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Jobs -->
+        <div class="dux-card dux-fade-in" style="margin-top:24px;">
+            <div class="dux-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h2 class="dux-card-title">Recent Ingest Jobs</h2>
+                    <p class="dux-card-subtitle">Jobs submitted in this session</p>
+                </div>
+                <button class="dux-btn dux-btn-ghost" onclick="clearJobs()">Clear</button>
+            </div>
+            <div class="dux-card-body" style="padding:0;">
+                <table class="dux-table" id="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>Job ID</th>
+                            <th>Source URI</th>
+                            <th>Tenant</th>
+                            <th>Status</th>
+                            <th>Submitted</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobs-tbody">
+                        <tr id="jobs-empty-row">
+                            <td colspan="6" style="text-align:center;color:#9ca3af;padding:32px;">No jobs yet</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .dux-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e5e7eb;
+            border-top-color: #4f46e5;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .dux-stat-mini { background: #f9fafb; border-radius: 8px; padding: 10px 14px; }
+        .dux-stat-mini-label { font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+        .status-queued    { background:#fef3c7;color:#92400e; }
+        .status-processing{ background:#dbeafe;color:#1e40af; }
+        .status-succeeded { background:#d1fae5;color:#065f46; }
+        .status-failed    { background:#fee2e2;color:#991b1b; }
+    </style>
+
+    <script>
+        const sessionJobs = [];
+        let pollInterval = null;
+
+        async function submitIngest() {
+            const tenant   = document.getElementById('ingest-tenant').value.trim();
+            const uri      = document.getElementById('ingest-uri').value.trim();
+            const docType  = document.getElementById('ingest-doctype').value;
+            const token    = document.getElementById('ingest-token').value.trim();
+            const errBox   = document.getElementById('ingest-error');
+
+            if (!tenant || !uri) {
+                errBox.textContent = 'Tenant ID and Source URI are required.';
+                errBox.style.display = 'block';
+                return;
+            }
+            errBox.style.display = 'none';
+
+            const body = { tenant, source_uri: uri };
+            if (docType) body.doc_type = docType;
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            try {
+                const resp = await fetch('/api/v1/ingest', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(body),
+                });
+
+                if (!resp.ok) {
+                    const err = await resp.text();
+                    throw new Error(err);
+                }
+
+                const data = await resp.json();
+                const jobId = data.job_id || data.id || JSON.stringify(data);
+
+                // Add to session list
+                sessionJobs.unshift({ jobId, uri, tenant, status: 'QUEUED', submitted: new Date().toISOString() });
+                renderJobsTable();
+
+                // Show status panel
+                showJobPanel(jobId, tenant, token);
+
+                // Auto-poll
+                startAutoPoll(jobId, token);
+
+            } catch(e) {
+                errBox.textContent = `Error: ${e.message}`;
+                errBox.style.display = 'block';
+            }
+        }
+
+        function showJobPanel(jobId, tenant, token) {
+            document.getElementById('job-idle').style.display = 'none';
+            document.getElementById('job-active').style.display = 'block';
+            document.getElementById('job-id-display').textContent = jobId;
+            document.getElementById('job-tenant-display').textContent = tenant;
+            document.getElementById('poll-job-id').value = jobId;
+            document.getElementById('job-spinner').style.display = 'block';
+            setStatusBadge('QUEUED');
+        }
+
+        function setStatusBadge(status) {
+            const el = document.getElementById('job-status-badge');
+            el.textContent = status;
+            el.className = `dux-badge status-${status.toLowerCase()}`;
+        }
+
+        async function pollStatus() {
+            const jobId = document.getElementById('poll-job-id').value.trim();
+            const token = document.getElementById('ingest-token').value.trim();
+            if (!jobId) return;
+
+            const headers = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            try {
+                const resp = await fetch(`/api/v1/doc/${jobId}`, { headers });
+                if (!resp.ok) throw new Error(await resp.text());
+                const data = await resp.json();
+
+                const status = (data.status || 'UNKNOWN').toUpperCase();
+                setStatusBadge(status);
+                document.getElementById('job-chunks').textContent = data.chunk_count ?? data.chunks ?? '—';
+                document.getElementById('job-updated').textContent = data.updated_at ? new Date(data.updated_at).toLocaleTimeString() : '—';
+                document.getElementById('job-error-box').style.display = 'none';
+
+                // Update session list
+                const job = sessionJobs.find(j => j.jobId === jobId);
+                if (job) { job.status = status; renderJobsTable(); }
+
+                if (status === 'SUCCEEDED' || status === 'FAILED') {
+                    document.getElementById('job-spinner').style.display = 'none';
+                    if (status === 'FAILED') {
+                        const errBox = document.getElementById('job-error-box');
+                        errBox.textContent = data.error || 'Processing failed.';
+                        errBox.style.display = 'block';
+                    }
+                    stopAutoPoll();
+                }
+            } catch(e) {
+                document.getElementById('job-error-box').textContent = `Poll error: ${e.message}`;
+                document.getElementById('job-error-box').style.display = 'block';
+            }
+        }
+
+        function startAutoPoll(jobId, token) {
+            stopAutoPoll();
+            document.getElementById('poll-job-id').value = jobId;
+            pollInterval = setInterval(() => pollStatus(), 3000);
+        }
+
+        function stopAutoPoll() {
+            if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+        }
+
+        function renderJobsTable() {
+            const tbody = document.getElementById('jobs-tbody');
+            if (sessionJobs.length === 0) {
+                tbody.innerHTML = '<tr id="jobs-empty-row"><td colspan="6" style="text-align:center;color:#9ca3af;padding:32px;">No jobs yet</td></tr>';
+                return;
+            }
+            tbody.innerHTML = sessionJobs.map(j => `
+                <tr>
+                    <td><code style="font-size:12px;">${j.jobId}</code></td>
+                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.uri}</td>
+                    <td>${j.tenant}</td>
+                    <td><span class="dux-badge status-${j.status.toLowerCase()}">${j.status}</span></td>
+                    <td style="color:#6b7280;font-size:13px;">${new Date(j.submitted).toLocaleTimeString()}</td>
+                    <td><button class="dux-btn dux-btn-ghost" style="padding:4px 10px;font-size:12px;" onclick="quickPoll('${j.jobId}')">Poll</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function quickPoll(jobId) {
+            document.getElementById('job-idle').style.display = 'none';
+            document.getElementById('job-active').style.display = 'block';
+            document.getElementById('poll-job-id').value = jobId;
+            pollStatus();
+        }
+
+        function clearJobs() {
+            sessionJobs.length = 0;
+            renderJobsTable();
+        }
+    </script>
+</body>
+</html>

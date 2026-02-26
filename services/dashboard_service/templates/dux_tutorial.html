@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchimista - Tutorial</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dux-minimal.css">
+</head>
+<body>
+    <header class="dux-header">
+        <a href="/" class="dux-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height:32px;width:auto;">
+            <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#111827;letter-spacing:-0.5px;">Alchimista</span>
+        </a>
+        <nav class="dux-nav">
+            <a href="/dashboard" class="dux-nav-item">Dashboard</a>
+            <a href="/ingest" class="dux-nav-item">Ingest</a>
+            <a href="/connectors" class="dux-nav-item">Connectors</a>
+            <a href="/query" class="dux-nav-item">Query</a>
+            <a href="/decisions" class="dux-nav-item">Decisions</a>
+            <a href="/governance" class="dux-nav-item">Governance</a>
+            <a href="/monitoring" class="dux-nav-item">Monitoring</a>
+            <a href="/quality" class="dux-nav-item">Quality</a>
+            <a href="/settings" class="dux-nav-item">Settings</a>
+            <a href="/guide" class="dux-nav-item">Guide</a>
+        </nav>
+    </header>
+
+    <div class="dux-container" style="max-width:860px;">
+        <div class="dux-page-title dux-fade-in">
+            <h1>Integration Tutorial</h1>
+            <p>End-to-end walkthrough: ingest a document, query with citations, register a decision, and export a compliance bundle — using only the Alchimista REST API.</p>
+        </div>
+
+        <!-- Step 1: Auth -->
+        <div class="tutorial-step dux-fade-in">
+            <div class="step-header">
+                <div class="step-number">1</div>
+                <div>
+                    <h2 class="step-title">Obtain an Auth Token</h2>
+                    <p class="step-desc">Alchimista uses OIDC / JWT Bearer tokens (Auth0 M2M or any OIDC provider). Include the token in every request.</p>
+                </div>
+            </div>
+            <div class="step-body">
+                <div class="lang-tabs">
+                    <button class="lang-tab active" onclick="showLang(this,'auth','curl')">cURL</button>
+                    <button class="lang-tab" onclick="showLang(this,'auth','python')">Python</button>
+                </div>
+                <pre class="code-block" id="auth-curl"># Auth0 client credentials flow
+curl -s -X POST https://YOUR_DOMAIN/oauth/token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id":     "YOUR_CLIENT_ID",
+    "client_secret": "YOUR_CLIENT_SECRET",
+    "audience":      "https://alchimista.api",
+    "grant_type":    "client_credentials"
+  }' | jq -r .access_token</pre>
+                <pre class="code-block hidden" id="auth-python">import httpx
+
+resp = httpx.post("https://YOUR_DOMAIN/oauth/token", json={
+    "client_id":     "YOUR_CLIENT_ID",
+    "client_secret": "YOUR_CLIENT_SECRET",
+    "audience":      "https://alchimista.api",
+    "grant_type":    "client_credentials",
+})
+TOKEN = resp.json()["access_token"]
+HEADERS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}</pre>
+            </div>
+        </div>
+
+        <!-- Step 2: Ingest -->
+        <div class="tutorial-step dux-fade-in">
+            <div class="step-header">
+                <div class="step-number">2</div>
+                <div>
+                    <h2 class="step-title">Ingest a Document</h2>
+                    <p class="step-desc">Submit a GCS URI to the ingestion API. The service queues the job via Pub/Sub and returns a <code>job_id</code>.</p>
+                </div>
+            </div>
+            <div class="step-body">
+                <div class="lang-tabs">
+                    <button class="lang-tab active" onclick="showLang(this,'ingest','curl')">cURL</button>
+                    <button class="lang-tab" onclick="showLang(this,'ingest','python')">Python</button>
+                </div>
+                <pre class="code-block" id="ingest-curl">curl -s -X POST https://ingest.yourdomain.com/v1/ingest \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":     "acme-corp",
+    "source_uri": "gs://my-docs-bucket/eu-ai-act-2024.pdf",
+    "doc_type":   "regulation"
+  }'
+
+# Response:
+# { "job_id": "job_abc123", "status": "QUEUED", "tenant": "acme-corp" }</pre>
+                <pre class="code-block hidden" id="ingest-python">INGEST_URL = "https://ingest.yourdomain.com"
+
+resp = httpx.post(f"{INGEST_URL}/v1/ingest", headers=HEADERS, json={
+    "tenant":     "acme-corp",
+    "source_uri": "gs://my-docs-bucket/eu-ai-act-2024.pdf",
+    "doc_type":   "regulation",
+})
+job = resp.json()
+job_id = job["job_id"]
+print(f"Job queued: {job_id}")</pre>
+            </div>
+        </div>
+
+        <!-- Step 3: Poll -->
+        <div class="tutorial-step dux-fade-in">
+            <div class="step-header">
+                <div class="step-number">3</div>
+                <div>
+                    <h2 class="step-title">Poll Job Status</h2>
+                    <p class="step-desc">Poll <code>GET /v1/doc/{job_id}</code> until status is <code>SUCCEEDED</code>. The document is then indexed and queryable.</p>
+                </div>
+            </div>
+            <div class="step-body">
+                <div class="lang-tabs">
+                    <button class="lang-tab active" onclick="showLang(this,'poll','curl')">cURL</button>
+                    <button class="lang-tab" onclick="showLang(this,'poll','python')">Python</button>
+                </div>
+                <pre class="code-block" id="poll-curl">curl -s https://ingest.yourdomain.com/v1/doc/job_abc123 \
+  -H "Authorization: Bearer $TOKEN"
+
+# Response when done:
+# {
+#   "job_id": "job_abc123",
+#   "status": "SUCCEEDED",
+#   "chunk_count": 42,
+#   "updated_at": "2025-03-01T12:05:00Z"
+# }</pre>
+                <pre class="code-block hidden" id="poll-python">import time
+
+while True:
+    resp = httpx.get(f"{INGEST_URL}/v1/doc/{job_id}", headers=HEADERS)
+    status = resp.json()["status"]
+    print(f"Status: {status}")
+    if status in ("SUCCEEDED", "FAILED"):
+        break
+    time.sleep(3)
+
+chunks = resp.json().get("chunk_count", 0)
+print(f"Indexed {chunks} chunks")</pre>
+            </div>
+        </div>
+
+        <!-- Step 4: Query -->
+        <div class="tutorial-step dux-fade-in">
+            <div class="step-header">
+                <div class="step-number">4</div>
+                <div>
+                    <h2 class="step-title">Run a RAG Query</h2>
+                    <p class="step-desc">Ask a question. The response always includes a <code>trace_id</code> and <code>citations</code> linking the answer to source chunks.</p>
+                </div>
+            </div>
+            <div class="step-body">
+                <div class="lang-tabs">
+                    <button class="lang-tab active" onclick="showLang(this,'query','curl')">cURL</button>
+                    <button class="lang-tab" onclick="showLang(this,'query','python')">Python</button>
+                </div>
+                <pre class="code-block" id="query-curl">curl -s -X POST https://rag.yourdomain.com/v1/query \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant": "acme-corp",
+    "query":  "What obligations does Article 9 of the EU AI Act impose?",
+    "top_k":  5
+  }'
+
+# Response:
+# {
+#   "answer":   "Article 9 requires high-risk AI systems to implement...",
+#   "trace_id": "trace_xyz789",
+#   "citations": [
+#     { "doc_id": "doc_abc", "chunk_id": "chunk_7", "score": 0.94 }
+#   ]
+# }</pre>
+                <pre class="code-block hidden" id="query-python">RAG_URL = "https://rag.yourdomain.com"
+
+resp = httpx.post(f"{RAG_URL}/v1/query", headers=HEADERS, json={
+    "tenant": "acme-corp",
+    "query":  "What obligations does Article 9 of the EU AI Act impose?",
+    "top_k":  5,
+})
+result = resp.json()
+trace_id = result["trace_id"]
+print(f"Answer: {result['answer'][:120]}…")
+print(f"Citations: {len(result['citations'])}")
+print(f"Trace ID: {trace_id}")</pre>
+            </div>
+        </div>
+
+        <!-- Step 5: Register Decision -->
+        <div class="tutorial-step dux-fade-in">
+            <div class="step-header">
+                <div class="step-number">5</div>
+                <div>
+                    <h2 class="step-title">Register an AI Decision</h2>
+                    <p class="step-desc">Write an immutable decision record linking the answer to its citations. The <code>trace_id</code> from the query is used. Returns 409 on duplicate.</p>
+                </div>
+            </div>
+            <div class="step-body">
+                <div class="lang-tabs">
+                    <button class="lang-tab active" onclick="showLang(this,'decision','curl')">cURL</button>
+                    <button class="lang-tab" onclick="showLang(this,'decision','python')">Python</button>
+                </div>
+                <pre class="code-block" id="decision-curl">curl -s -X POST https://ingest.yourdomain.com/v1/decisions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "decision_id":   "d-001",
+    "tenant":        "acme-corp",
+    "trace_id":      "trace_xyz789",
+    "model":         "gpt-4",
+    "model_version": "2024-01",
+    "input":         "What does Article 9 require?",
+    "output":        "High-risk AI systems must implement a risk management system...",
+    "confidence":    0.94,
+    "context_docs":  ["doc_abc"],
+    "context_chunks":["chunk_7"],
+    "metadata":      {"decision_type":"rag_answer","subject_id":"user_456"}
+  }'</pre>
+                <pre class="code-block hidden" id="decision-python">INGEST_URL = "https://ingest.yourdomain.com"
+
+decision_resp = httpx.post(f"{INGEST_URL}/v1/decisions", headers=HEADERS, json={
+    "decision_id":   "d-001",
+    "tenant":        "acme-corp",
+    "trace_id":      trace_id,  # from step 4
+    "model":         "gpt-4",
+    "model_version": "2024-01",
+    "input":         "What does Article 9 require?",
+    "output":        result["answer"],
+    "confidence":    0.94,
+    "context_docs":  [result["citations"][0]["doc_id"]],
+    "context_chunks":[result["citations"][0]["chunk_id"]],
+    "metadata":      {"decision_type":"rag_answer","subject_id":"user_456"},
+})
+print(f"Decision registered: {decision_resp.status_code}")</pre>
+            </div>
+        </div>
+
+        <!-- Step 6: Bundle -->
+        <div class="tutorial-step dux-fade-in">
+            <div class="step-header">
+                <div class="step-number">6</div>
+                <div>
+                    <h2 class="step-title">Export a Compliance Bundle</h2>
+                    <p class="step-desc">Package multiple decisions into a cryptographically signed, immutable bundle for regulatory submission or audit.</p>
+                </div>
+            </div>
+            <div class="step-body">
+                <div class="lang-tabs">
+                    <button class="lang-tab active" onclick="showLang(this,'bundle','curl')">cURL</button>
+                    <button class="lang-tab" onclick="showLang(this,'bundle','python')">Python</button>
+                </div>
+                <pre class="code-block" id="bundle-curl"># 1. Create bundle
+curl -s -X POST https://ingest.yourdomain.com/v1/decisions/bundle \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":    "acme-corp",
+    "decision_ids": ["d-001", "d-002"]
+  }'
+
+# 2. Verify integrity later
+curl -s -X POST https://ingest.yourdomain.com/v1/decisions/verify \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant": "acme-corp",
+    "gs_uri": "gs://YOUR_REPORTS_BUCKET/reports/acme-corp/audit/bundles/bundle-001.json",
+    "expected_report_hash_sha256": "e3b0c44298fc1c149afb..."
+  }'</pre>
+                <pre class="code-block hidden" id="bundle-python">INGEST_URL = "https://ingest.yourdomain.com"
+
+# Create bundle
+bundle = httpx.post(f"{INGEST_URL}/v1/decisions/bundle", headers=HEADERS, json={
+    "tenant":       "acme-corp",
+    "decision_ids": ["d-001", "d-002"],
+}).json()
+
+gs_uri = bundle.get("gs_uri")
+report_hash = bundle.get("report_hash_sha256")
+print(f"Bundle created: {gs_uri}")
+
+# Verify integrity
+verify = httpx.post(f"{INGEST_URL}/v1/decisions/verify", headers=HEADERS, json={
+    "tenant": "acme-corp",
+    "gs_uri": gs_uri,
+    "expected_report_hash_sha256": report_hash,
+}).json()
+print(f"Verified: {verify.get('verified')}")</pre>
+            </div>
+        </div>
+
+        <!-- Step 7: Governance -->
+        <div class="tutorial-step dux-fade-in">
+            <div class="step-header">
+                <div class="step-number">7</div>
+                <div>
+                    <h2 class="step-title">Set Up Retention Policy</h2>
+                    <p class="step-desc">Configuring a GDPR-compliant 7-year retention policy. Admin endpoints require the <code>x-admin-key</code> header.</p>
+                </div>
+            </div>
+            <div class="step-body">
+                <div class="lang-tabs">
+                    <button class="lang-tab active" onclick="showLang(this,'retain','curl')">cURL</button>
+                    <button class="lang-tab" onclick="showLang(this,'retain','python')">Python</button>
+                </div>
+                <pre class="code-block" id="retain-curl">curl -s -X POST https://ingest.yourdomain.com/v1/admin/retention-policies \
+  -H "x-admin-key: $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":              "acme-corp",
+    "artifact_type":       "audit_artifacts",
+    "retain_days":         2555,
+    "legal_hold_enabled":  true,
+    "immutable_required":  true
+  }'
+
+# Run dry-run enforcement
+curl -s -X POST https://ingest.yourdomain.com/v1/admin/retention/enforce \
+  -H "x-admin-key: $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"tenant":"acme-corp","dry_run":true}'</pre>
+                <pre class="code-block hidden" id="retain-python">INGEST_URL = "https://ingest.yourdomain.com"
+ADMIN_HEADERS = {"x-admin-key": "YOUR_ADMIN_KEY", "Content-Type": "application/json"}
+
+# Create retention policy
+httpx.post(f"{INGEST_URL}/v1/admin/retention-policies", headers=ADMIN_HEADERS, json={
+    "tenant":              "acme-corp",
+    "artifact_type":       "audit_artifacts",
+    "retain_days":         2555,
+    "legal_hold_enabled":  True,
+    "immutable_required":  True,
+})
+
+# Dry-run enforcement
+result = httpx.post(f"{INGEST_URL}/v1/admin/retention/enforce", headers=ADMIN_HEADERS, json={
+    "tenant":  "acme-corp",
+    "dry_run": True,
+}).json()
+print(f"Eligible for deletion: {result.get('eligible')}")</pre>
+            </div>
+        </div>
+
+        <!-- Next steps -->
+        <div class="dux-card dux-fade-in" style="margin-top:8px;">
+            <div class="dux-card-body" style="display:flex;gap:16px;flex-wrap:wrap;">
+                <a href="/guide" class="dux-btn dux-btn-secondary" style="text-decoration:none;">Full API Reference →</a>
+                <a href="/ingest" class="dux-btn dux-btn-secondary" style="text-decoration:none;">Try Ingest →</a>
+                <a href="/query" class="dux-btn dux-btn-secondary" style="text-decoration:none;">Try Query →</a>
+                <a href="/decisions" class="dux-btn dux-btn-secondary" style="text-decoration:none;">Try Decisions →</a>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .tutorial-step { background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;margin-bottom:20px; }
+        .step-header { display:flex;gap:16px;align-items:flex-start;padding:20px;border-bottom:1px solid #f3f4f6; }
+        .step-number { width:32px;height:32px;border-radius:50%;background:#4f46e5;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0; }
+        .step-title { font-size:17px;font-weight:700;color:#111827;margin:0 0 4px; }
+        .step-desc { font-size:14px;color:#6b7280;margin:0; }
+        .step-body { padding:20px; }
+        .lang-tabs { display:flex;gap:4px;margin-bottom:10px; }
+        .lang-tab { padding:5px 14px;font-size:12px;font-weight:600;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb;color:#6b7280;cursor:pointer;transition:all 0.15s; }
+        .lang-tab.active { background:#4f46e5;color:#fff;border-color:#4f46e5; }
+        .code-block { background:#1e1e2e;color:#cdd6f4;padding:16px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:12px;overflow:auto;white-space:pre;line-height:1.6;margin:0; }
+        .hidden { display:none; }
+    </style>
+
+    <script>
+        function showLang(btn, prefix, lang) {
+            // Toggle tab styles
+            btn.closest('.step-body').querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Toggle code blocks
+            const all = Object.keys({curl:1,python:1});
+            all.forEach(l => {
+                const el = document.getElementById(`${prefix}-${l}`);
+                if (el) el.classList.toggle('hidden', l !== lang);
+            });
+        }
+    </script>
+</body>
+</html>

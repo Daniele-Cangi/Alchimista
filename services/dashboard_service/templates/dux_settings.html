@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchimista - Settings</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dux-minimal.css">
+</head>
+<body>
+    <header class="dux-header">
+        <a href="/" class="dux-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height:32px;width:auto;">
+            <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#111827;letter-spacing:-0.5px;">Alchimista</span>
+        </a>
+        <nav class="dux-nav">
+            <a href="/dashboard" class="dux-nav-item">Dashboard</a>
+            <a href="/ingest" class="dux-nav-item">Ingest</a>
+            <a href="/connectors" class="dux-nav-item">Connectors</a>
+            <a href="/query" class="dux-nav-item">Query</a>
+            <a href="/decisions" class="dux-nav-item">Decisions</a>
+            <a href="/governance" class="dux-nav-item">Governance</a>
+            <a href="/monitoring" class="dux-nav-item">Monitoring</a>
+            <a href="/quality" class="dux-nav-item">Quality</a>
+            <a href="/settings" class="dux-nav-item active">Settings</a>
+            <a href="/guide" class="dux-nav-item">Guide</a>
+        </nav>
+    </header>
+
+    <div class="dux-container">
+        <div class="dux-page-title dux-fade-in">
+            <h1>Settings</h1>
+            <p>Service endpoint configuration for the Alchimista dashboard. These values are read from environment variables at startup. Update them in your deployment environment.</p>
+        </div>
+
+        <!-- Current Configuration -->
+        <div class="dux-card dux-fade-in" style="margin-bottom:24px;">
+            <div class="dux-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h2 class="dux-card-title">Active Configuration</h2>
+                    <p class="dux-card-subtitle">Current service endpoint values</p>
+                </div>
+                <button class="dux-btn dux-btn-ghost" onclick="loadSettings()">Refresh</button>
+            </div>
+            <div class="dux-card-body" style="padding:0;">
+                <table class="dux-table">
+                    <thead>
+                        <tr><th>Environment Variable</th><th>Current Value</th><th>Description</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>INGEST_URL</code></td>
+                            <td id="cfg-ingest" style="font-family:'JetBrains Mono',monospace;font-size:13px;">—</td>
+                            <td style="color:#6b7280;font-size:13px;">ingestion-api-service base URL</td>
+                        </tr>
+                        <tr>
+                            <td><code>PROCESSOR_URL</code></td>
+                            <td id="cfg-processor" style="font-family:'JetBrains Mono',monospace;font-size:13px;">—</td>
+                            <td style="color:#6b7280;font-size:13px;">document-processor-service base URL</td>
+                        </tr>
+                        <tr>
+                            <td><code>RAG_URL</code></td>
+                            <td id="cfg-rag" style="font-family:'JetBrains Mono',monospace;font-size:13px;">—</td>
+                            <td style="color:#6b7280;font-size:13px;">rag-query-service base URL</td>
+                        </tr>
+                        <tr>
+                            <td><code>ADMIN_KEY</code></td>
+                            <td id="cfg-adminkey" style="font-size:13px;">—</td>
+                            <td style="color:#6b7280;font-size:13px;">Admin key for governance endpoints (<code>x-admin-key</code>)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- How to configure -->
+        <div class="dux-grid" style="grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;">
+            <div class="dux-card dux-fade-in">
+                <div class="dux-card-header">
+                    <h2 class="dux-card-title">Local Development</h2>
+                    <p class="dux-card-subtitle">Run the dashboard against local service instances</p>
+                </div>
+                <div class="dux-card-body">
+                    <pre class="code-block"># .env
+INGEST_URL=http://localhost:8011
+PROCESSOR_URL=http://localhost:8012
+RAG_URL=http://localhost:8013
+ADMIN_KEY=your-local-admin-key
+
+# Start dashboard
+INGEST_URL=http://localhost:8011 \
+PROCESSOR_URL=http://localhost:8012 \
+RAG_URL=http://localhost:8013 \
+ADMIN_KEY=dev-key \
+python -m services.dashboard_service</pre>
+                </div>
+            </div>
+            <div class="dux-card dux-fade-in">
+                <div class="dux-card-header">
+                    <h2 class="dux-card-title">Cloud Run Deployment</h2>
+                    <p class="dux-card-subtitle">Point to production Cloud Run service URLs</p>
+                </div>
+                <div class="dux-card-body">
+                    <pre class="code-block"># gcloud deploy with env vars
+gcloud run deploy alchimista-dashboard \
+  --image gcr.io/PROJECT/dashboard:latest \
+  --set-env-vars \
+    INGEST_URL=https://ingest-xyz-ew.a.run.app,\
+    PROCESSOR_URL=https://processor-xyz-ew.a.run.app,\
+    RAG_URL=https://rag-xyz-ew.a.run.app,\
+    ADMIN_KEY=prod-secret-key</pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Service Ports Reference -->
+        <div class="dux-card dux-fade-in">
+            <div class="dux-card-header">
+                <h2 class="dux-card-title">Service Reference</h2>
+                <p class="dux-card-subtitle">Alchimista Cloud Run services and their responsibilities</p>
+            </div>
+            <div class="dux-card-body" style="padding:0;">
+                <table class="dux-table">
+                    <thead>
+                        <tr><th>Service</th><th>Default Port</th><th>Responsibility</th><th>Key Endpoints</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>ingestion-api-service</strong></td>
+                            <td><code>8011</code></td>
+                            <td style="font-size:13px;color:#6b7280;">Accepts ingest requests, creates jobs, publishes to Pub/Sub</td>
+                            <td><code style="font-size:12px;">POST /v1/ingest, GET /v1/doc/{id}</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>document-processor-service</strong></td>
+                            <td><code>8012</code></td>
+                            <td style="font-size:13px;color:#6b7280;">Consumes Pub/Sub jobs, chunks documents, generates embeddings</td>
+                            <td><code style="font-size:12px;">POST /v1/process, POST /v1/process/pubsub</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>rag-query-service</strong></td>
+                            <td><code>8013</code></td>
+                            <td style="font-size:13px;color:#6b7280;">RAG retrieval and citation response generation</td>
+                            <td><code style="font-size:12px;">POST /v1/query</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>ingestion-api-service</strong> (audit/governance)</td>
+                            <td><code>8011</code></td>
+                            <td style="font-size:13px;color:#6b7280;">AI decision trail, exports/bundles/packages, retention and legal-hold admin</td>
+                            <td><code style="font-size:12px;">POST /v1/decisions*, /v1/admin/*</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>dashboard</strong></td>
+                            <td><code>8000</code></td>
+                            <td style="font-size:13px;color:#6b7280;">This management UI — proxies requests to the three services above</td>
+                            <td><code style="font-size:12px;">GET /api/v1/health, /api/settings</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .code-block { background:#1e1e2e;color:#cdd6f4;padding:16px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:12px;overflow:auto;white-space:pre;line-height:1.6;margin:0; }
+    </style>
+
+    <script>
+        async function loadSettings() {
+            try {
+                const resp = await fetch('/api/settings');
+                if (!resp.ok) return;
+                const d = await resp.json();
+                document.getElementById('cfg-ingest').textContent    = d.ingest_url    || 'not set';
+                document.getElementById('cfg-processor').textContent = d.processor_url || 'not set';
+                document.getElementById('cfg-rag').textContent       = d.rag_url       || 'not set';
+                document.getElementById('cfg-adminkey').textContent  = d.admin_key_configured ? '*** configured' : 'not set';
+            } catch(e) { console.warn('Settings load failed:', e); }
+        }
+        loadSettings();
+    </script>
+</body>
+</html>

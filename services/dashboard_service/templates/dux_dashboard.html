@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchimista - Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dux-minimal.css">
+</head>
+<body>
+    <header class="dux-header">
+        <a href="/" class="dux-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height:32px;width:auto;">
+            <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#111827;letter-spacing:-0.5px;">Alchimista</span>
+        </a>
+        <nav class="dux-nav">
+            <a href="/dashboard" class="dux-nav-item active">Dashboard</a>
+            <a href="/ingest" class="dux-nav-item">Ingest</a>
+            <a href="/connectors" class="dux-nav-item">Connectors</a>
+            <a href="/query" class="dux-nav-item">Query</a>
+            <a href="/decisions" class="dux-nav-item">Decisions</a>
+            <a href="/governance" class="dux-nav-item">Governance</a>
+            <a href="/monitoring" class="dux-nav-item">Monitoring</a>
+            <a href="/quality" class="dux-nav-item">Quality</a>
+            <a href="/settings" class="dux-nav-item">Settings</a>
+            <a href="/guide" class="dux-nav-item">Guide</a>
+        </nav>
+    </header>
+
+    <div class="dux-container">
+        <div class="dux-page-title dux-fade-in">
+            <h1>Dashboard</h1>
+            <p>Overview of the Alchimista document pipeline and AI audit trail.</p>
+        </div>
+
+        <!-- Service Health Banner -->
+        <div id="health-banner" class="dux-fade-in" style="padding:12px 18px;border-radius:10px;margin-bottom:24px;display:flex;align-items:center;gap:12px;font-size:14px;background:#f3f4f6;border:1px solid #e5e7eb;">
+            <div id="health-dot" style="width:10px;height:10px;border-radius:50%;background:#d1d5db;flex-shrink:0;"></div>
+            <span id="health-text" style="color:#6b7280;">Checking service health…</span>
+            <a href="/monitoring" style="margin-left:auto;color:#4f46e5;font-size:13px;text-decoration:none;">View details →</a>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="dux-stats-grid dux-fade-in">
+            <div class="dux-stat-card">
+                <div class="dux-stat-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                </div>
+                <div class="dux-stat-value" id="stat-documents">—</div>
+                <div class="dux-stat-label">Documents Ingested</div>
+            </div>
+            <div class="dux-stat-card">
+                <div class="dux-stat-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"/>
+                        <rect x="14" y="3" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/>
+                    </svg>
+                </div>
+                <div class="dux-stat-value" id="stat-chunks">—</div>
+                <div class="dux-stat-label">Chunks Indexed</div>
+            </div>
+            <div class="dux-stat-card">
+                <div class="dux-stat-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+                <div class="dux-stat-value" id="stat-decisions">—</div>
+                <div class="dux-stat-label">Decisions Registered</div>
+            </div>
+            <div class="dux-stat-card">
+                <div class="dux-stat-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                </div>
+                <div class="dux-stat-value" id="stat-queries">—</div>
+                <div class="dux-stat-label">RAG Queries (24h)</div>
+            </div>
+        </div>
+
+        <!-- Job Status Summary + Quick Actions -->
+        <div class="dux-grid" style="grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;">
+
+            <!-- Job Pipeline Status -->
+            <div class="dux-card dux-fade-in">
+                <div class="dux-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <h2 class="dux-card-title">Job Pipeline</h2>
+                        <p class="dux-card-subtitle">Ingest job status distribution</p>
+                    </div>
+                    <button class="dux-btn dux-btn-ghost" onclick="loadDashboard()">Refresh</button>
+                </div>
+                <div class="dux-card-body">
+                    <div id="jobs-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div class="job-stat-box" style="background:#fef3c7;border-radius:8px;padding:14px;">
+                            <div style="font-size:11px;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Queued</div>
+                            <div id="jobs-queued" style="font-size:28px;font-weight:700;color:#92400e;margin-top:4px;">—</div>
+                        </div>
+                        <div class="job-stat-box" style="background:#dbeafe;border-radius:8px;padding:14px;">
+                            <div style="font-size:11px;color:#1e40af;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Processing</div>
+                            <div id="jobs-processing" style="font-size:28px;font-weight:700;color:#1e40af;margin-top:4px;">—</div>
+                        </div>
+                        <div class="job-stat-box" style="background:#d1fae5;border-radius:8px;padding:14px;">
+                            <div style="font-size:11px;color:#065f46;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Succeeded</div>
+                            <div id="jobs-succeeded" style="font-size:28px;font-weight:700;color:#065f46;margin-top:4px;">—</div>
+                        </div>
+                        <div class="job-stat-box" style="background:#fee2e2;border-radius:8px;padding:14px;">
+                            <div style="font-size:11px;color:#991b1b;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Failed</div>
+                            <div id="jobs-failed" style="font-size:28px;font-weight:700;color:#991b1b;margin-top:4px;">—</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #f3f4f6;">
+                        <a href="/ingest" class="dux-btn dux-btn-secondary" style="text-decoration:none;display:inline-block;">New Ingest Job →</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="dux-card dux-fade-in">
+                <div class="dux-card-header">
+                    <h2 class="dux-card-title">Quick Actions</h2>
+                    <p class="dux-card-subtitle">Jump to key operations</p>
+                </div>
+                <div class="dux-card-body" style="display:flex;flex-direction:column;gap:10px;">
+                    <a href="/ingest" class="dux-quick-action">
+                        <div class="dux-quick-action-icon" style="background:#ede9fe;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2" style="width:20px;height:20px;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div style="font-weight:600;font-size:14px;">Ingest Document</div>
+                            <div style="font-size:12px;color:#6b7280;">Upload a new document to the pipeline</div>
+                        </div>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;"><polyline points="9 18 15 12 9 6"/></svg>
+                    </a>
+                    <a href="/query" class="dux-quick-action">
+                        <div class="dux-quick-action-icon" style="background:#dbeafe;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#1e40af" stroke-width="2" style="width:20px;height:20px;">
+                                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div style="font-weight:600;font-size:14px;">Run RAG Query</div>
+                            <div style="font-size:12px;color:#6b7280;">Ask a question with cited answers</div>
+                        </div>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;"><polyline points="9 18 15 12 9 6"/></svg>
+                    </a>
+                    <a href="/decisions" class="dux-quick-action">
+                        <div class="dux-quick-action-icon" style="background:#d1fae5;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#065f46" stroke-width="2" style="width:20px;height:20px;">
+                                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div style="font-weight:600;font-size:14px;">Register Decision</div>
+                            <div style="font-size:12px;color:#6b7280;">Add an immutable AI decision record</div>
+                        </div>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;"><polyline points="9 18 15 12 9 6"/></svg>
+                    </a>
+                    <a href="/governance" class="dux-quick-action">
+                        <div class="dux-quick-action-icon" style="background:#fef3c7;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#92400e" stroke-width="2" style="width:20px;height:20px;">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div style="font-weight:600;font-size:14px;">Governance</div>
+                            <div style="font-size:12px;color:#6b7280;">Retention policies &amp; legal holds</div>
+                        </div>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;"><polyline points="9 18 15 12 9 6"/></svg>
+                    </a>
+                    <a href="/connectors" class="dux-quick-action">
+                        <div class="dux-quick-action-icon" style="background:#f3f4f6;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2" style="width:20px;height:20px;">
+                                <path d="M4 17l6-6-6-6"/><line x1="12" y1="19" x2="20" y2="19"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div style="font-weight:600;font-size:14px;">GCS Import</div>
+                            <div style="font-size:12px;color:#6b7280;">Bulk import from Google Cloud Storage</div>
+                        </div>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;"><polyline points="9 18 15 12 9 6"/></svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pipeline Architecture -->
+        <div class="dux-card dux-fade-in" style="margin-top:24px;">
+            <div class="dux-card-header">
+                <h2 class="dux-card-title">Pipeline Architecture</h2>
+                <p class="dux-card-subtitle">End-to-end flow from document to decision</p>
+            </div>
+            <div class="dux-card-body">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;">
+                    <div class="pipe-box" style="background:#ede9fe;border:1px solid #c4b5fd;">
+                        <div class="pipe-label" style="color:#5b21b6;">Source</div>
+                        <div class="pipe-name">GCS / URI</div>
+                    </div>
+                    <div class="pipe-arrow">→</div>
+                    <div class="pipe-box" style="background:#dbeafe;border:1px solid #93c5fd;">
+                        <div class="pipe-label" style="color:#1e40af;">ingestion-api</div>
+                        <div class="pipe-name">POST /v1/ingest</div>
+                    </div>
+                    <div class="pipe-arrow">→</div>
+                    <div class="pipe-box" style="background:#fef3c7;border:1px solid #fcd34d;">
+                        <div class="pipe-label" style="color:#92400e;">Pub/Sub</div>
+                        <div class="pipe-name">Job Queue</div>
+                    </div>
+                    <div class="pipe-arrow">→</div>
+                    <div class="pipe-box" style="background:#d1fae5;border:1px solid #6ee7b7;">
+                        <div class="pipe-label" style="color:#065f46;">processor</div>
+                        <div class="pipe-name">chunk + embed</div>
+                    </div>
+                    <div class="pipe-arrow">→</div>
+                    <div class="pipe-box" style="background:#f3f4f6;border:1px solid #d1d5db;">
+                        <div class="pipe-label" style="color:#374151;">Storage</div>
+                        <div class="pipe-name">PG + Vector</div>
+                    </div>
+                    <div class="pipe-arrow">→</div>
+                    <div class="pipe-box" style="background:#dbeafe;border:1px solid #93c5fd;">
+                        <div class="pipe-label" style="color:#1e40af;">rag-query</div>
+                        <div class="pipe-name">POST /v1/query</div>
+                    </div>
+                    <div class="pipe-arrow">→</div>
+                    <div class="pipe-box" style="background:#d1fae5;border:1px solid #6ee7b7;">
+                        <div class="pipe-label" style="color:#065f46;">Audit Trail</div>
+                        <div class="pipe-name">POST /v1/decisions</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .dux-quick-action {
+            display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:8px;
+            border:1px solid #f3f4f6;text-decoration:none;color:#111827;
+            transition:background 0.15s,border-color 0.15s;
+        }
+        .dux-quick-action:hover { background:#f9fafb;border-color:#e5e7eb; }
+        .dux-quick-action-icon { width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+        .pipe-box { padding:10px 14px;border-radius:8px;text-align:center;min-width:90px; }
+        .pipe-label { font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em; }
+        .pipe-name { font-size:12px;font-family:'JetBrains Mono',monospace;margin-top:2px;color:#374151; }
+        .pipe-arrow { font-size:18px;color:#9ca3af; }
+    </style>
+
+    <script>
+        async function loadDashboard() {
+            try {
+                const resp = await fetch('/api/v1/health');
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const banner = document.getElementById('health-banner');
+                    const dot = document.getElementById('health-dot');
+                    const text = document.getElementById('health-text');
+                    if (data.overall === 'healthy') {
+                        banner.style.background = '#d1fae5';
+                        banner.style.borderColor = '#6ee7b7';
+                        dot.style.background = '#10b981';
+                        text.style.color = '#065f46';
+                        text.textContent = 'All services healthy — ingest, processor, rag-query';
+                    } else {
+                        banner.style.background = '#fee2e2';
+                        banner.style.borderColor = '#fca5a5';
+                        dot.style.background = '#ef4444';
+                        text.style.color = '#991b1b';
+                        const degraded = Object.entries(data.services || {})
+                            .filter(([, v]) => v.status !== 'healthy')
+                            .map(([k]) => k).join(', ');
+                        text.textContent = `Degraded: ${degraded || 'unknown'}`;
+                    }
+                }
+            } catch(e) {
+                document.getElementById('health-text').textContent = 'Could not reach backend services';
+            }
+
+            // Stats — filled from backend when implemented
+            // For now show placeholder until real stats endpoint exists
+            ['stat-documents','stat-chunks','stat-decisions','stat-queries'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el.textContent === '—') el.textContent = '—';
+            });
+            ['jobs-queued','jobs-processing','jobs-succeeded','jobs-failed'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el.textContent === '—') el.textContent = '—';
+            });
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>

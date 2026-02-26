@@ -11,6 +11,7 @@ Upload documents and AI decisions, convert them into auditable knowledge (chunks
 - AI decision trail ingestion/query/export/package (`/v1/decisions*`) for regulator-grade evidence.
 - Governance controls for retention policies and legal holds (`/v1/admin/retention-policies`, `/v1/admin/legal-holds`).
 - Retention enforcement engine (`/v1/admin/retention/enforce`) with dry-run, hold-aware deletion, and audit trail of deletion actions.
+- Web control plane (`services/dashboard_service`) to operate ingest/query/decision/governance flows from one UI.
 
 ## License
 This repository is distributed under a proprietary commercial license.
@@ -25,6 +26,7 @@ See:
 - `services/ingestion_api_service`: ingest API (`/v1/ingest`, `/v1/ingest/complete`, `/v1/doc/{id}`)
 - `services/document_processor_service`: parser/chunker/embedder/DB writer (`/v1/process`, `/v1/process/pubsub`)
 - `services/rag_query_service`: retrieval + answer with citations (`/v1/query`)
+- `services/dashboard_service`: management UI + proxy (`/dashboard`, `/ingest`, `/query`, `/decisions`, `/governance`)
 - `services/shared`: shared contracts, DB helpers, chunking, embeddings, logging
 - `infra/terraform`: IaC baseline aligned to current GCP resources
 - `_archive/`: preserved historical Cloud Run sample recovered from GCS
@@ -56,6 +58,7 @@ set +a
 uvicorn services.ingestion_api_service.main:app --reload --port 8011
 uvicorn services.document_processor_service.main:app --reload --port 8012
 uvicorn services.rag_query_service.main:app --reload --port 8013
+uvicorn services.dashboard_service.app:app --reload --port 8000
 ```
 
 ## P1 Definition of Done

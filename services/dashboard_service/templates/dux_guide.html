@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchimista - API Guide</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dux-minimal.css">
+</head>
+<body>
+    <header class="dux-header">
+        <a href="/" class="dux-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height:32px;width:auto;">
+            <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#111827;letter-spacing:-0.5px;">Alchimista</span>
+        </a>
+        <nav class="dux-nav">
+            <a href="/dashboard" class="dux-nav-item">Dashboard</a>
+            <a href="/ingest" class="dux-nav-item">Ingest</a>
+            <a href="/connectors" class="dux-nav-item">Connectors</a>
+            <a href="/query" class="dux-nav-item">Query</a>
+            <a href="/decisions" class="dux-nav-item">Decisions</a>
+            <a href="/governance" class="dux-nav-item">Governance</a>
+            <a href="/monitoring" class="dux-nav-item">Monitoring</a>
+            <a href="/quality" class="dux-nav-item">Quality</a>
+            <a href="/settings" class="dux-nav-item">Settings</a>
+            <a href="/guide" class="dux-nav-item active">Guide</a>
+        </nav>
+    </header>
+
+    <div class="dux-container" style="max-width:960px;">
+        <div class="dux-page-title dux-fade-in">
+            <h1>API Reference</h1>
+            <p>Complete REST API reference for all Alchimista services. Auth: <code>Authorization: Bearer &lt;OIDC token&gt;</code>. Admin endpoints additionally require <code>x-admin-key</code>.</p>
+        </div>
+
+        <!-- TOC -->
+        <div class="dux-card dux-fade-in" style="margin-bottom:24px;">
+            <div class="dux-card-body" style="padding:16px 20px;">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <a href="#ingest" class="toc-link">Ingest</a>
+                    <span style="color:#d1d5db;">·</span>
+                    <a href="#connectors" class="toc-link">GCS Connector</a>
+                    <span style="color:#d1d5db;">·</span>
+                    <a href="#query" class="toc-link">Query</a>
+                    <span style="color:#d1d5db;">·</span>
+                    <a href="#decisions" class="toc-link">Decisions</a>
+                    <span style="color:#d1d5db;">·</span>
+                    <a href="#governance" class="toc-link">Governance</a>
+                    <span style="color:#d1d5db;">·</span>
+                    <a href="#health" class="toc-link">Health</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- INGEST -->
+        <div id="ingest" class="dux-card dux-fade-in" style="margin-bottom:20px;">
+            <div class="dux-card-header" style="background:#ede9fe;border-radius:10px 10px 0 0;padding:16px 20px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span class="method-badge method-post">POST</span>
+                    <code style="font-size:15px;font-weight:600;color:#3730a3;">/v1/ingest</code>
+                </div>
+                <p style="margin:6px 0 0;color:#4338ca;font-size:13px;">ingestion-api-service · port 8011</p>
+            </div>
+            <div class="dux-card-body">
+                <p style="margin-bottom:14px;">Submit a document for ingestion. Creates a job record and publishes to Pub/Sub for async processing.</p>
+                <div class="api-section">
+                    <div class="api-label">Request Body</div>
+                    <pre class="code-block">{
+  "tenant":     "acme-corp",       // required — tenant identifier
+  "source_uri": "gs://bucket/doc.pdf",  // required — GCS URI or HTTPS URL
+  "doc_type":   "regulation",      // optional
+  "metadata":   {}                 // optional — arbitrary key/value pairs
+}</pre>
+                </div>
+                <div class="api-section">
+                    <div class="api-label">Response 202</div>
+                    <pre class="code-block">{
+  "job_id":  "job_abc123",
+  "status":  "QUEUED",
+  "tenant":  "acme-corp"
+}</pre>
+                </div>
+                <div class="api-note">Poll <code>GET /v1/doc/{job_id}</code> to track processing. Status transitions: <code>QUEUED → PROCESSING → SUCCEEDED | FAILED</code></div>
+            </div>
+        </div>
+
+        <div class="dux-card dux-fade-in" style="margin-bottom:20px;">
+            <div class="dux-card-header" style="background:#ede9fe;border-radius:10px 10px 0 0;padding:16px 20px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span class="method-badge method-get">GET</span>
+                    <code style="font-size:15px;font-weight:600;color:#3730a3;">/v1/doc/{id}</code>
+                </div>
+                <p style="margin:6px 0 0;color:#4338ca;font-size:13px;">ingestion-api-service · port 8011</p>
+            </div>
+            <div class="dux-card-body">
+                <p style="margin-bottom:14px;">Get document and job status. Poll this endpoint after submitting an ingest job.</p>
+                <div class="api-section">
+                    <div class="api-label">Response 200</div>
+                    <pre class="code-block">{
+  "job_id":      "job_abc123",
+  "status":      "SUCCEEDED",       // QUEUED | PROCESSING | SUCCEEDED | FAILED
+  "tenant":      "acme-corp",
+  "source_uri":  "gs://bucket/doc.pdf",
+  "chunk_count": 42,
+  "updated_at":  "2025-03-01T12:00:00Z",
+  "error":       null
+}</pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- GCS CONNECTOR -->
+        <div id="connectors" class="dux-card dux-fade-in" style="margin-bottom:20px;">
+            <div class="dux-card-header" style="background:#dbeafe;border-radius:10px 10px 0 0;padding:16px 20px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span class="method-badge method-post">POST</span>
+                    <code style="font-size:15px;font-weight:600;color:#1e3a8a;">/v1/connectors/gcs/import</code>
+                </div>
+                <p style="margin:6px 0 0;color:#1d4ed8;font-size:13px;">ingestion-api-service · port 8011</p>
+            </div>
+            <div class="dux-card-body">
+                <p style="margin-bottom:14px;">Bulk-import all objects from a GCS bucket (optionally filtered by prefix). Each object is enqueued as an individual ingest job.</p>
+                <div class="api-section">
+                    <div class="api-label">Request Body</div>
+                    <pre class="code-block">{
+  "tenant":   "acme-corp",         // required
+  "bucket":   "my-docs-bucket",    // required — bucket name (no gs:// prefix)
+  "prefix":   "regulations/2025/", // optional
+  "doc_type": "regulation"         // optional
+}</pre>
+                </div>
+                <div class="api-section">
+                    <div class="api-label">Response 202</div>
+                    <pre class="code-block">{
+  "jobs_queued": 47,
+  "tenant":      "acme-corp",
+  "bucket":      "my-docs-bucket"
+}</pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- QUERY -->
+        <div id="query" class="dux-card dux-fade-in" style="margin-bottom:20px;">
+            <div class="dux-card-header" style="background:#d1fae5;border-radius:10px 10px 0 0;padding:16px 20px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span class="method-badge method-post">POST</span>
+                    <code style="font-size:15px;font-weight:600;color:#065f46;">/v1/query</code>
+                </div>
+                <p style="margin:6px 0 0;color:#047857;font-size:13px;">rag-query-service · port 8013</p>
+            </div>
+            <div class="dux-card-body">
+                <p style="margin-bottom:14px;">Execute a retrieval-augmented generation query. Returns a natural language answer grounded in indexed document chunks, with mandatory citations.</p>
+                <div class="api-section">
+                    <div class="api-label">Request Body</div>
+                    <pre class="code-block">{
+  "tenant":  "acme-corp",          // required
+  "query":   "What does Art. 9 EU AI Act require?",  // required
+  "top_k":   5,                    // optional — top-k chunks (default 5)
+  "filters": {}                    // optional — metadata filters
+}</pre>
+                </div>
+                <div class="api-section">
+                    <div class="api-label">Response 200</div>
+                    <pre class="code-block">{
+  "answer":   "High-risk AI systems must implement a risk management system...",
+  "trace_id": "trace_xyz789",
+  "citations": [
+    { "doc_id": "doc_abc", "chunk_id": "chunk_7", "score": 0.94 },
+    { "doc_id": "doc_def", "chunk_id": "chunk_2", "score": 0.87 }
+  ]
+}</pre>
+                </div>
+                <div class="api-note">The <code>trace_id</code> can be used to register a decision with <code>POST /v1/decisions</code>, linking the answer to its citations in the immutable audit trail.</div>
+            </div>
+        </div>
+
+        <!-- DECISIONS -->
+        <div id="decisions" class="dux-card dux-fade-in" style="margin-bottom:20px;">
+            <div class="dux-card-header" style="background:#d1fae5;border-radius:10px 10px 0 0;padding:16px 20px;">
+                <h2 style="font-size:16px;font-weight:700;color:#065f46;margin:0;">Decision Trail API</h2>
+                <p style="margin:4px 0 0;color:#047857;font-size:13px;">ingestion-api-service · port 8011 · All decision records are immutable (write-once)</p>
+            </div>
+            <div class="dux-card-body">
+
+                <div class="endpoint-group">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <span class="method-badge method-post">POST</span>
+                        <code style="font-size:14px;font-weight:600;">/v1/decisions</code>
+                        <span style="font-size:12px;color:#6b7280;">Register an AI decision (write-once, returns 409 on duplicate trace_id)</span>
+                    </div>
+                    <pre class="code-block">{
+  "decision_id":   "d-001",
+  "tenant":        "acme-corp",
+  "trace_id":      "trace_xyz789",
+  "model":         "gpt-4",
+  "model_version": "2024-01",
+  "input":         "query prompt",
+  "output":        "approved",
+  "confidence":    0.94,
+  "context_docs":  ["doc_abc"],
+  "context_chunks":["chunk_7"],
+  "metadata":      {"decision_type":"rag_answer","subject_id":"user_456"}
+}</pre>
+                </div>
+
+                <div class="endpoint-group">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <span class="method-badge method-post">POST</span>
+                        <code style="font-size:14px;font-weight:600;">/v1/decisions/query</code>
+                        <span style="font-size:12px;color:#6b7280;">Search registered decisions</span>
+                    </div>
+                    <pre class="code-block">{
+  "tenant":           "acme-corp",
+  "decision_trace_id":"trace_xyz789",   // optional filter
+  "query":            "rag_answer user_456", // optional full text filter
+  "created_from":     "2025-01-01T00:00:00Z", // optional
+  "created_to":       "2025-12-31T23:59:59Z", // optional
+  "limit":         50
+}</pre>
+                </div>
+
+                <div class="endpoint-group">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <span class="method-badge method-get">GET</span>
+                        <code style="font-size:14px;font-weight:600;">/v1/decisions/{decision_id}/report?tenant=</code>
+                        <span style="font-size:12px;color:#6b7280;">Per-decision compliance report</span>
+                    </div>
+                </div>
+
+                <div class="endpoint-group">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                        <span class="method-badge method-post">POST</span>
+                        <code style="font-size:14px;font-weight:600;">/v1/decisions/export</code>
+                        <span style="font-size:12px;color:#6b7280;">Export decision bundle</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                        <span class="method-badge method-post">POST</span>
+                        <code style="font-size:14px;font-weight:600;">/v1/decisions/bundle</code>
+                        <span style="font-size:12px;color:#6b7280;">Create immutable artifact</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                        <span class="method-badge method-post">POST</span>
+                        <code style="font-size:14px;font-weight:600;">/v1/decisions/package</code>
+                        <span style="font-size:12px;color:#6b7280;">Package for compliance submission</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <span class="method-badge method-post">POST</span>
+                        <code style="font-size:14px;font-weight:600;">/v1/decisions/verify</code>
+                        <span style="font-size:12px;color:#6b7280;">Verify artifact integrity (checksum)</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- GOVERNANCE -->
+        <div id="governance" class="dux-card dux-fade-in" style="margin-bottom:20px;">
+            <div class="dux-card-header" style="background:#fef3c7;border-radius:10px 10px 0 0;padding:16px 20px;">
+                <h2 style="font-size:16px;font-weight:700;color:#92400e;margin:0;">Governance API</h2>
+                <p style="margin:4px 0 0;color:#b45309;font-size:13px;">ingestion-api-service · port 8011 · Requires <code>x-admin-key</code> header</p>
+            </div>
+            <div class="dux-card-body">
+
+                <div class="endpoint-group">
+                    <div style="font-weight:600;font-size:14px;margin-bottom:10px;color:#374151;">Retention Policies</div>
+                    <div style="display:flex;flex-direction:column;gap:6px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span class="method-badge method-post">POST</span>
+                            <code style="font-size:13px;">/v1/admin/retention-policies</code>
+                            <span style="font-size:12px;color:#6b7280;">Create policy</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span class="method-badge method-get">GET</span>
+                            <code style="font-size:13px;">/v1/admin/retention-policies?tenant=</code>
+                            <span style="font-size:12px;color:#6b7280;">List policies</span>
+                        </div>
+                    </div>
+                    <pre class="code-block" style="margin-top:10px;">{
+  "tenant":              "acme-corp",
+  "artifact_type":       "audit_artifacts",
+  "retain_days":         2555,
+  "legal_hold_enabled":  true,
+  "immutable_required":  true
+}</pre>
+                </div>
+
+                <div class="endpoint-group">
+                    <div style="font-weight:600;font-size:14px;margin-bottom:10px;color:#374151;">Legal Holds</div>
+                    <div style="display:flex;flex-direction:column;gap:6px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span class="method-badge method-post">POST</span>
+                            <code style="font-size:13px;">/v1/admin/legal-holds</code>
+                            <span style="font-size:12px;color:#6b7280;">Create hold — prevents retention deletion</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span class="method-badge method-get">GET</span>
+                            <code style="font-size:13px;">/v1/admin/legal-holds?tenant=</code>
+                            <span style="font-size:12px;color:#6b7280;">List holds</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span class="method-badge method-post">POST</span>
+                            <code style="font-size:13px;">/v1/admin/legal-holds/release</code>
+                            <span style="font-size:12px;color:#6b7280;">Release hold</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="endpoint-group">
+                    <div style="font-weight:600;font-size:14px;margin-bottom:10px;color:#374151;">Enforcement</div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <span class="method-badge method-post">POST</span>
+                        <code style="font-size:13px;">/v1/admin/retention/enforce</code>
+                        <span style="font-size:12px;color:#6b7280;">Run enforcement pass</span>
+                    </div>
+                    <pre class="code-block">{
+  "tenant":   "acme-corp",
+  "dry_run":  true    // false = permanent deletion; always test with dry_run=true first
+}</pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- HEALTH -->
+        <div id="health" class="dux-card dux-fade-in" style="margin-bottom:24px;">
+            <div class="dux-card-header" style="background:#f3f4f6;border-radius:10px 10px 0 0;padding:16px 20px;">
+                <h2 style="font-size:16px;font-weight:700;color:#374151;margin:0;">Health Endpoints</h2>
+                <p style="margin:4px 0 0;color:#6b7280;font-size:13px;">All services expose <code>GET /v1/healthz</code> — returns 200 when healthy</p>
+            </div>
+            <div class="dux-card-body">
+                <table class="dux-table">
+                    <thead><tr><th>Service</th><th>Endpoint</th><th>Port</th></tr></thead>
+                    <tbody>
+                        <tr><td>ingestion-api-service</td><td><code>GET /v1/healthz</code></td><td>8011</td></tr>
+                        <tr><td>document-processor-service</td><td><code>GET /v1/healthz</code></td><td>8012</td></tr>
+                        <tr><td>rag-query-service</td><td><code>GET /v1/healthz</code></td><td>8013</td></tr>
+                        <tr><td>Dashboard aggregate</td><td><code>GET /api/v1/health</code></td><td>8000</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .toc-link { color:#4f46e5;text-decoration:none;font-size:14px;font-weight:500; }
+        .toc-link:hover { text-decoration:underline; }
+        .method-badge { display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;flex-shrink:0; }
+        .method-get    { background:#d1fae5;color:#065f46; }
+        .method-post   { background:#dbeafe;color:#1e40af; }
+        .method-delete { background:#fee2e2;color:#991b1b; }
+        .code-block { background:#1e1e2e;color:#cdd6f4;padding:14px 16px;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:12px;overflow:auto;white-space:pre;line-height:1.6;margin:0; }
+        .api-section { margin-bottom:16px; }
+        .api-label { font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;margin-bottom:6px; }
+        .api-note { background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:10px 14px;font-size:13px;color:#0369a1;margin-top:12px; }
+        .endpoint-group { border-bottom:1px solid #f3f4f6;padding-bottom:16px;margin-bottom:16px; }
+        .endpoint-group:last-child { border-bottom:none;margin-bottom:0;padding-bottom:0; }
+    </style>
+</body>
+</html>

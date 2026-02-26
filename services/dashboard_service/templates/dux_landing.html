@@ -1,0 +1,2399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchimista - AI Audit Trail Engine</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="apple-touch-icon" href="/static/images/logo/logo-dark.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --white: #ffffff;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+            --black: #000000;
+            --accent: #2563eb;
+            --accent-light: #3b82f6;
+            --accent-dark: #1d4ed8;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--white);
+            color: var(--gray-900);
+            line-height: 1.6;
+        }
+
+        /* Navigation */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 20px 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--gray-100);
+        }
+
+        .nav-logo img {
+            height: 32px;
+            width: auto;
+        }
+
+        .nav-logo {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--gray-900);
+            text-decoration: none;
+            letter-spacing: -1px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 40px;
+        }
+
+        .nav-links a {
+            color: var(--gray-600);
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--gray-900);
+        }
+
+        .nav-cta {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--gray-700);
+            border: 1px solid var(--gray-300);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--gray-400);
+            background: var(--gray-50);
+        }
+
+        .btn-primary {
+            background: var(--gray-900);
+            color: var(--white);
+        }
+
+        .btn-primary:hover {
+            background: var(--gray-800);
+        }
+
+        .btn-large {
+            padding: 16px 32px;
+            font-size: 16px;
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 120px 60px 80px;
+            background: linear-gradient(180deg, var(--gray-50) 0%, var(--white) 100%);
+        }
+
+        .hero-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .hero-text h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 64px;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -2px;
+            margin-bottom: 24px;
+            color: var(--gray-900);
+        }
+
+        .hero-text h1 span {
+            background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-text p {
+            font-size: 20px;
+            color: var(--gray-600);
+            margin-bottom: 40px;
+            max-width: 500px;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+        }
+
+        .hero-stats {
+            display: flex;
+            gap: 48px;
+            margin-top: 60px;
+            padding-top: 40px;
+            border-top: 1px solid var(--gray-200);
+        }
+
+        .hero-stat h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 48px;
+            font-weight: 700;
+            color: var(--gray-900);
+        }
+
+        .hero-stat p {
+            font-size: 14px;
+            color: var(--gray-500);
+            margin-bottom: 0;
+        }
+
+        /* Hero Visual */
+        .hero-visual {
+            position: relative;
+        }
+
+        .hero-card {
+            background: var(--white);
+            border-radius: 16px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.1);
+            padding: 32px;
+            border: 1px solid var(--gray-100);
+        }
+
+        .hero-card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .hero-card-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .hero-card-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--gray-200);
+        }
+
+        .hero-card-dot:nth-child(1) { background: #ef4444; }
+        .hero-card-dot:nth-child(2) { background: #f59e0b; }
+        .hero-card-dot:nth-child(3) { background: #22c55e; }
+
+        .hero-card-code {
+            background: var(--gray-900);
+            border-radius: 12px;
+            padding: 24px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            color: var(--gray-300);
+            overflow: hidden;
+        }
+
+        .code-line {
+            margin-bottom: 8px;
+        }
+
+        .code-keyword { color: #c084fc; }
+        .code-string { color: #4ade80; }
+        .code-function { color: #60a5fa; }
+        .code-comment { color: #6b7280; }
+
+        /* Features Section */
+        .features {
+            padding: 120px 60px;
+            background: var(--white);
+        }
+
+        .section-header {
+            text-align: center;
+            max-width: 600px;
+            margin: 0 auto 80px;
+        }
+
+        .section-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 48px;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 16px;
+            letter-spacing: -1px;
+        }
+
+        .section-desc {
+            font-size: 18px;
+            color: var(--gray-500);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            padding: 32px;
+            background: var(--gray-50);
+            border-radius: 16px;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            background: var(--white);
+            box-shadow: 0 20px 40px -12px rgba(0,0,0,0.1);
+            transform: translateY(-4px);
+        }
+
+        .feature-icon {
+            width: 64px;
+            height: 64px;
+            background: var(--white);
+            border: 2px solid var(--gray-900);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+
+        .feature-icon svg {
+            width: 32px;
+            height: 32px;
+            stroke: var(--gray-900);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            fill: none;
+        }
+
+        .feature-card h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--gray-900);
+        }
+
+        .feature-card p {
+            font-size: 15px;
+            color: var(--gray-500);
+            line-height: 1.7;
+        }
+
+        /* How It Works - Neo4j Style Animation */
+        .how-it-works {
+            padding: 120px 60px;
+            background: var(--gray-50);
+            overflow: hidden;
+        }
+
+        .flow-wrapper {
+            position: relative;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* SVG Connection Lines */
+        .flow-svg {
+            position: absolute;
+            top: 40px;
+            left: 0;
+            width: 100%;
+            height: 80px;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .flow-line {
+            stroke: var(--gray-300);
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 8 4;
+            animation: dashFlow 20s linear infinite;
+        }
+
+        @keyframes dashFlow {
+            to { stroke-dashoffset: -1000; }
+        }
+
+        /* Animated particles on lines */
+        .flow-particle {
+            fill: var(--accent);
+            filter: drop-shadow(0 0 6px var(--accent));
+        }
+
+        .flow-particle-1 { animation: moveParticle1 3s ease-in-out infinite; }
+        .flow-particle-2 { animation: moveParticle2 3s ease-in-out infinite 1s; }
+        .flow-particle-3 { animation: moveParticle3 3s ease-in-out infinite 2s; }
+
+        @keyframes moveParticle1 {
+            0% { cx: 150; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { cx: 350; opacity: 0; }
+        }
+        @keyframes moveParticle2 {
+            0% { cx: 450; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { cx: 650; opacity: 0; }
+        }
+        @keyframes moveParticle3 {
+            0% { cx: 750; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { cx: 950; opacity: 0; }
+        }
+
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 32px;
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step {
+            text-align: center;
+            position: relative;
+        }
+
+        .step-node {
+            position: relative;
+            display: inline-block;
+        }
+
+        .step-number {
+            width: 80px;
+            height: 80px;
+            background: var(--white);
+            border: 2px solid var(--gray-200);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin: 0 auto 24px;
+            position: relative;
+            z-index: 2;
+            transition: all 0.3s ease;
+        }
+
+        .step:hover .step-number {
+            border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
+            transform: scale(1.05);
+        }
+
+        /* Pulse ring animation */
+        .step-pulse {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            opacity: 0;
+            z-index: 1;
+        }
+
+        .step[data-active="true"] .step-pulse {
+            animation: pulseRing 2s ease-out infinite;
+        }
+
+        @keyframes pulseRing {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+            100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+        }
+
+        /* Sequential activation */
+        .step:nth-child(1) .step-pulse { animation-delay: 0s; }
+        .step:nth-child(2) .step-pulse { animation-delay: 0.5s; }
+        .step:nth-child(3) .step-pulse { animation-delay: 1s; }
+        .step:nth-child(4) .step-pulse { animation-delay: 1.5s; }
+
+        .step h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--gray-900);
+        }
+
+        .step p {
+            font-size: 14px;
+            color: var(--gray-500);
+        }
+
+        /* Connectors Section */
+        .connectors {
+            padding: 120px 60px;
+            background: var(--white);
+        }
+
+        .connectors-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .connector-card {
+            padding: 32px 24px;
+            background: var(--gray-50);
+            border-radius: 12px;
+            text-align: center;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+
+        .connector-card:hover {
+            border-color: var(--gray-200);
+            background: var(--white);
+        }
+
+        .connector-flag {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .connector-card h4 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--gray-900);
+            margin-bottom: 4px;
+        }
+
+        .connector-card p {
+            font-size: 13px;
+            color: var(--gray-500);
+        }
+
+        /* CTA Section */
+        .cta {
+            padding: 120px 60px;
+            background: var(--gray-900);
+            text-align: center;
+        }
+
+        .cta h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 48px;
+            font-weight: 700;
+            color: var(--white);
+            margin-bottom: 16px;
+            letter-spacing: -1px;
+        }
+
+        .cta p {
+            font-size: 18px;
+            color: var(--gray-400);
+            margin-bottom: 40px;
+        }
+
+        .cta .btn-primary {
+            background: var(--white);
+            color: var(--gray-900);
+        }
+
+        .cta .btn-primary:hover {
+            background: var(--gray-100);
+        }
+
+        /* Footer */
+        .footer {
+            padding: 60px;
+            background: var(--gray-900);
+            border-top: 1px solid var(--gray-800);
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-logo img {
+            height: 28px;
+            width: auto;
+        }
+
+        .footer-logo {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--white);
+        }
+
+        .footer-text {
+            font-size: 14px;
+            color: var(--gray-500);
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 32px;
+        }
+
+        .footer-links a {
+            color: var(--gray-400);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .footer-links a:hover {
+            color: var(--white);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate {
+            animation: fadeInUp 0.6s ease-out forwards;
+        }
+
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .hero-content {
+                grid-template-columns: 1fr;
+                gap: 60px;
+            }
+
+            .hero-text h1 {
+                font-size: 48px;
+            }
+
+            .features-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .steps {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .step::after {
+                display: none;
+            }
+
+            .connectors-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav {
+                padding: 20px 24px;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .hero {
+                padding: 100px 24px 60px;
+            }
+
+            .hero-text h1 {
+                font-size: 36px;
+            }
+
+            .features, .how-it-works, .connectors, .cta {
+                padding: 80px 24px;
+            }
+
+            .section-title {
+                font-size: 36px;
+            }
+
+            .features-grid, .steps, .connectors-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-stats {
+                flex-direction: column;
+                gap: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <a href="/" class="nav-logo" style="display: flex; align-items: center; gap: 10px; text-decoration: none;">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height: 28px; width: auto;">
+            <span style="font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; color: #111827; letter-spacing: -0.5px;">Alchimista</span>
+        </a>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How It Works</a>
+            <a href="#connectors">Connectors</a>
+            <a href="https://github.com/Daniele-Cangi/Alchimista" target="_blank">GitHub</a>
+        </div>
+        <div class="nav-cta">
+            <a href="https://github.com/Daniele-Cangi/Alchimista" target="_blank" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .587l3.668 7.568 8.332 1.151-6.064 5.828 1.48 8.279-7.416-3.967-7.417 3.967 1.481-8.279-6.064-5.828 8.332-1.151z"/></svg>
+                Star on GitHub
+            </a>
+            <a href="#" onclick="openAuthModal(); return false;" class="btn btn-primary">Integrate the API</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section - Mountain with Flag -->
+    <section class="hero" style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(180deg, #fff 0%, #f8f9fa 100%); position: relative; overflow: hidden;">
+
+        <div class="hero-content" style="text-align: center; max-width: 900px; padding: 120px 24px 60px; position: relative; z-index: 1;">
+
+            <!-- Mountain with Flag SVG -->
+            <div class="mountain-hero animate" style="margin-bottom: 0;">
+                <svg viewBox="0 0 400 300" style="width: 100%; max-width: 500px; height: auto;">
+                    <!-- Background mountains (gray) -->
+                    <polygon points="0,300 80,180 160,300" fill="#e5e7eb"/>
+                    <polygon points="280,300 360,200 400,300" fill="#d1d5db"/>
+
+                    <!-- Main mountain (black) -->
+                    <polygon points="60,300 200,80 340,300" fill="#1f2937"/>
+
+                    <!-- Snow cap -->
+                    <polygon points="200,80 170,130 200,120 230,130" fill="#fff"/>
+
+                    <!-- Flag pole -->
+                    <line x1="200" y1="80" x2="200" y2="5" stroke="#111827" stroke-width="3" stroke-linecap="round"/>
+
+                    <!-- Flag -->
+                    <g transform="translate(200, 5)">
+                        <!-- Flag shape -->
+                        <path d="M0,0 C20,-3 40,-3 70,0 C40,3 40,12 70,15 C40,18 40,27 70,30 C40,33 20,33 0,30 Z" fill="#fff" stroke="#111827" stroke-width="2.5"/>
+
+                        <!-- Logo image -->
+                        <image href="/static/images/logo/logo-dark.png" x="-2" y="0" width="58" height="30" preserveAspectRatio="xMidYMid meet"/>
+                    </g>
+
+                    <!-- Flag pole ball top -->
+                    <circle cx="200" cy="5" r="3" fill="#111827"/>
+
+                    <!-- Ground line -->
+                    <line x1="0" y1="300" x2="400" y2="300" stroke="#111827" stroke-width="2"/>
+
+                    <!-- Weather animations - above flag, in the sky -->
+                    <g class="weather-container">
+                        <!-- Sunny -->
+                        <g class="weather weather-sun">
+                            <circle cx="70" cy="40" r="14" fill="none" stroke="#9ca3af" stroke-width="2"/>
+                            <g stroke="#9ca3af" stroke-width="2" stroke-linecap="round">
+                                <line x1="70" y1="18" x2="70" y2="10"/>
+                                <line x1="70" y1="70" x2="70" y2="62"/>
+                                <line x1="48" y1="40" x2="40" y2="40"/>
+                                <line x1="100" y1="40" x2="92" y2="40"/>
+                                <line x1="53" y1="23" x2="47" y2="17"/>
+                                <line x1="93" y1="63" x2="87" y2="57"/>
+                                <line x1="53" y1="57" x2="47" y2="63"/>
+                                <line x1="93" y1="17" x2="87" y2="23"/>
+                            </g>
+                        </g>
+
+                        <!-- Rain -->
+                        <g class="weather weather-rain" style="opacity: 0;">
+                            <path d="M45,30 Q55,20 75,20 Q100,20 105,38 Q118,40 118,52 Q118,65 105,65 L50,65 Q38,65 38,52 Q38,42 50,40 Q45,35 45,30 Z" fill="none" stroke="#9ca3af" stroke-width="2"/>
+                            <g stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round" class="raindrops">
+                                <line x1="55" y1="72" x2="51" y2="85"/>
+                                <line x1="70" y1="70" x2="66" y2="83"/>
+                                <line x1="85" y1="72" x2="81" y2="85"/>
+                                <line x1="100" y1="70" x2="96" y2="83"/>
+                                <line x1="62" y1="90" x2="58" y2="103"/>
+                                <line x1="78" y1="88" x2="74" y2="101"/>
+                                <line x1="93" y1="90" x2="89" y2="103"/>
+                            </g>
+                        </g>
+
+                        <!-- Snow -->
+                        <g class="weather weather-snow" style="opacity: 0;">
+                            <path d="M45,30 Q55,20 75,20 Q100,20 105,38 Q118,40 118,52 Q118,65 105,65 L50,65 Q38,65 38,52 Q38,42 50,40 Q45,35 45,30 Z" fill="none" stroke="#9ca3af" stroke-width="2"/>
+                            <g class="snowflakes" fill="#9ca3af">
+                                <circle cx="55" cy="75" r="2.5"/>
+                                <circle cx="75" cy="72" r="2.5"/>
+                                <circle cx="95" cy="76" r="2.5"/>
+                                <circle cx="62" cy="90" r="2.5"/>
+                                <circle cx="82" cy="88" r="2.5"/>
+                                <circle cx="100" cy="92" r="2.5"/>
+                                <circle cx="70" cy="105" r="2.5"/>
+                                <circle cx="90" cy="102" r="2.5"/>
+                            </g>
+                        </g>
+
+                        <!-- Wind -->
+                        <g class="weather weather-wind" style="opacity: 0;">
+                            <g stroke="#9ca3af" stroke-width="2" stroke-linecap="round" fill="none">
+                                <path d="M35,30 Q65,30 85,22 Q100,15 115,25"/>
+                                <path d="M30,50 Q70,50 95,40 Q115,32 130,45"/>
+                                <path d="M40,70 Q65,70 85,63 Q100,57 112,67"/>
+                            </g>
+                        </g>
+                    </g>
+                </svg>
+            </div>
+
+            <!-- Weather animation styles -->
+            <style>
+                .weather { transition: opacity 1s ease; }
+
+                @keyframes rainFall {
+                    0% { transform: translateY(0); opacity: 1; }
+                    100% { transform: translateY(20px); opacity: 0; }
+                }
+
+                @keyframes snowFall {
+                    0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+                    100% { transform: translateY(25px) rotate(180deg); opacity: 0; }
+                }
+
+                @keyframes windBlow {
+                    0% { transform: translateX(0); opacity: 0.3; }
+                    50% { opacity: 1; }
+                    100% { transform: translateX(15px); opacity: 0.3; }
+                }
+
+                @keyframes sunPulse {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                }
+
+                .weather-sun { animation: sunPulse 3s ease-in-out infinite; transform-origin: 70px 40px; }
+                .weather-rain .raindrops line { animation: rainFall 0.8s linear infinite; }
+                .weather-rain .raindrops line:nth-child(2) { animation-delay: 0.1s; }
+                .weather-rain .raindrops line:nth-child(3) { animation-delay: 0.2s; }
+                .weather-rain .raindrops line:nth-child(4) { animation-delay: 0.3s; }
+                .weather-rain .raindrops line:nth-child(5) { animation-delay: 0.4s; }
+                .weather-rain .raindrops line:nth-child(6) { animation-delay: 0.5s; }
+                .weather-rain .raindrops line:nth-child(7) { animation-delay: 0.6s; }
+
+                .weather-snow .snowflakes circle { animation: snowFall 2s linear infinite; }
+                .weather-snow .snowflakes circle:nth-child(2) { animation-delay: 0.2s; }
+                .weather-snow .snowflakes circle:nth-child(3) { animation-delay: 0.4s; }
+                .weather-snow .snowflakes circle:nth-child(4) { animation-delay: 0.6s; }
+                .weather-snow .snowflakes circle:nth-child(5) { animation-delay: 0.8s; }
+                .weather-snow .snowflakes circle:nth-child(6) { animation-delay: 1s; }
+                .weather-snow .snowflakes circle:nth-child(7) { animation-delay: 1.2s; }
+                .weather-snow .snowflakes circle:nth-child(8) { animation-delay: 1.4s; }
+                .weather-snow .snowflakes circle:nth-child(9) { animation-delay: 1.6s; }
+
+                .weather-wind path { animation: windBlow 1.5s ease-in-out infinite; }
+                .weather-wind path:nth-child(2) { animation-delay: 0.3s; }
+                .weather-wind path:nth-child(3) { animation-delay: 0.6s; }
+            </style>
+
+            <script>
+                // Weather cycle animation
+                (function() {
+                    const weathers = ['sun', 'rain', 'snow', 'wind'];
+                    let currentWeather = 0;
+
+                    function cycleWeather() {
+                        // Hide all
+                        weathers.forEach(w => {
+                            const el = document.querySelector('.weather-' + w);
+                            if (el) el.style.opacity = '0';
+                        });
+
+                        // Show current
+                        const current = document.querySelector('.weather-' + weathers[currentWeather]);
+                        if (current) current.style.opacity = '1';
+
+                        // Next
+                        currentWeather = (currentWeather + 1) % weathers.length;
+                    }
+
+                    // Start cycle
+                    cycleWeather();
+                    setInterval(cycleWeather, 4000);
+                })();
+            </script>
+
+            <!-- Alchimista Title -->
+            <div class="hero-title animate delay-1" style="margin-top: 5px; margin-bottom: 16px;">
+                <h1 style="font-family: 'Space Grotesk', sans-serif; font-size: clamp(48px, 10vw, 100px); font-weight: 700; color: #111827; letter-spacing: -4px; line-height: 1; margin: 0;">
+                    Alchimista
+                </h1>
+            </div>
+
+            <!-- Hero Buttons -->
+            <div class="hero-text animate delay-2" style="margin-bottom: 20px;">
+                <div class="hero-buttons" style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+                    <button onclick="openAuthModal()" class="btn btn-primary btn-large" style="background: #111827; color: #fff; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; cursor: pointer;">Integrate the API</button>
+                    <a href="#features" class="btn btn-outline btn-large" style="border: 2px solid #111827; color: #111827; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">Read the Docs</a>
+                </div>
+            </div>
+
+            <!-- Description below buttons -->
+            <div class="hero-description animate delay-3" style="margin-bottom: 20px;">
+                <p style="font-size: 18px; color: #9ca3af; font-weight: 500; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 16px;">
+                    <span style="color: #111827; font-weight: 700;">AI</span> Audit Trail <span style="color: #111827; font-weight: 700;">Engine</span>
+                </p>
+                <p style="font-size: 20px; color: #4b5563; max-width: 600px; margin-left: auto; margin-right: auto; line-height: 1.6;">
+                    Every AI Decision, Traced and Auditable. Alchimista captures AI outputs, links them to source documents, and generates verifiable audit trails — EU AI Act ready.
+                </p>
+            </div>
+
+        </div>
+
+        <!-- Scroll indicator -->
+        <div style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); animation: bounce 2s infinite;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2">
+                <path d="M12 5v14M5 12l7 7 7-7"/>
+            </svg>
+        </div>
+    </section>
+
+    <style>
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateX(-50%) translateY(0); }
+            40% { transform: translateX(-50%) translateY(-10px); }
+            60% { transform: translateX(-50%) translateY(-5px); }
+        }
+    </style>
+
+    <!-- How It Works - Neo4j Style with Animated Graph -->
+    <section class="how-it-works" id="how-it-works">
+        <div class="how-it-works-content">
+            <!-- Left: Steps -->
+            <div class="steps-container">
+                <div class="section-header-left">
+                    <div class="section-label">Process</div>
+                    <h2 class="section-title">How It Works</h2>
+                </div>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-text"><h3>Capture</h3><p>AI decisions, model outputs, API responses</p></div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-text"><h3>Trace</h3><p>Link to source documents and context</p></div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-text"><h3>Audit</h3><p>Build immutable trail with citations</p></div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">4</div>
+                        <div class="step-text"><h3>Report</h3><p>Export for regulators and clients</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Dark Scrolling Cards with Code/Charts -->
+            <div class="scroll-cards-wrapper">
+            <div class="scroll-cards-container">
+                <!-- Row 1 - Code snippets -->
+                <div class="scroll-row scroll-row-1">
+                    <div class="scroll-track">
+                        <!-- Code Cards -->
+                        <div class="scroll-card code-card">
+                            <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                            <pre><code><span class="kw">from</span> alchimista <span class="kw">import</span> Engine
+engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</span>)</code></pre>
+                        </div>
+                        <div class="scroll-card code-card">
+                            <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                            <pre><code>engine.<span class="fn">capture</span>(
+  decision_id=<span class="str">"d-001"</span>,
+  output=<span class="str">"approved"</span>,
+  trace_id=<span class="str">"uuid-here"</span>
+)</code></pre>
+                        </div>
+                        <div class="scroll-card chart-card">
+                            <div class="mini-chart">
+                                <svg viewBox="0 0 100 50"><polyline points="5,45 20,30 35,35 50,15 65,25 80,10 95,20" fill="none" stroke="#3b82f6" stroke-width="2"/><circle cx="50" cy="15" r="3" fill="#3b82f6"/></svg>
+                            </div>
+                            <span class="chart-label">Traces: 12.4K</span>
+                        </div>
+                        <div class="scroll-card code-card">
+                            <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                            <pre><code>engine.<span class="fn">trace</span>(
+  doc_id=<span class="str">"contract-42"</span>,
+  chunk_id=<span class="str">"chunk-7"</span>,
+  score=<span class="fn">0.94</span>
+)</code></pre>
+                        </div>
+                        <div class="scroll-card chart-card">
+                            <div class="mini-bars">
+                                <div class="bar" style="height: 80%"></div>
+                                <div class="bar" style="height: 60%"></div>
+                                <div class="bar" style="height: 90%"></div>
+                                <div class="bar" style="height: 45%"></div>
+                                <div class="bar" style="height: 70%"></div>
+                            </div>
+                            <span class="chart-label">Decisions: 8.7K</span>
+                        </div>
+                        <!-- Duplicate for seamless -->
+                        <div class="scroll-card code-card">
+                            <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                            <pre><code><span class="kw">from</span> alchimista <span class="kw">import</span> Engine
+engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</span>)</code></pre>
+                        </div>
+                        <div class="scroll-card code-card">
+                            <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                            <pre><code>engine.<span class="fn">capture</span>(
+  decision_id=<span class="str">"d-001"</span>,
+  output=<span class="str">"approved"</span>,
+  trace_id=<span class="str">"uuid-here"</span>
+)</code></pre>
+                        </div>
+                        <div class="scroll-card chart-card">
+                            <div class="mini-chart">
+                                <svg viewBox="0 0 100 50"><polyline points="5,45 20,30 35,35 50,15 65,25 80,10 95,20" fill="none" stroke="#3b82f6" stroke-width="2"/><circle cx="50" cy="15" r="3" fill="#3b82f6"/></svg>
+                            </div>
+                            <span class="chart-label">Traces: 12.4K</span>
+                        </div>
+                        <div class="scroll-card code-card">
+                            <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                            <pre><code>engine.<span class="fn">trace</span>(
+  doc_id=<span class="str">"contract-42"</span>,
+  chunk_id=<span class="str">"chunk-7"</span>,
+  score=<span class="fn">0.94</span>
+)</code></pre>
+                        </div>
+                        <div class="scroll-card chart-card">
+                            <div class="mini-bars">
+                                <div class="bar" style="height: 80%"></div>
+                                <div class="bar" style="height: 60%"></div>
+                                <div class="bar" style="height: 90%"></div>
+                                <div class="bar" style="height: 45%"></div>
+                                <div class="bar" style="height: 70%"></div>
+                            </div>
+                            <span class="chart-label">Decisions: 8.7K</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 2 - Mixed cards (slower, opposite feel) -->
+                <div class="scroll-row scroll-row-2">
+                    <div class="scroll-track">
+                        <div class="scroll-card chart-card wide">
+                            <div class="mini-pie">
+                                <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="none" stroke="#1e3a5f" stroke-width="6"/><circle cx="20" cy="20" r="15" fill="none" stroke="#3b82f6" stroke-width="6" stroke-dasharray="70 30" stroke-dashoffset="25"/></svg>
+                            </div>
+                            <span class="chart-label">Cited 94%</span>
+                        </div>
+                        <div class="scroll-card code-card sm">
+                            <pre><code><span class="fn">audit</span>()
+<span class="cmt"># immutable</span></code></pre>
+                        </div>
+                        <div class="scroll-card chart-card">
+                            <div class="mini-dots">
+                                <span class="dot-item"></span><span class="dot-item"></span><span class="dot-item active"></span><span class="dot-item"></span><span class="dot-item"></span>
+                            </div>
+                            <span class="chart-label">Tenants</span>
+                        </div>
+                        <div class="scroll-card code-card sm">
+                            <pre><code><span class="fn">export</span>(<span class="str">"eu-ai-act"</span>)
+<span class="cmt"># compliant</span></code></pre>
+                        </div>
+                        <div class="scroll-card chart-card wide">
+                            <div class="mini-wave">
+                                <svg viewBox="0 0 120 40"><path d="M0,20 Q15,5 30,20 T60,20 T90,20 T120,20" fill="none" stroke="#3b82f6" stroke-width="2"/></svg>
+                            </div>
+                            <span class="chart-label">Audit Trail</span>
+                        </div>
+                        <!-- Duplicate -->
+                        <div class="scroll-card chart-card wide">
+                            <div class="mini-pie">
+                                <svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="none" stroke="#1e3a5f" stroke-width="6"/><circle cx="20" cy="20" r="15" fill="none" stroke="#3b82f6" stroke-width="6" stroke-dasharray="70 30" stroke-dashoffset="25"/></svg>
+                            </div>
+                            <span class="chart-label">Cited 94%</span>
+                        </div>
+                        <div class="scroll-card code-card sm">
+                            <pre><code><span class="fn">audit</span>()
+<span class="cmt"># immutable</span></code></pre>
+                        </div>
+                        <div class="scroll-card chart-card">
+                            <div class="mini-dots">
+                                <span class="dot-item"></span><span class="dot-item"></span><span class="dot-item active"></span><span class="dot-item"></span><span class="dot-item"></span>
+                            </div>
+                            <span class="chart-label">Tenants</span>
+                        </div>
+                        <div class="scroll-card code-card sm">
+                            <pre><code><span class="fn">export</span>(<span class="str">"eu-ai-act"</span>)
+<span class="cmt"># compliant</span></code></pre>
+                        </div>
+                        <div class="scroll-card chart-card wide">
+                            <div class="mini-wave">
+                                <svg viewBox="0 0 120 40"><path d="M0,20 Q15,5 30,20 T60,20 T90,20 T120,20" fill="none" stroke="#3b82f6" stroke-width="2"/></svg>
+                            </div>
+                            <span class="chart-label">Audit Trail</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Row 3 - More code/charts -->
+                <div class="scroll-row scroll-row-3">
+                    <div class="scroll-track">
+                        <div class="scroll-card code-card">
+                            <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                            <pre><code>report = engine.<span class="fn">audit</span>(
+  trace_id=<span class="str">"uuid-here"</span>
+)
+<span class="cmt"># citations: [{doc_id, chunk_id}]</span></code></pre>
+                        </div>
+                        <div class="scroll-card chart-card">
+                            <div class="mini-bars">
+                                <div class="bar" style="height: 28px;"></div>
+                                <div class="bar" style="height: 35px;"></div>
+                                <div class="bar" style="height: 20px;"></div>
+                                <div class="bar" style="height: 32px;"></div>
+                            </div>
+                            <span class="chart-label">Scores</span>
+                        </div>
+                        <div class="scroll-card code-card sm">
+                            <pre><code><span class="fn">verify</span>()
+<span class="cmt"># EU-ready</span></code></pre>
+                        </div>
+                        <div class="scroll-card chart-card wide">
+                            <div class="mini-chart">
+                                <svg viewBox="0 0 100 40"><polyline points="5,35 25,20 45,28 65,8 85,15 95,10" fill="none" stroke="#22c55e" stroke-width="2"/></svg>
+                            </div>
+                            <span class="chart-label">Compliance 100%</span>
+                        </div>
+                        <!-- Duplicate -->
+                        <div class="scroll-card code-card">
+                            <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
+                            <pre><code>report = engine.<span class="fn">audit</span>(
+  trace_id=<span class="str">"uuid-here"</span>
+)
+<span class="cmt"># citations: [{doc_id, chunk_id}]</span></code></pre>
+                        </div>
+                        <div class="scroll-card chart-card">
+                            <div class="mini-bars">
+                                <div class="bar" style="height: 28px;"></div>
+                                <div class="bar" style="height: 35px;"></div>
+                                <div class="bar" style="height: 20px;"></div>
+                                <div class="bar" style="height: 32px;"></div>
+                            </div>
+                            <span class="chart-label">Scores</span>
+                        </div>
+                        <div class="scroll-card code-card sm">
+                            <pre><code><span class="fn">verify</span>()
+<span class="cmt"># EU-ready</span></code></pre>
+                        </div>
+                        <div class="scroll-card chart-card wide">
+                            <div class="mini-chart">
+                                <svg viewBox="0 0 100 40"><polyline points="5,35 25,20 45,28 65,8 85,15 95,10" fill="none" stroke="#22c55e" stroke-width="2"/></svg>
+                            </div>
+                            <span class="chart-label">Compliance 100%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </div>
+
+        <style>
+            .how-it-works-content {
+                display: grid;
+                grid-template-columns: 340px 1fr;
+                gap: 60px;
+                max-width: 1200px;
+                margin: 0 auto;
+                align-items: center;
+            }
+
+            .steps-container {
+                display: flex;
+                flex-direction: column;
+                gap: 40px;
+            }
+
+            .section-header-left {
+                text-align: left;
+            }
+
+            .section-header-left .section-label {
+                font-size: 13px;
+                font-weight: 600;
+                color: var(--accent);
+                text-transform: uppercase;
+                letter-spacing: 1.5px;
+                margin-bottom: 12px;
+            }
+
+            .section-header-left .section-title {
+                font-family: 'Space Grotesk', sans-serif;
+                font-size: 42px;
+                font-weight: 700;
+                color: var(--gray-900);
+                letter-spacing: -1.5px;
+                margin: 0;
+                line-height: 1.1;
+            }
+
+            .steps {
+                display: flex;
+                flex-direction: column;
+                gap: 24px;
+            }
+
+            .step {
+                display: flex;
+                align-items: flex-start;
+                gap: 16px;
+            }
+
+            .step .step-number {
+                width: 44px;
+                height: 44px;
+                background: var(--gray-900);
+                border: none;
+                border-radius: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-family: 'Space Grotesk', sans-serif;
+                font-size: 18px;
+                font-weight: 700;
+                color: var(--white);
+                flex-shrink: 0;
+            }
+
+            .step h3 {
+                font-size: 17px;
+                font-weight: 700;
+                color: var(--gray-900);
+                margin: 0 0 4px;
+            }
+
+            .step p {
+                font-size: 14px;
+                color: var(--gray-500);
+                margin: 0;
+                line-height: 1.4;
+            }
+
+            .step-text {
+                display: flex;
+                flex-direction: column;
+                padding-top: 2px;
+            }
+
+            /* Dark Scrolling Cards Container */
+            .scroll-cards-wrapper {
+                position: relative;
+            }
+
+            .scroll-cards-container {
+                background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+                padding: 40px 30px 40px 60px;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                gap: 20px;
+                box-shadow:
+                    0 25px 50px rgba(0,0,0,0.3),
+                    inset 0 1px 0 rgba(255,255,255,0.05);
+                min-height: 380px;
+                clip-path: polygon(60px 0, 100% 0, 100% 100%, 0 100%);
+                border-radius: 0 16px 16px 0;
+            }
+
+            .scroll-row {
+                overflow: hidden;
+                position: relative;
+            }
+
+            .scroll-track {
+                display: flex;
+                align-items: center;
+                gap: 16px;
+                width: max-content;
+            }
+
+            /* Card Styles */
+            .scroll-card {
+                flex-shrink: 0;
+                border-radius: 12px;
+                background: rgba(30, 41, 59, 0.8);
+                border: 1px solid rgba(71, 85, 105, 0.5);
+                backdrop-filter: blur(8px);
+            }
+
+            .code-card {
+                padding: 12px 16px;
+                min-width: 180px;
+            }
+
+            .code-card.sm {
+                min-width: 120px;
+                padding: 10px 12px;
+            }
+
+            .code-card .card-header {
+                display: flex;
+                gap: 6px;
+                margin-bottom: 10px;
+            }
+
+            .code-card .card-header .dot {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                display: inline-block;
+            }
+
+            .code-card .card-header .dot.red { background: #ef4444; }
+            .code-card .card-header .dot.yellow { background: #f59e0b; }
+            .code-card .card-header .dot.green { background: #22c55e; }
+
+            .code-card pre {
+                margin: 0;
+                font-family: 'JetBrains Mono', 'Fira Code', monospace;
+                font-size: 11px;
+                line-height: 1.5;
+                color: #e2e8f0;
+            }
+
+            .code-card code {
+                display: block;
+            }
+
+            /* Syntax highlighting */
+            .code-card .kw { color: #c084fc; }
+            .code-card .fn { color: #60a5fa; }
+            .code-card .str { color: #4ade80; }
+            .code-card .cmt { color: #64748b; }
+
+            /* Chart Cards */
+            .chart-card {
+                padding: 14px 18px;
+                min-width: 100px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .chart-card.wide {
+                min-width: 140px;
+            }
+
+            .chart-label {
+                font-size: 10px;
+                color: #94a3b8;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+
+            /* Mini Charts */
+            .mini-chart {
+                width: 100%;
+                height: 40px;
+            }
+
+            .mini-chart svg {
+                width: 100%;
+                height: 100%;
+            }
+
+            .mini-bars {
+                display: flex;
+                align-items: flex-end;
+                gap: 4px;
+                height: 35px;
+            }
+
+            .mini-bars .bar {
+                width: 12px;
+                background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+                border-radius: 3px 3px 0 0;
+                min-height: 8px;
+            }
+
+            .mini-pie {
+                width: 40px;
+                height: 40px;
+            }
+
+            .mini-pie svg {
+                width: 100%;
+                height: 100%;
+            }
+
+            .mini-dots {
+                display: flex;
+                gap: 6px;
+            }
+
+            .mini-dots .dot-item {
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                background: #475569;
+            }
+
+            .mini-dots .dot-item.active {
+                background: #3b82f6;
+                box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+            }
+
+            .mini-wave {
+                width: 100%;
+                height: 30px;
+            }
+
+            .mini-wave svg {
+                width: 100%;
+                height: 100%;
+            }
+
+            /* Seamless scroll animation - LEFT direction */
+            @keyframes scrollLeft {
+                0% { transform: translateX(0); }
+                100% { transform: translateX(-50%); }
+            }
+
+            .scroll-row-1 .scroll-track {
+                animation: scrollLeft 18s linear infinite;
+            }
+
+            .scroll-row-2 .scroll-track {
+                animation: scrollLeft 22s linear infinite;
+            }
+
+            .scroll-row-3 .scroll-track {
+                animation: scrollLeft 15s linear infinite;
+            }
+
+            /* Pause on hover */
+            .scroll-cards-container:hover .scroll-track {
+                animation-play-state: paused;
+            }
+
+            /* Node styles */
+            .scroll-node {
+                width: 60px;
+                height: 60px;
+                flex-shrink: 0;
+            }
+
+            .scroll-node.sm {
+                width: 50px;
+                height: 50px;
+            }
+
+            .scroll-line {
+                width: 40px;
+                height: 20px;
+                flex-shrink: 0;
+            }
+
+            .scroll-line.sm {
+                width: 30px;
+            }
+
+            /* Responsive */
+            @media (max-width: 1024px) {
+                .how-it-works-content {
+                    grid-template-columns: 1fr;
+                    gap: 40px;
+                }
+
+                .graph-container {
+                    order: -1;
+                }
+
+                .animated-graph {
+                    max-width: 300px;
+                }
+
+                .steps {
+                    grid-template-columns: repeat(4, 1fr);
+                    max-width: 100%;
+                }
+            }
+
+            @media (max-width: 768px) {
+                .steps {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+            }
+
+            @media (max-width: 480px) {
+                .steps {
+                    grid-template-columns: 1fr;
+                }
+
+                .animated-graph {
+                    max-width: 250px;
+                }
+            }
+        </style>
+    </section>
+
+    <!-- Original Hero Visual (hidden, kept for reference) -->
+    <section style="display: none;">
+        <div class="hero-content">
+            <div class="hero-visual animate delay-2">
+                <div class="hero-card">
+                    <div class="hero-card-header">
+                        <div class="hero-card-dots">
+                            <div class="hero-card-dot"></div>
+                            <div class="hero-card-dot"></div>
+                            <div class="hero-card-dot"></div>
+                        </div>
+                    </div>
+                    <div class="hero-card-code">
+                        <div class="code-line"><span class="code-keyword">from</span> alchimista <span class="code-keyword">import</span> Engine</div>
+                        <div class="code-line"></div>
+                        <div class="code-line"><span class="code-comment"># Initialize the engine</span></div>
+                        <div class="code-line">engine = Engine.<span class="code-function">connect</span>(<span class="code-string">tenant="your-vendor"</span>)</div>
+                        <div class="code-line"></div>
+                        <div class="code-line"><span class="code-comment"># Capture AI decisions</span></div>
+                        <div class="code-line">engine.<span class="code-function">capture</span>(decision_id=<span class="code-string">"d-001"</span>)</div>
+                        <div class="code-line"></div>
+                        <div class="code-line"><span class="code-comment"># EU AI Act ready audit trail</span></div>
+                        <div class="code-line">report = engine.<span class="code-function">audit</span>(trace_id=<span class="code-string">"uuid-here"</span>)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features" style="position: relative; overflow: hidden;">
+        <!-- Decorative Background with Mountains, Flags and Goats -->
+        <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 300px; opacity: 0.07; pointer-events: none;" viewBox="0 0 1200 300" preserveAspectRatio="xMidYMid slice">
+            <!-- Left side mountains -->
+            <polygon points="0,300 80,180 160,300" fill="none" stroke="#111827" stroke-width="2"/>
+            <polygon points="40,300 140,120 240,300" fill="none" stroke="#111827" stroke-width="2"/>
+            <line x1="140" y1="120" x2="140" y2="85" stroke="#111827" stroke-width="2"/>
+            <path d="M140,85 Q155,80 170,85 Q155,90 170,95 Q155,100 140,95 Z" fill="none" stroke="#111827" stroke-width="1.5"/>
+
+            <!-- Goat left -->
+            <g transform="translate(100, 240) scale(0.8)">
+                <ellipse cx="0" cy="0" rx="16" ry="10" fill="none" stroke="#111827" stroke-width="1.5"/>
+                <circle cx="-12" cy="-7" r="5" fill="none" stroke="#111827" stroke-width="1.5"/>
+                <path d="M-16,-10 Q-20,-16 -14,-18" fill="none" stroke="#111827" stroke-width="1.5"/>
+                <path d="M-9,-9 Q-6,-15 -11,-16" fill="none" stroke="#111827" stroke-width="1.5"/>
+                <line x1="-5" y1="9" x2="-5" y2="18" stroke="#111827" stroke-width="1.5"/>
+                <line x1="3" y1="10" x2="3" y2="19" stroke="#111827" stroke-width="1.5"/>
+                <line x1="9" y1="9" x2="9" y2="18" stroke="#111827" stroke-width="1.5"/>
+            </g>
+
+            <!-- Right side mountains -->
+            <polygon points="960,300 1060,150 1160,300" fill="none" stroke="#111827" stroke-width="2"/>
+            <polygon points="1040,300 1120,200 1200,300" fill="none" stroke="#111827" stroke-width="2"/>
+            <line x1="1060" y1="150" x2="1060" y2="115" stroke="#111827" stroke-width="2"/>
+            <path d="M1060,115 Q1075,110 1090,115 Q1075,120 1090,125 Q1075,130 1060,125 Z" fill="none" stroke="#111827" stroke-width="1.5"/>
+
+            <!-- Goat right -->
+            <g transform="translate(1100, 250) scale(0.8)">
+                <ellipse cx="0" cy="0" rx="16" ry="10" fill="none" stroke="#111827" stroke-width="1.5"/>
+                <circle cx="12" cy="-7" r="5" fill="none" stroke="#111827" stroke-width="1.5"/>
+                <path d="M16,-10 Q20,-16 14,-18" fill="none" stroke="#111827" stroke-width="1.5"/>
+                <path d="M9,-9 Q6,-15 11,-16" fill="none" stroke="#111827" stroke-width="1.5"/>
+                <line x1="-5" y1="9" x2="-5" y2="18" stroke="#111827" stroke-width="1.5"/>
+                <line x1="3" y1="10" x2="3" y2="19" stroke="#111827" stroke-width="1.5"/>
+                <line x1="9" y1="9" x2="9" y2="18" stroke="#111827" stroke-width="1.5"/>
+            </g>
+
+            <!-- Center small mountains -->
+            <polygon points="450,280 500,220 550,280" fill="none" stroke="#111827" stroke-width="1.5"/>
+            <polygon points="650,280 710,200 770,280" fill="none" stroke="#111827" stroke-width="1.5"/>
+            <line x1="710" y1="200" x2="710" y2="175" stroke="#111827" stroke-width="1.5"/>
+            <path d="M710,175 Q720,172 730,175 Q720,178 730,181 Q720,184 710,181 Z" fill="none" stroke="#111827" stroke-width="1"/>
+
+            <!-- Small goat center -->
+            <g transform="translate(520, 260) scale(0.6)">
+                <ellipse cx="0" cy="0" rx="14" ry="9" fill="none" stroke="#111827" stroke-width="1.5"/>
+                <circle cx="-10" cy="-6" r="4" fill="none" stroke="#111827" stroke-width="1.5"/>
+                <path d="M-14,-9 Q-18,-14 -12,-16" fill="none" stroke="#111827" stroke-width="1.5"/>
+                <line x1="-5" y1="8" x2="-5" y2="15" stroke="#111827" stroke-width="1.5"/>
+                <line x1="5" y1="9" x2="5" y2="16" stroke="#111827" stroke-width="1.5"/>
+            </g>
+
+            <!-- Top small peaks -->
+            <polygon points="280,120 320,60 360,120" fill="none" stroke="#111827" stroke-width="1"/>
+            <polygon points="840,100 880,50 920,100" fill="none" stroke="#111827" stroke-width="1"/>
+        </svg>
+
+        <div class="section-header" style="position: relative; z-index: 1;">
+            <div class="section-label">Features</div>
+            <h2 class="section-title">Trace. Cite. Comply.</h2>
+            <p class="section-desc">
+                Every AI decision auditable, every answer citable, every report regulator-ready
+            </p>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                </div>
+                <h3>Decision Traceability</h3>
+                <p>Every AI output tracked with a unique <code style="font-size:13px;background:#f3f4f6;padding:1px 4px;border-radius:4px;">trace_id</code> and <code style="font-size:13px;background:#f3f4f6;padding:1px 4px;border-radius:4px;">job_id</code>. Full lineage from input to decision, always queryable.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"/>
+                        <rect x="14" y="3" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/>
+                    </svg>
+                </div>
+                <h3>Citation Proof</h3>
+                <p>Every answer cites <code style="font-size:13px;background:#f3f4f6;padding:1px 4px;border-radius:4px;">doc_id</code> and <code style="font-size:13px;background:#f3f4f6;padding:1px 4px;border-radius:4px;">chunk_id</code>, so you can verify exactly which document and chunk produced each answer.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 6v6l4 2"/>
+                    </svg>
+                </div>
+                <h3>Multi-tenant Isolation</h3>
+                <p>Vendor and client data fully isolated at the engine level. Each tenant's audit trail is cryptographically separated and independently exportable.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                </div>
+                <h3>Regulatory Export</h3>
+                <p>EU AI Act ready reports, one click away. Export structured audit packages for regulators, enterprise clients, and internal compliance teams.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                </div>
+                <h3>Real-time Monitoring</h3>
+                <p>Live dashboards for backlog, error rate, and latency. Catch anomalies before they become compliance incidents.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <polyline points="1 20 1 14 7 14"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                </div>
+                <h3>API-first</h3>
+                <p>Integrate in days, not months. Drop-in SDK for Python. REST API for any stack. Designed for CTOs who need compliance without friction.</p>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- Connectors -->
+    <section class="connectors" id="connectors">
+        <div class="section-header">
+            <div class="section-label">Connectors</div>
+            <h2 class="section-title">Works With Every AI Stack</h2>
+            <p class="section-desc">
+                Connect any model or API — Alchimista captures outputs regardless of the source
+            </p>
+        </div>
+        <div class="connectors-grid" style="grid-template-columns: repeat(5, 1fr); max-width: 1100px;">
+            <div class="connector-card">
+                <div class="connector-flag">
+                    <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="24" cy="24" r="18"/>
+                        <path d="M16 24h16M24 16v16"/>
+                    </svg>
+                </div>
+                <h4>OpenAI API</h4>
+                <p>GPT-4o, o3, embeddings</p>
+            </div>
+            <div class="connector-card">
+                <div class="connector-flag">
+                    <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M24 8L8 32h32L24 8z"/>
+                        <line x1="24" y1="18" x2="24" y2="28"/>
+                        <circle cx="24" cy="33" r="1.5" fill="#111827"/>
+                    </svg>
+                </div>
+                <h4>Anthropic</h4>
+                <p>Claude 3.5, Claude 4</p>
+            </div>
+            <div class="connector-card">
+                <div class="connector-flag">
+                    <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="8" y="8" width="14" height="14" rx="2"/>
+                        <rect x="26" y="8" width="14" height="14" rx="2"/>
+                        <rect x="8" y="26" width="14" height="14" rx="2"/>
+                        <rect x="26" y="26" width="14" height="14" rx="2"/>
+                    </svg>
+                </div>
+                <h4>Azure AI</h4>
+                <p>Azure OpenAI, ML Studio</p>
+            </div>
+            <div class="connector-card">
+                <div class="connector-flag">
+                    <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="24" cy="14" r="6"/>
+                        <circle cx="14" cy="34" r="6"/>
+                        <circle cx="34" cy="34" r="6"/>
+                        <line x1="24" y1="20" x2="14" y2="28"/>
+                        <line x1="24" y1="20" x2="34" y2="28"/>
+                    </svg>
+                </div>
+                <h4>Google Vertex AI</h4>
+                <p>Gemini, PaLM, custom</p>
+            </div>
+            <div class="connector-card">
+                <div class="connector-flag">
+                    <svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 32l-8-8 8-8"/>
+                        <path d="M30 16l8 8-8 8"/>
+                        <line x1="24" y1="10" x2="24" y2="38"/>
+                    </svg>
+                </div>
+                <h4>Custom Models</h4>
+                <p>Any REST endpoint</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- AI Assistant Section -->
+    <section class="ai-assistant" id="assistant" style="padding: 120px 60px; background: linear-gradient(180deg, #f9fafb 0%, #fff 100%);">
+        <div style="max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center;">
+
+            <!-- Left: Text Content -->
+            <div>
+                <div class="section-label" style="font-size: 14px; font-weight: 600; color: #2563eb; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px;">AI Assistant</div>
+                <h2 style="font-family: 'Space Grotesk', sans-serif; font-size: 48px; font-weight: 700; color: #111827; margin-bottom: 24px; letter-spacing: -1px; line-height: 1.1;">
+                    Your compliance<br>co-pilot
+                </h2>
+                <p style="font-size: 18px; color: #4b5563; line-height: 1.7; margin-bottom: 32px;">
+                    Inside the Alchimista platform you have an <strong>AI assistant</strong> always ready to help. It guides you through audit trail configuration, explains compliance requirements, and answers questions about your traced decisions.
+                </p>
+
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #f9fafb; border-radius: 10px;">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#111827" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                        <span style="font-size: 15px; color: #374151;"><strong>Setup guidance</strong> — capture, trace, audit configuration</span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #f9fafb; border-radius: 10px;">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#111827" stroke-width="2">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                        </svg>
+                        <span style="font-size: 15px; color: #374151;"><strong>Compliance concepts</strong> — EU AI Act, audit trails, citations</span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #f9fafb; border-radius: 10px;">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#111827" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                        <span style="font-size: 15px; color: #374151;"><strong>Trace queries</strong> — inspect decisions by trace_id or job_id</span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #f9fafb; border-radius: 10px;">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#111827" stroke-width="2">
+                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                        </svg>
+                        <span style="font-size: 15px; color: #374151;"><strong>Troubleshooting</strong> — diagnose gaps in your audit coverage</span>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #f9fafb; border-radius: 10px;">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#111827" stroke-width="2">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                        <span style="font-size: 15px; color: #374151;"><strong>Best practices</strong> — advice for every AI system type</span>
+                    </div>
+                </div>
+
+                <a href="/guide" style="display: inline-flex; align-items: center; gap: 8px; margin-top: 24px; color: #2563eb; font-weight: 600; text-decoration: none; font-size: 15px;">
+                    Read the full documentation
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                        <polyline points="12 5 19 12 12 19"/>
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Right: Visual Chat Preview -->
+            <div style="position: relative;">
+                <div style="background: #fff; border: 2px solid #111827; border-radius: 20px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15);">
+                    <!-- Chat Header -->
+                    <div style="background: #111827; color: #fff; padding: 20px; display: flex; align-items: center; gap: 12px;">
+                        <img src="/static/images/logo/logo-light.png" alt="Alchimista" style="width: 32px; height: 32px;">
+                        <span style="font-weight: 600; font-size: 18px;">Alchimista Assistant</span>
+                    </div>
+
+                    <!-- Chat Messages -->
+                    <div style="padding: 24px; background: #f9fafb; min-height: 280px;">
+                        <div style="background: #fff; border: 1px solid #e5e7eb; padding: 14px 18px; border-radius: 16px 16px 16px 4px; margin-bottom: 16px; max-width: 85%; font-size: 15px; color: #374151; line-height: 1.6;">
+                            Hi! Ask me anything about Alchimista.
+                        </div>
+
+                        <div style="background: #111827; color: #fff; padding: 14px 18px; border-radius: 16px 16px 4px 16px; margin-bottom: 16px; margin-left: auto; max-width: 85%; font-size: 15px; line-height: 1.6; text-align: right;">
+                            How does citation proof work?
+                        </div>
+
+                        <div style="background: #fff; border: 1px solid #e5e7eb; padding: 14px 18px; border-radius: 16px 16px 16px 4px; max-width: 85%; font-size: 15px; color: #374151; line-height: 1.6;">
+                            Every query response includes <strong>citations[]</strong> with <code style="font-size:13px;background:#f3f4f6;padding:1px 4px;border-radius:4px;">doc_id</code> and <code style="font-size:13px;background:#f3f4f6;padding:1px 4px;border-radius:4px;">chunk_id</code>, so you can verify exactly which document and chunk produced each answer.
+                        </div>
+                    </div>
+
+                    <!-- Chat Input -->
+                    <div style="padding: 16px; border-top: 1px solid #e5e7eb; display: flex; gap: 12px; background: #fff;">
+                        <div style="flex: 1; padding: 14px 18px; background: #f3f4f6; border-radius: 12px; color: #9ca3af; font-size: 15px;">Write a message...</div>
+                        <div style="width: 48px; height: 48px; background: #111827; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2">
+                                <line x1="22" y1="2" x2="11" y2="13"/>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Decorative elements -->
+                <div style="position: absolute; top: -20px; right: -20px; width: 80px; height: 80px; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border-radius: 50%; opacity: 0.1;"></div>
+                <div style="position: absolute; bottom: -30px; left: -30px; width: 120px; height: 120px; background: linear-gradient(135deg, #111827 0%, #374151 100%); border-radius: 50%; opacity: 0.05;"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta">
+        <h2>Compliance is a feature, not a burden</h2>
+        <p>Ship EU AI Act compliance to your enterprise clients without slowing down your roadmap</p>
+        <button onclick="openAuthModal()" class="btn btn-primary btn-large" style="cursor: pointer;">Integrate the API — Free Trial</button>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div>
+                <div class="footer-logo"><img src="/static/images/logo/logo-dark.png" alt="Alchimista"> Alchimista</div>
+                <p class="footer-text">AI Audit Trail Engine</p>
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com/Daniele-Cangi/Alchimista" target="_blank">GitHub</a>
+                <a href="/dashboard">Console</a>
+                <a href="#">Documentation</a>
+                <a href="https://alchimista.ai" target="_blank">alchimista.ai</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Animate elements on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.feature-card, .step, .connector-card').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(20px)';
+            el.style.transition = 'all 0.5s ease-out';
+            observer.observe(el);
+        });
+    </script>
+
+    <!-- AI Assistant Widget -->
+    <style>
+        .goat-widget {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1000;
+        }
+
+        .goat-toggle {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2px solid #111827;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s ease;
+        }
+
+        .goat-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .goat-toggle:hover .goat-icon {
+            animation: goatNod 0.5s ease-in-out;
+        }
+
+        @keyframes goatNod {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-5deg); }
+            75% { transform: rotate(5deg); }
+        }
+
+        .goat-chat {
+            position: absolute;
+            bottom: 80px;
+            right: 0;
+            width: 350px;
+            background: #fff;
+            border: 2px solid #111827;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            display: none;
+            overflow: hidden;
+        }
+
+        .goat-chat.open {
+            display: block;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .goat-chat-header {
+            background: #111827;
+            color: #fff;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .goat-chat-header svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        .goat-chat-header span {
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .goat-chat-header button {
+            margin-left: auto;
+            background: none;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .goat-chat-messages {
+            height: 300px;
+            overflow-y: auto;
+            padding: 16px;
+            background: #f9fafb;
+        }
+
+        .goat-message {
+            margin-bottom: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 85%;
+            line-height: 1.5;
+            font-size: 14px;
+        }
+
+        .goat-message.assistant {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px 12px 12px 0;
+        }
+
+        .goat-message.user {
+            background: #111827;
+            color: #fff;
+            margin-left: auto;
+            border-radius: 12px 12px 0 12px;
+        }
+
+        .goat-chat-input {
+            display: flex;
+            padding: 12px;
+            border-top: 1px solid #e5e7eb;
+            background: #fff;
+        }
+
+        .goat-chat-input input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .goat-chat-input input:focus {
+            border-color: #111827;
+        }
+
+        .goat-chat-input button {
+            margin-left: 8px;
+            padding: 12px;
+            background: #111827;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .goat-chat-input button:hover {
+            background: #374151;
+        }
+
+        .goat-label {
+            position: absolute;
+            bottom: 72px;
+            right: 8px;
+            background: #111827;
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .goat-widget:hover .goat-label {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+
+    <div class="goat-widget" id="goat-widget">
+        <div class="goat-label">AI Assistant</div>
+
+        <div class="goat-chat" id="goat-chat">
+            <div class="goat-chat-header">
+                <!-- Logo in header -->
+                <img src="/static/images/logo/logo-light.png" alt="Alchimista" style="width: 28px; height: 28px; object-fit: contain;">
+                <span>Alchimista Assistant</span>
+                <button onclick="toggleGoatChat()" title="Close">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="goat-chat-messages" id="goat-messages">
+                <div class="goat-message assistant">
+                    Hi! Ask me anything about Alchimista.
+                </div>
+            </div>
+            <div class="goat-chat-input">
+                <input type="text" id="goat-input" placeholder="Write a message..." onkeypress="if(event.key==='Enter')sendGoatMessage()">
+                <button onclick="sendGoatMessage()">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13"/>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Toggle button with logo -->
+        <button class="goat-toggle" onclick="toggleGoatChat()" title="AI Assistant">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="width: 36px; height: 36px; object-fit: contain;">
+        </button>
+    </div>
+
+    <script>
+        function toggleGoatChat() {
+            const chat = document.getElementById('goat-chat');
+            chat.classList.toggle('open');
+            if (chat.classList.contains('open')) {
+                document.getElementById('goat-input').focus();
+            }
+        }
+
+        async function sendGoatMessage() {
+            const input = document.getElementById('goat-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const messagesDiv = document.getElementById('goat-messages');
+
+            // Add user message
+            messagesDiv.innerHTML += `<div class="goat-message user">${message}</div>`;
+            input.value = '';
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+            // Send to API
+            try {
+                const response = await fetch('/api/assistant/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    messagesDiv.innerHTML += `<div class="goat-message assistant">${data.response}</div>`;
+                } else {
+                    messagesDiv.innerHTML += `<div class="goat-message assistant">Go to the Dashboard to configure the AI assistant in Settings.</div>`;
+                }
+            } catch (e) {
+                messagesDiv.innerHTML += `<div class="goat-message assistant">To use the AI assistant, go to the Dashboard and configure your API key in Settings.</div>`;
+            }
+
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="auth-modal">
+        <div class="auth-modal-backdrop" onclick="closeAuthModal()"></div>
+        <div class="auth-modal-content">
+            <button class="auth-modal-close" onclick="closeAuthModal()">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
+
+            <div class="auth-modal-header">
+                <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height: 40px; margin-bottom: 16px;">
+                <h2>Access Alchimista</h2>
+                <p>Choose how you want to proceed</p>
+            </div>
+
+            <div class="auth-modal-options">
+                <a href="/auth/github" class="auth-btn auth-btn-github">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                    Continue with GitHub
+                </a>
+
+                <div class="auth-divider">
+                    <span>or</span>
+                </div>
+
+                <a href="/dashboard" class="auth-btn auth-btn-guest">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                        <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    Enter as Guest
+                </a>
+            </div>
+
+            <p class="auth-modal-note">
+                Sign in with GitHub to save your audit trail configurations and sync across devices.
+            </p>
+        </div>
+    </div>
+
+    <style>
+        .auth-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-modal.open {
+            display: flex;
+        }
+
+        .auth-modal-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+        }
+
+        .auth-modal-content {
+            position: relative;
+            background: #fff;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 420px;
+            width: 90%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            animation: modalSlideIn 0.3s ease-out;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .auth-modal-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .auth-modal-close:hover {
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        .auth-modal-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .auth-modal-header h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: #111827;
+            margin: 0 0 8px;
+        }
+
+        .auth-modal-header p {
+            color: #6b7280;
+            font-size: 15px;
+            margin: 0;
+        }
+
+        .auth-modal-options {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .auth-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+
+        .auth-btn-github {
+            background: #111827;
+            color: #fff;
+        }
+
+        .auth-btn-github:hover {
+            background: #1f2937;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.2);
+        }
+
+        .auth-btn-guest {
+            background: #f3f4f6;
+            color: #374151;
+            border: 2px solid #e5e7eb;
+        }
+
+        .auth-btn-guest:hover {
+            background: #e5e7eb;
+            border-color: #d1d5db;
+        }
+
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 8px 0;
+        }
+
+        .auth-divider::before,
+        .auth-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e5e7eb;
+        }
+
+        .auth-divider span {
+            color: #9ca3af;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .auth-modal-note {
+            text-align: center;
+            font-size: 13px;
+            color: #9ca3af;
+            margin: 24px 0 0;
+            line-height: 1.5;
+        }
+    </style>
+
+    <script>
+        function openAuthModal() {
+            document.getElementById('auth-modal').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAuthModal() {
+            document.getElementById('auth-modal').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        // Close on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeAuthModal();
+            }
+        });
+    </script>
+</body>
+</html>

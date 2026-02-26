@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchimista - Governance</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dux-minimal.css">
+</head>
+<body>
+    <header class="dux-header">
+        <a href="/" class="dux-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height:32px;width:auto;">
+            <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#111827;letter-spacing:-0.5px;">Alchimista</span>
+        </a>
+        <nav class="dux-nav">
+            <a href="/dashboard" class="dux-nav-item">Dashboard</a>
+            <a href="/ingest" class="dux-nav-item">Ingest</a>
+            <a href="/connectors" class="dux-nav-item">Connectors</a>
+            <a href="/query" class="dux-nav-item">Query</a>
+            <a href="/decisions" class="dux-nav-item">Decisions</a>
+            <a href="/governance" class="dux-nav-item active">Governance</a>
+            <a href="/monitoring" class="dux-nav-item">Monitoring</a>
+            <a href="/quality" class="dux-nav-item">Quality</a>
+            <a href="/settings" class="dux-nav-item">Settings</a>
+            <a href="/guide" class="dux-nav-item">Guide</a>
+        </nav>
+    </header>
+
+    <div class="dux-container">
+        <div class="dux-page-title dux-fade-in">
+            <h1>Governance</h1>
+            <p>Manage data retention policies, legal holds, and run enforcement passes. All admin endpoints require the <code>x-admin-key</code> header. Retention policies are currently upsert/list only.</p>
+        </div>
+
+        <!-- Tabs -->
+        <div class="dux-tabs dux-fade-in" style="margin-bottom:24px;">
+            <button class="dux-tab active" onclick="switchTab('retention')">Retention Policies</button>
+            <button class="dux-tab" onclick="switchTab('holds')">Legal Holds</button>
+            <button class="dux-tab" onclick="switchTab('enforce')">Enforcement</button>
+        </div>
+
+        <!-- Tenant bar (shared across tabs) -->
+        <div class="dux-card dux-fade-in" style="margin-bottom:20px;padding:16px 20px;">
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:200px;">
+                    <label class="dux-label" style="margin-bottom:4px;">Active Tenant</label>
+                    <input id="gov-tenant" class="dux-input" type="text" placeholder="acme-corp" style="margin:0;">
+                </div>
+                <div style="flex:1;min-width:200px;">
+                    <label class="dux-label" style="margin-bottom:4px;">Admin Key</label>
+                    <input id="gov-admin-key" class="dux-input" type="password" placeholder="configured via ADMIN_KEY env var" style="margin:0;">
+                    <small style="color:#6b7280;font-size:11px;">Leave empty to use server-side ADMIN_KEY</small>
+                </div>
+                <div style="padding-top:20px;">
+                    <button class="dux-btn dux-btn-secondary" onclick="loadAll()">Load All</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== TAB: RETENTION POLICIES ========== -->
+        <div id="tab-retention">
+            <div class="dux-grid" style="grid-template-columns:1fr 1fr;gap:24px;">
+                <!-- Create Form -->
+                <div class="dux-card dux-fade-in">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">New Retention Policy</h2>
+                        <p class="dux-card-subtitle">POST /v1/admin/retention-policies</p>
+                    </div>
+                    <div class="dux-card-body">
+                        <div class="dux-form-group">
+                            <label class="dux-label">Policy Name <span style="color:#ef4444;">*</span></label>
+                            <input id="rp-name" class="dux-input" type="text" placeholder="e.g. gdpr-7-year">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Retention Days <span style="color:#ef4444;">*</span></label>
+                            <input id="rp-days" class="dux-input" type="number" placeholder="2555" min="1">
+                            <small style="color:#6b7280;font-size:12px;">e.g. 2555 = 7 years (GDPR), 3650 = 10 years</small>
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Document Types (comma-separated, optional)</label>
+                            <input id="rp-doc-types" class="dux-input" type="text" placeholder="regulation, directive, ruling">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Action after expiry</label>
+                            <select id="rp-action" class="dux-select">
+                                <option value="delete">Delete</option>
+                                <option value="archive">Archive</option>
+                            </select>
+                        </div>
+                        <button class="dux-btn dux-btn-primary" onclick="createRetentionPolicy()" style="width:100%;">Create Policy</button>
+                        <div id="rp-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
+                        <div id="rp-success" class="dux-alert dux-alert-success" style="display:none;margin-top:12px;"></div>
+                    </div>
+                </div>
+
+                <!-- Policy List -->
+                <div class="dux-card dux-fade-in">
+                    <div class="dux-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <h2 class="dux-card-title">Active Policies</h2>
+                            <p class="dux-card-subtitle">GET /v1/admin/retention-policies</p>
+                        </div>
+                        <button class="dux-btn dux-btn-ghost" onclick="loadRetentionPolicies()">Refresh</button>
+                    </div>
+                    <div class="dux-card-body" style="padding:0;">
+                        <div id="rp-empty" style="text-align:center;padding:32px;color:#9ca3af;">Enter tenant ID and click Load All</div>
+                        <table class="dux-table" id="rp-table" style="display:none;">
+                            <thead>
+                                <tr><th>Name</th><th>Days</th><th>Doc Types</th><th>Action</th><th></th></tr>
+                            </thead>
+                            <tbody id="rp-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== TAB: LEGAL HOLDS ========== -->
+        <div id="tab-holds" style="display:none;">
+            <div class="dux-grid" style="grid-template-columns:1fr 1fr;gap:24px;">
+                <!-- Create Form -->
+                <div class="dux-card dux-fade-in">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">New Legal Hold</h2>
+                        <p class="dux-card-subtitle">POST /v1/admin/legal-holds</p>
+                    </div>
+                    <div class="dux-card-body">
+                        <div class="dux-form-group">
+                            <label class="dux-label">Hold Name <span style="color:#ef4444;">*</span></label>
+                            <input id="lh-name" class="dux-input" type="text" placeholder="e.g. litigation-2025-xyz">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Reason <span style="color:#ef4444;">*</span></label>
+                            <input id="lh-reason" class="dux-input" type="text" placeholder="e.g. Active litigation Case #2025-001">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Document IDs (one per line, optional)</label>
+                            <textarea id="lh-doc-ids" class="dux-textarea" rows="3" placeholder="doc_abc123&#10;doc_def456"></textarea>
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Query Filter JSON (optional)</label>
+                            <textarea id="lh-filter" class="dux-textarea" rows="2" placeholder='{"doc_type":"ruling","tenant":"acme-corp"}'></textarea>
+                            <small style="color:#6b7280;font-size:12px;">Applies hold to all documents matching the filter</small>
+                        </div>
+                        <button class="dux-btn dux-btn-primary" onclick="createLegalHold()" style="width:100%;">Create Legal Hold</button>
+                        <div id="lh-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
+                        <div id="lh-success" class="dux-alert dux-alert-success" style="display:none;margin-top:12px;"></div>
+                    </div>
+                </div>
+
+                <!-- Hold List -->
+                <div class="dux-card dux-fade-in">
+                    <div class="dux-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <h2 class="dux-card-title">Active Legal Holds</h2>
+                            <p class="dux-card-subtitle">GET /v1/admin/legal-holds</p>
+                        </div>
+                        <button class="dux-btn dux-btn-ghost" onclick="loadLegalHolds()">Refresh</button>
+                    </div>
+                    <div class="dux-card-body" style="padding:0;">
+                        <div id="lh-empty" style="text-align:center;padding:32px;color:#9ca3af;">Enter tenant ID and click Load All</div>
+                        <table class="dux-table" id="lh-table" style="display:none;">
+                            <thead>
+                                <tr><th>Hold Name</th><th>Reason</th><th>Docs</th><th>Created</th><th></th></tr>
+                            </thead>
+                            <tbody id="lh-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== TAB: ENFORCEMENT ========== -->
+        <div id="tab-enforce" style="display:none;">
+            <div class="dux-grid" style="grid-template-columns:1fr 1fr;gap:24px;">
+                <div class="dux-card dux-fade-in">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">Run Retention Enforcement</h2>
+                        <p class="dux-card-subtitle">POST /v1/admin/retention/enforce</p>
+                    </div>
+                    <div class="dux-card-body">
+                        <div class="dux-alert" style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:14px;margin-bottom:20px;font-size:14px;">
+                            <strong>Warning:</strong> Running enforcement with <code>dry_run: false</code> permanently deletes or archives documents that have exceeded their retention period (unless under a legal hold). Always run a dry run first.
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label" style="font-size:15px;font-weight:600;">Mode</label>
+                            <div style="display:flex;gap:12px;margin-top:8px;">
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+                                    <input type="radio" name="enforce-mode" value="true" checked> Dry Run (safe — no deletions)
+                                </label>
+                                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;color:#dc2626;">
+                                    <input type="radio" name="enforce-mode" value="false"> Live Run (permanent deletions)
+                                </label>
+                            </div>
+                        </div>
+                        <button class="dux-btn dux-btn-primary" onclick="runEnforcement()" style="width:100%;" id="enforce-btn">Run Enforcement</button>
+                        <div id="enforce-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
+                    </div>
+                </div>
+                <div class="dux-card dux-fade-in">
+                    <div class="dux-card-header"><h2 class="dux-card-title">Enforcement Report</h2></div>
+                    <div class="dux-card-body">
+                        <div id="enforce-empty" style="text-align:center;padding:40px;color:#9ca3af;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;margin:0 auto 16px;display:block;opacity:0.4;">
+                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                            <p>Run enforcement to see results</p>
+                        </div>
+                        <div id="enforce-result" style="display:none;">
+                            <div id="enforce-mode-badge" style="display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;margin-bottom:16px;"></div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+                                <div style="background:#f9fafb;border-radius:8px;padding:14px;">
+                                    <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Documents Scanned</div>
+                                    <div id="enforce-scanned" style="font-size:24px;font-weight:700;margin-top:4px;">—</div>
+                                </div>
+                                <div style="background:#f9fafb;border-radius:8px;padding:14px;">
+                                    <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Eligible for Deletion</div>
+                                    <div id="enforce-eligible" style="font-size:24px;font-weight:700;margin-top:4px;">—</div>
+                                </div>
+                                <div style="background:#f9fafb;border-radius:8px;padding:14px;">
+                                    <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Under Legal Hold</div>
+                                    <div id="enforce-held" style="font-size:24px;font-weight:700;margin-top:4px;">—</div>
+                                </div>
+                                <div style="background:#f9fafb;border-radius:8px;padding:14px;">
+                                    <div style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Deleted / Archived</div>
+                                    <div id="enforce-deleted" style="font-size:24px;font-weight:700;margin-top:4px;">—</div>
+                                </div>
+                            </div>
+                            <pre id="enforce-output" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;font-family:'JetBrains Mono',monospace;font-size:12px;overflow:auto;max-height:250px;white-space:pre-wrap;"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .dux-tabs { display:flex;gap:4px;border-bottom:1px solid #e5e7eb;padding-bottom:0; }
+        .dux-tab { padding:10px 18px;font-size:14px;font-weight:500;color:#6b7280;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all 0.15s; }
+        .dux-tab:hover { color:#111827; }
+        .dux-tab.active { color:#4f46e5;border-bottom-color:#4f46e5; }
+        .dux-textarea { width:100%;padding:10px 14px;border:1px solid #e5e7eb;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:13px;resize:vertical;color:#111827;box-sizing:border-box; }
+        .dux-textarea:focus { outline:none;border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
+        .dux-alert-success { background:#d1fae5;border:1px solid #10b981;border-radius:8px;padding:12px;font-size:14px;color:#065f46; }
+    </style>
+
+    <script>
+        function switchTab(name) {
+            ['retention','holds','enforce'].forEach(t => {
+                document.getElementById(`tab-${t}`).style.display = (t === name) ? 'block' : 'none';
+            });
+            document.querySelectorAll('.dux-tab').forEach(t => t.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+        }
+
+        function getTenant() { return document.getElementById('gov-tenant').value.trim(); }
+        function getAdminKey() { return document.getElementById('gov-admin-key').value.trim(); }
+
+        function buildAdminHeaders() {
+            const h = { 'Content-Type': 'application/json' };
+            const k = getAdminKey();
+            if (k) h['x-admin-key'] = k;
+            return h;
+        }
+
+        function loadAll() {
+            loadRetentionPolicies();
+            loadLegalHolds();
+        }
+
+        async function loadRetentionPolicies() {
+            const tenant = getTenant();
+            if (!tenant) { alert('Enter a Tenant ID first.'); return; }
+            try {
+                const resp = await fetch(`/api/v1/admin/retention-policies?tenant=${encodeURIComponent(tenant)}`, { headers: buildAdminHeaders() });
+                if (!resp.ok) throw new Error(await resp.text());
+                const data = await resp.json();
+                const policies = data.policies || data.items || (Array.isArray(data) ? data : []);
+                renderPolicies(policies);
+            } catch(e) { alert('Load policies failed: ' + e.message); }
+        }
+
+        function renderPolicies(policies) {
+            document.getElementById('rp-empty').style.display = 'none';
+            const table = document.getElementById('rp-table');
+            table.style.display = 'table';
+            document.getElementById('rp-tbody').innerHTML = policies.length
+                ? policies.map(p => `
+                    <tr>
+                        <td><strong>${p.policy_name || p.name}</strong></td>
+                        <td>${p.retention_days} days</td>
+                        <td style="font-size:13px;">${(p.doc_types || []).join(', ') || '—'}</td>
+                        <td><span class="dux-badge">${p.action || 'delete'}</span></td>
+                        <td><button class="dux-btn dux-btn-ghost" style="color:#ef4444;padding:4px 8px;font-size:12px;" onclick="deletePolicy('${p.id || p.policy_id}')">Delete</button></td>
+                    </tr>`)
+                    .join('')
+                : '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:24px;">No policies found</td></tr>';
+        }
+
+        async function createRetentionPolicy() {
+            const tenant = getTenant();
+            const name = document.getElementById('rp-name').value.trim();
+            const days = parseInt(document.getElementById('rp-days').value);
+            const action = document.getElementById('rp-action').value;
+            const docTypesRaw = document.getElementById('rp-doc-types').value.trim();
+            const errBox = document.getElementById('rp-error');
+            const successBox = document.getElementById('rp-success');
+            errBox.style.display = 'none'; successBox.style.display = 'none';
+
+            if (!tenant || !name || !days) { errBox.textContent = 'Tenant, name and days are required.'; errBox.style.display = 'block'; return; }
+
+            const body = { tenant, policy_name: name, retention_days: days, action };
+            if (docTypesRaw) body.doc_types = docTypesRaw.split(',').map(s => s.trim()).filter(Boolean);
+
+            try {
+                const resp = await fetch('/api/v1/admin/retention-policies', { method:'POST', headers: buildAdminHeaders(), body: JSON.stringify(body) });
+                if (!resp.ok) throw new Error(await resp.text());
+                successBox.textContent = `Policy "${name}" created.`;
+                successBox.style.display = 'block';
+                loadRetentionPolicies();
+            } catch(e) { errBox.textContent = `Error: ${e.message}`; errBox.style.display = 'block'; }
+        }
+
+        async function deletePolicy(policyId) {
+            alert(`Deletion is not exposed by the backend API yet (policy_id=${policyId}). Use update/upsert instead.`);
+        }
+
+        async function loadLegalHolds() {
+            const tenant = getTenant();
+            if (!tenant) return;
+            try {
+                const resp = await fetch(`/api/v1/admin/legal-holds?tenant=${encodeURIComponent(tenant)}`, { headers: buildAdminHeaders() });
+                if (!resp.ok) throw new Error(await resp.text());
+                const data = await resp.json();
+                const holds = data.holds || data.items || (Array.isArray(data) ? data : []);
+                renderHolds(holds);
+            } catch(e) { /* silently fail if no data */ }
+        }
+
+        function renderHolds(holds) {
+            document.getElementById('lh-empty').style.display = 'none';
+            const table = document.getElementById('lh-table');
+            table.style.display = 'table';
+            document.getElementById('lh-tbody').innerHTML = holds.length
+                ? holds.map(h => `
+                    <tr>
+                        <td><strong>${h.hold_name || h.name}</strong></td>
+                        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${h.reason || '—'}</td>
+                        <td>${(h.doc_ids || []).length || '—'}</td>
+                        <td style="font-size:13px;color:#6b7280;">${h.created_at ? new Date(h.created_at).toLocaleDateString() : '—'}</td>
+                        <td><button class="dux-btn dux-btn-ghost" style="color:#ef4444;padding:4px 8px;font-size:12px;" onclick="deleteLegalHold('${h.id || h.hold_id}')">Release</button></td>
+                    </tr>`)
+                    .join('')
+                : '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:24px;">No legal holds found</td></tr>';
+        }
+
+        async function createLegalHold() {
+            const tenant = getTenant();
+            const name = document.getElementById('lh-name').value.trim();
+            const reason = document.getElementById('lh-reason').value.trim();
+            const docIdsRaw = document.getElementById('lh-doc-ids').value.trim();
+            const filterRaw = document.getElementById('lh-filter').value.trim();
+            const errBox = document.getElementById('lh-error');
+            const successBox = document.getElementById('lh-success');
+            errBox.style.display = 'none'; successBox.style.display = 'none';
+
+            if (!tenant || !name || !reason) { errBox.textContent = 'Tenant, name and reason are required.'; errBox.style.display = 'block'; return; }
+
+            const body = { tenant, hold_name: name, reason };
+            if (docIdsRaw) body.doc_ids = docIdsRaw.split('\n').map(s => s.trim()).filter(Boolean);
+            try {
+                if (filterRaw) body.query_filter = JSON.parse(filterRaw);
+            } catch(e) { errBox.textContent = 'Invalid JSON in Query Filter.'; errBox.style.display = 'block'; return; }
+
+            try {
+                const resp = await fetch('/api/v1/admin/legal-holds', { method:'POST', headers: buildAdminHeaders(), body: JSON.stringify(body) });
+                if (!resp.ok) throw new Error(await resp.text());
+                successBox.textContent = `Legal hold "${name}" created.`;
+                successBox.style.display = 'block';
+                loadLegalHolds();
+            } catch(e) { errBox.textContent = `Error: ${e.message}`; errBox.style.display = 'block'; }
+        }
+
+        async function deleteLegalHold(holdId) {
+            if (!confirm(`Release legal hold ${holdId}?`)) return;
+            try {
+                const resp = await fetch(`/api/v1/admin/legal-holds/${holdId}`, { method:'DELETE', headers: buildAdminHeaders() });
+                if (!resp.ok) throw new Error(await resp.text());
+                loadLegalHolds();
+            } catch(e) { alert('Release failed: ' + e.message); }
+        }
+
+        async function runEnforcement() {
+            const tenant = getTenant();
+            if (!tenant) { alert('Enter a Tenant ID first.'); return; }
+            const dryRun = document.querySelector('input[name="enforce-mode"]:checked').value === 'true';
+
+            if (!dryRun && !confirm('You are about to run LIVE enforcement. Documents beyond their retention period will be permanently deleted. Continue?')) return;
+
+            const btn = document.getElementById('enforce-btn');
+            btn.disabled = true;
+            document.getElementById('enforce-error').style.display = 'none';
+
+            try {
+                const resp = await fetch('/api/v1/admin/retention/enforce', {
+                    method: 'POST',
+                    headers: buildAdminHeaders(),
+                    body: JSON.stringify({ tenant, dry_run: dryRun }),
+                });
+                if (!resp.ok) throw new Error(await resp.text());
+                const data = await resp.json();
+
+                document.getElementById('enforce-empty').style.display = 'none';
+                const result = document.getElementById('enforce-result');
+                result.style.display = 'block';
+
+                const badge = document.getElementById('enforce-mode-badge');
+                badge.textContent = dryRun ? 'DRY RUN — no data deleted' : 'LIVE RUN — enforcement applied';
+                badge.style.background = dryRun ? '#dbeafe' : '#fee2e2';
+                badge.style.color = dryRun ? '#1e40af' : '#991b1b';
+
+                document.getElementById('enforce-scanned').textContent = data.scanned ?? '—';
+                document.getElementById('enforce-eligible').textContent = data.eligible ?? '—';
+                document.getElementById('enforce-held').textContent = data.under_hold ?? '—';
+                document.getElementById('enforce-deleted').textContent = dryRun ? '0 (dry run)' : (data.deleted ?? '—');
+
+                document.getElementById('enforce-output').textContent = JSON.stringify(data, null, 2);
+            } catch(e) {
+                document.getElementById('enforce-error').textContent = `Error: ${e.message}`;
+                document.getElementById('enforce-error').style.display = 'block';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

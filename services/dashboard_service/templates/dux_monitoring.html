@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchimista - Monitoring</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dux-minimal.css">
+</head>
+<body>
+    <header class="dux-header">
+        <a href="/" class="dux-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height:32px;width:auto;">
+            <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#111827;letter-spacing:-0.5px;">Alchimista</span>
+        </a>
+        <nav class="dux-nav">
+            <a href="/dashboard" class="dux-nav-item">Dashboard</a>
+            <a href="/ingest" class="dux-nav-item">Ingest</a>
+            <a href="/connectors" class="dux-nav-item">Connectors</a>
+            <a href="/query" class="dux-nav-item">Query</a>
+            <a href="/decisions" class="dux-nav-item">Decisions</a>
+            <a href="/governance" class="dux-nav-item">Governance</a>
+            <a href="/monitoring" class="dux-nav-item active">Monitoring</a>
+            <a href="/quality" class="dux-nav-item">Quality</a>
+            <a href="/settings" class="dux-nav-item">Settings</a>
+            <a href="/guide" class="dux-nav-item">Guide</a>
+        </nav>
+    </header>
+
+    <div class="dux-container">
+        <div class="dux-page-title dux-fade-in" style="display:flex;align-items:flex-start;justify-content:space-between;">
+            <div>
+                <h1>Monitoring</h1>
+                <p>Service health, job queue status, and backend availability for all three Cloud Run services.</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding-top:4px;">
+                <div id="auto-refresh-badge" style="font-size:12px;color:#6b7280;">Auto-refresh: 15s</div>
+                <button class="dux-btn dux-btn-secondary" onclick="refreshAll()">Refresh Now</button>
+            </div>
+        </div>
+
+        <!-- Service Health Cards -->
+        <div class="dux-grid" style="grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px;" id="health-grid">
+            <div class="health-card dux-card dux-fade-in" id="svc-ingest">
+                <div class="dux-card-body" style="display:flex;align-items:center;gap:14px;">
+                    <div id="dot-ingest" class="health-dot health-dot-checking"></div>
+                    <div style="flex:1;">
+                        <div style="font-weight:600;font-size:15px;">ingestion-api</div>
+                        <div style="font-size:12px;color:#6b7280;font-family:'JetBrains Mono',monospace;">GET /v1/healthz · port 8011</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div id="status-ingest" class="dux-badge">—</div>
+                        <div id="latency-ingest" style="font-size:11px;color:#9ca3af;margin-top:4px;">— ms</div>
+                    </div>
+                </div>
+            </div>
+            <div class="health-card dux-card dux-fade-in" id="svc-processor">
+                <div class="dux-card-body" style="display:flex;align-items:center;gap:14px;">
+                    <div id="dot-processor" class="health-dot health-dot-checking"></div>
+                    <div style="flex:1;">
+                        <div style="font-weight:600;font-size:15px;">document-processor</div>
+                        <div style="font-size:12px;color:#6b7280;font-family:'JetBrains Mono',monospace;">GET /v1/healthz · port 8012</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div id="status-processor" class="dux-badge">—</div>
+                        <div id="latency-processor" style="font-size:11px;color:#9ca3af;margin-top:4px;">— ms</div>
+                    </div>
+                </div>
+            </div>
+            <div class="health-card dux-card dux-fade-in" id="svc-rag">
+                <div class="dux-card-body" style="display:flex;align-items:center;gap:14px;">
+                    <div id="dot-rag" class="health-dot health-dot-checking"></div>
+                    <div style="flex:1;">
+                        <div style="font-weight:600;font-size:15px;">rag-query</div>
+                        <div style="font-size:12px;color:#6b7280;font-family:'JetBrains Mono',monospace;">GET /v1/healthz · port 8013</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div id="status-rag" class="dux-badge">—</div>
+                        <div id="latency-rag" style="font-size:11px;color:#9ca3af;margin-top:4px;">— ms</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Raw Health Response -->
+        <div class="dux-grid" style="grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;">
+            <div class="dux-card dux-fade-in">
+                <div class="dux-card-header">
+                    <h2 class="dux-card-title">Health API Response</h2>
+                    <p class="dux-card-subtitle">GET /api/v1/health</p>
+                </div>
+                <div class="dux-card-body">
+                    <pre id="health-raw" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;font-family:'JetBrains Mono',monospace;font-size:12px;overflow:auto;max-height:220px;white-space:pre-wrap;color:#374151;">Checking…</pre>
+                </div>
+            </div>
+
+            <div class="dux-card dux-fade-in">
+                <div class="dux-card-header">
+                    <h2 class="dux-card-title">Service Configuration</h2>
+                    <p class="dux-card-subtitle">Active backend endpoints</p>
+                </div>
+                <div class="dux-card-body">
+                    <div id="settings-display" style="display:flex;flex-direction:column;gap:10px;">
+                        <div class="setting-row">
+                            <span class="setting-key">INGEST_URL</span>
+                            <span id="cfg-ingest" class="setting-val">—</span>
+                        </div>
+                        <div class="setting-row">
+                            <span class="setting-key">PROCESSOR_URL</span>
+                            <span id="cfg-processor" class="setting-val">—</span>
+                        </div>
+                        <div class="setting-row">
+                            <span class="setting-key">RAG_URL</span>
+                            <span id="cfg-rag" class="setting-val">—</span>
+                        </div>
+                        <div class="setting-row">
+                            <span class="setting-key">ADMIN_KEY</span>
+                            <span id="cfg-adminkey" class="setting-val">—</span>
+                        </div>
+                    </div>
+                    <div style="margin-top:16px;">
+                        <a href="/settings" class="dux-btn dux-btn-ghost" style="text-decoration:none;display:inline-block;font-size:13px;">Edit Settings →</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Health Check -->
+        <div class="dux-card dux-fade-in">
+            <div class="dux-card-header">
+                <h2 class="dux-card-title">Manual Endpoint Check</h2>
+                <p class="dux-card-subtitle">Test any Alchimista API endpoint via the dashboard proxy</p>
+            </div>
+            <div class="dux-card-body">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <select id="manual-method" class="dux-select" style="width:100px;">
+                        <option>GET</option>
+                        <option>POST</option>
+                    </select>
+                    <input id="manual-url" class="dux-input" type="text" placeholder="/api/v1/health" style="flex:1;min-width:200px;">
+                    <button class="dux-btn dux-btn-primary" onclick="runManualCheck()">Send</button>
+                </div>
+                <div id="manual-result" style="display:none;margin-top:16px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <span id="manual-status-badge" class="dux-badge"></span>
+                        <span id="manual-latency" style="font-size:12px;color:#6b7280;"></span>
+                    </div>
+                    <pre id="manual-response" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;font-family:'JetBrains Mono',monospace;font-size:12px;overflow:auto;max-height:300px;white-space:pre-wrap;"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .health-dot { width:12px;height:12px;border-radius:50%;flex-shrink:0; }
+        .health-dot-checking { background:#d1d5db;animation:pulse 1.5s ease-in-out infinite; }
+        .health-dot-healthy  { background:#10b981; }
+        .health-dot-degraded { background:#f59e0b; }
+        .health-dot-unreachable { background:#ef4444; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .setting-row { display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6; }
+        .setting-row:last-child { border-bottom:none; }
+        .setting-key { font-size:12px;font-family:'JetBrains Mono',monospace;color:#6b7280; }
+        .setting-val { font-size:13px;font-weight:500;color:#111827; }
+        .status-healthy    { background:#d1fae5;color:#065f46; }
+        .status-degraded   { background:#fef3c7;color:#92400e; }
+        .status-unreachable{ background:#fee2e2;color:#991b1b; }
+    </style>
+
+    <script>
+        let autoRefreshTimer = null;
+
+        async function refreshAll() {
+            await Promise.all([checkHealth(), loadSettings()]);
+        }
+
+        async function checkHealth() {
+            const rawEl = document.getElementById('health-raw');
+            rawEl.textContent = 'Checking…';
+            rawEl.style.color = '#6b7280';
+
+            try {
+                const t0 = performance.now();
+                const resp = await fetch('/api/v1/health');
+                const elapsed = Math.round(performance.now() - t0);
+                const data = await resp.json();
+
+                rawEl.textContent = JSON.stringify(data, null, 2);
+                rawEl.style.color = '#374151';
+
+                // Update per-service cards
+                const services = data.services || {};
+                Object.entries({
+                    ingest: 'ingest',
+                    processor: 'processor',
+                    rag: 'rag',
+                }).forEach(([key, id]) => {
+                    const svc = services[key] || {};
+                    const status = svc.status || 'unreachable';
+                    const dot = document.getElementById(`dot-${id}`);
+                    const badge = document.getElementById(`status-${id}`);
+                    const latency = document.getElementById(`latency-${id}`);
+
+                    dot.className = `health-dot health-dot-${status}`;
+                    badge.textContent = status;
+                    badge.className = `dux-badge status-${status}`;
+                    latency.textContent = svc.latency_ms !== undefined ? `${svc.latency_ms} ms` : '— ms';
+                });
+
+            } catch(e) {
+                rawEl.textContent = `Error: ${e.message}`;
+                rawEl.style.color = '#ef4444';
+                ['ingest','processor','rag'].forEach(id => {
+                    document.getElementById(`dot-${id}`).className = 'health-dot health-dot-unreachable';
+                    document.getElementById(`status-${id}`).textContent = 'unreachable';
+                    document.getElementById(`status-${id}`).className = 'dux-badge status-unreachable';
+                });
+            }
+        }
+
+        async function loadSettings() {
+            try {
+                const resp = await fetch('/api/settings');
+                if (!resp.ok) return;
+                const d = await resp.json();
+                document.getElementById('cfg-ingest').textContent    = d.ingest_url    || '—';
+                document.getElementById('cfg-processor').textContent = d.processor_url || '—';
+                document.getElementById('cfg-rag').textContent       = d.rag_url       || '—';
+                document.getElementById('cfg-adminkey').textContent  = d.admin_key_configured ? '*** configured' : 'not set';
+            } catch(e) { /* ignore */ }
+        }
+
+        async function runManualCheck() {
+            const method = document.getElementById('manual-method').value;
+            const url    = document.getElementById('manual-url').value.trim();
+            if (!url) return;
+
+            const resultDiv = document.getElementById('manual-result');
+            resultDiv.style.display = 'block';
+            document.getElementById('manual-response').textContent = 'Loading…';
+
+            const t0 = performance.now();
+            try {
+                const opts = { method };
+                if (method === 'POST') opts.headers = { 'Content-Type': 'application/json' };
+                const resp = await fetch(url, opts);
+                const elapsed = Math.round(performance.now() - t0);
+                let text;
+                try { const j = await resp.json(); text = JSON.stringify(j, null, 2); }
+                catch { text = await resp.text(); }
+
+                const badge = document.getElementById('manual-status-badge');
+                badge.textContent = `HTTP ${resp.status}`;
+                badge.className = `dux-badge ${resp.ok ? 'status-healthy' : 'status-unreachable'}`;
+                document.getElementById('manual-latency').textContent = `${elapsed} ms`;
+                document.getElementById('manual-response').textContent = text;
+            } catch(e) {
+                document.getElementById('manual-response').textContent = `Error: ${e.message}`;
+                document.getElementById('manual-status-badge').textContent = 'Error';
+                document.getElementById('manual-status-badge').className = 'dux-badge status-unreachable';
+            }
+        }
+
+        // Auto-refresh every 15 seconds
+        function startAutoRefresh() {
+            refreshAll();
+            autoRefreshTimer = setInterval(refreshAll, 15000);
+        }
+
+        startAutoRefresh();
+    </script>
+</body>
+</html>

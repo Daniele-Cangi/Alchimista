@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchimista - RAG Query</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dux-minimal.css">
+</head>
+<body>
+    <header class="dux-header">
+        <a href="/" class="dux-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height:32px;width:auto;">
+            <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#111827;letter-spacing:-0.5px;">Alchimista</span>
+        </a>
+        <nav class="dux-nav">
+            <a href="/dashboard" class="dux-nav-item">Dashboard</a>
+            <a href="/ingest" class="dux-nav-item">Ingest</a>
+            <a href="/connectors" class="dux-nav-item">Connectors</a>
+            <a href="/query" class="dux-nav-item active">Query</a>
+            <a href="/decisions" class="dux-nav-item">Decisions</a>
+            <a href="/governance" class="dux-nav-item">Governance</a>
+            <a href="/monitoring" class="dux-nav-item">Monitoring</a>
+            <a href="/quality" class="dux-nav-item">Quality</a>
+            <a href="/settings" class="dux-nav-item">Settings</a>
+            <a href="/guide" class="dux-nav-item">Guide</a>
+        </nav>
+    </header>
+
+    <div class="dux-container">
+        <div class="dux-page-title dux-fade-in">
+            <h1>RAG Query</h1>
+            <p>Ask questions over ingested documents. Every answer includes mandatory citations linking the response to source chunks.</p>
+        </div>
+
+        <div class="dux-grid" style="grid-template-columns:340px 1fr;gap:24px;align-items:start;">
+
+            <!-- Query Form -->
+            <div class="dux-card dux-fade-in">
+                <div class="dux-card-header">
+                    <h2 class="dux-card-title">Query Parameters</h2>
+                    <p class="dux-card-subtitle">POST /v1/query</p>
+                </div>
+                <div class="dux-card-body">
+                    <div class="dux-form-group">
+                        <label class="dux-label">Tenant ID <span style="color:#ef4444;">*</span></label>
+                        <input id="q-tenant" class="dux-input" type="text" placeholder="e.g. acme-corp">
+                    </div>
+                    <div class="dux-form-group">
+                        <label class="dux-label">Top-K Results</label>
+                        <input id="q-k" class="dux-input" type="number" value="5" min="1" max="20">
+                    </div>
+                    <div class="dux-form-group">
+                        <label class="dux-label">Bearer Token (optional)</label>
+                        <input id="q-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                    </div>
+                    <div class="dux-form-group">
+                        <label class="dux-label">Query <span style="color:#ef4444;">*</span></label>
+                        <textarea id="q-query" class="dux-textarea" rows="4" placeholder="e.g. What are the obligations for high-risk AI systems under Article 9 of the EU AI Act?"></textarea>
+                    </div>
+                    <button class="dux-btn dux-btn-primary" onclick="submitQuery()" style="width:100%;" id="q-submit-btn">
+                        Run Query
+                    </button>
+                    <div id="q-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div class="dux-fade-in">
+                <!-- Answer -->
+                <div class="dux-card" id="q-answer-card" style="display:none;margin-bottom:20px;">
+                    <div class="dux-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <h2 class="dux-card-title">Answer</h2>
+                            <p class="dux-card-subtitle" id="q-trace-id" style="font-family:'JetBrains Mono',monospace;font-size:12px;"></p>
+                        </div>
+                        <button class="dux-btn dux-btn-secondary" onclick="registerDecision()" id="q-register-btn" style="display:none;">
+                            Register Decision
+                        </button>
+                    </div>
+                    <div class="dux-card-body">
+                        <div id="q-answer-text" style="line-height:1.7;color:#111827;font-size:15px;"></div>
+                    </div>
+                </div>
+
+                <!-- Citations -->
+                <div class="dux-card" id="q-citations-card" style="display:none;">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">Citations</h2>
+                        <p class="dux-card-subtitle">Source chunks used to generate the answer</p>
+                    </div>
+                    <div class="dux-card-body" style="padding:0;">
+                        <table class="dux-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Doc ID</th>
+                                    <th>Chunk ID</th>
+                                    <th>Score</th>
+                                    <th>Excerpt</th>
+                                </tr>
+                            </thead>
+                            <tbody id="q-citations-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Empty state -->
+                <div id="q-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 0;color:#9ca3af;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:56px;height:56px;margin-bottom:16px;opacity:0.35;">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <p style="font-size:15px;">Enter a query to see results with citations</p>
+                </div>
+
+                <!-- Loading state -->
+                <div id="q-loading-state" style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:80px 0;color:#6b7280;">
+                    <div class="dux-spinner-large"></div>
+                    <p style="margin-top:16px;font-size:15px;">Retrieving and generating answer…</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Query History -->
+        <div class="dux-card dux-fade-in" style="margin-top:24px;">
+            <div class="dux-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h2 class="dux-card-title">Query History</h2>
+                    <p class="dux-card-subtitle">This session</p>
+                </div>
+                <button class="dux-btn dux-btn-ghost" onclick="clearHistory()">Clear</button>
+            </div>
+            <div class="dux-card-body" style="padding:0;">
+                <table class="dux-table">
+                    <thead>
+                        <tr><th>Query</th><th>Tenant</th><th>Citations</th><th>Trace ID</th><th>Time</th></tr>
+                    </thead>
+                    <tbody id="q-history-tbody">
+                        <tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:32px;">No queries yet</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .dux-textarea { width:100%;padding:10px 14px;border:1px solid #e5e7eb;border-radius:8px;font-family:'Inter',sans-serif;font-size:14px;resize:vertical;min-height:100px;color:#111827;box-sizing:border-box; }
+        .dux-textarea:focus { outline:none;border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
+        .dux-spinner-large { width:40px;height:40px;border:3px solid #e5e7eb;border-top-color:#4f46e5;border-radius:50%;animation:spin 0.8s linear infinite; }
+        .dux-spinner { width:20px;height:20px;border:2px solid #e5e7eb;border-top-color:#4f46e5;border-radius:50%;animation:spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .citation-excerpt { font-size:13px;color:#6b7280;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    </style>
+
+    <script>
+        const queryHistory = [];
+        let lastResult = null;
+
+        async function submitQuery() {
+            const tenant = document.getElementById('q-tenant').value.trim();
+            const query  = document.getElementById('q-query').value.trim();
+            const k      = parseInt(document.getElementById('q-k').value) || 5;
+            const token  = document.getElementById('q-token').value.trim();
+            const errBox = document.getElementById('q-error');
+
+            if (!tenant || !query) {
+                errBox.textContent = 'Tenant ID and Query are required.';
+                errBox.style.display = 'block';
+                return;
+            }
+            errBox.style.display = 'none';
+
+            // Show loading
+            document.getElementById('q-empty-state').style.display = 'none';
+            document.getElementById('q-answer-card').style.display = 'none';
+            document.getElementById('q-citations-card').style.display = 'none';
+            document.getElementById('q-loading-state').style.display = 'flex';
+            document.getElementById('q-submit-btn').disabled = true;
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            try {
+                const resp = await fetch('/api/v1/query', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ tenant, query, k }),
+                });
+                if (!resp.ok) throw new Error(await resp.text());
+                const data = await resp.json();
+                lastResult = { data, tenant, query };
+
+                renderResults(data, query, tenant);
+
+                // History
+                queryHistory.unshift({
+                    query,
+                    tenant,
+                    citations: (data.citations || []).length,
+                    trace_id: data.trace_id || '—',
+                    time: new Date().toLocaleTimeString(),
+                });
+                renderHistory();
+
+            } catch(e) {
+                errBox.textContent = `Error: ${e.message}`;
+                errBox.style.display = 'block';
+                document.getElementById('q-empty-state').style.display = 'flex';
+            } finally {
+                document.getElementById('q-loading-state').style.display = 'none';
+                document.getElementById('q-submit-btn').disabled = false;
+            }
+        }
+
+        function renderResults(data, query, tenant) {
+            // Answer
+            const answerCard = document.getElementById('q-answer-card');
+            answerCard.style.display = 'block';
+            document.getElementById('q-answer-text').textContent = data.answer || JSON.stringify(data, null, 2);
+            document.getElementById('q-trace-id').textContent = data.trace_id ? `trace_id: ${data.trace_id}` : '';
+
+            const regBtn = document.getElementById('q-register-btn');
+            regBtn.style.display = data.trace_id ? 'block' : 'none';
+
+            // Citations
+            const citations = data.citations || [];
+            if (citations.length > 0) {
+                const citCard = document.getElementById('q-citations-card');
+                citCard.style.display = 'block';
+                document.getElementById('q-citations-tbody').innerHTML = citations.map((c, i) => `
+                    <tr>
+                        <td style="color:#9ca3af;">${i + 1}</td>
+                        <td><code style="font-size:12px;">${c.doc_id || '—'}</code></td>
+                        <td><code style="font-size:12px;">${c.chunk_id || '—'}</code></td>
+                        <td>${c.score !== undefined ? (c.score * 100).toFixed(1) + '%' : '—'}</td>
+                        <td class="citation-excerpt" title="${(c.excerpt || c.text || '').replace(/"/g,'&quot;')}">${c.excerpt || c.text || '—'}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        function registerDecision() {
+            if (!lastResult) return;
+            const { data, tenant } = lastResult;
+            // Pre-fill decisions page via sessionStorage
+            sessionStorage.setItem('pending_decision', JSON.stringify({
+                tenant,
+                trace_id: data.trace_id,
+                decision_type: 'rag_answer',
+                citations: data.citations || [],
+            }));
+            window.location.href = '/decisions';
+        }
+
+        function renderHistory() {
+            const tbody = document.getElementById('q-history-tbody');
+            if (queryHistory.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:32px;">No queries yet</td></tr>';
+                return;
+            }
+            tbody.innerHTML = queryHistory.map(h => `
+                <tr>
+                    <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${h.query}</td>
+                    <td>${h.tenant}</td>
+                    <td><span class="dux-badge">${h.citations}</span></td>
+                    <td><code style="font-size:12px;">${h.trace_id}</code></td>
+                    <td style="color:#6b7280;font-size:13px;">${h.time}</td>
+                </tr>
+            `).join('');
+        }
+
+        function clearHistory() {
+            queryHistory.length = 0;
+            renderHistory();
+        }
+
+        // Submit on Ctrl+Enter
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('q-query').addEventListener('keydown', e => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitQuery();
+            });
+        });
+    </script>
+</body>
+</html>

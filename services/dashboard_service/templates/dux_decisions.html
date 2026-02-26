@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchimista - AI Decisions</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dux-minimal.css">
+</head>
+<body>
+    <header class="dux-header">
+        <a href="/" class="dux-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height:32px;width:auto;">
+            <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#111827;letter-spacing:-0.5px;">Alchimista</span>
+        </a>
+        <nav class="dux-nav">
+            <a href="/dashboard" class="dux-nav-item">Dashboard</a>
+            <a href="/ingest" class="dux-nav-item">Ingest</a>
+            <a href="/connectors" class="dux-nav-item">Connectors</a>
+            <a href="/query" class="dux-nav-item">Query</a>
+            <a href="/decisions" class="dux-nav-item active">Decisions</a>
+            <a href="/governance" class="dux-nav-item">Governance</a>
+            <a href="/monitoring" class="dux-nav-item">Monitoring</a>
+            <a href="/quality" class="dux-nav-item">Quality</a>
+            <a href="/settings" class="dux-nav-item">Settings</a>
+            <a href="/guide" class="dux-nav-item">Guide</a>
+        </nav>
+    </header>
+
+    <div class="dux-container">
+        <div class="dux-page-title dux-fade-in">
+            <h1>AI Decision Trail</h1>
+            <p>Register immutable AI decision records. Query, report, and export compliance bundles. Each artifact is write-once — a 409 is returned on duplicate <code>trace_id</code>.</p>
+        </div>
+
+        <!-- Tabs -->
+        <div class="dux-tabs dux-fade-in" style="margin-bottom:24px;">
+            <button class="dux-tab active" onclick="switchTab('register')">Register Decision</button>
+            <button class="dux-tab" onclick="switchTab('query')">Query Decisions</button>
+            <button class="dux-tab" onclick="switchTab('report')">Compliance Report</button>
+            <button class="dux-tab" onclick="switchTab('bundle')">Export &amp; Bundle</button>
+            <button class="dux-tab" onclick="switchTab('verify')">Verify Artifact</button>
+        </div>
+
+        <!-- ========== TAB: REGISTER ========== -->
+        <div id="tab-register" class="tab-panel">
+            <div class="dux-grid" style="grid-template-columns:1fr 1fr;gap:24px;">
+                <div class="dux-card">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">Register Decision</h2>
+                        <p class="dux-card-subtitle">POST /v1/decisions — write-once, immutable</p>
+                    </div>
+                    <div class="dux-card-body">
+                        <div class="dux-form-group">
+                            <label class="dux-label">Tenant ID <span style="color:#ef4444;">*</span></label>
+                            <input id="reg-tenant" class="dux-input" type="text" placeholder="acme-corp">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Trace ID <span style="color:#ef4444;">*</span></label>
+                            <div style="display:flex;gap:8px;">
+                                <input id="reg-trace-id" class="dux-input" type="text" placeholder="e.g. trace_abc123" style="flex:1;">
+                                <button class="dux-btn dux-btn-ghost" onclick="genTraceId()" style="white-space:nowrap;">Generate</button>
+                            </div>
+                            <small style="color:#6b7280;font-size:12px;">Unique per decision. Duplicate returns HTTP 409.</small>
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Decision Type <span style="color:#ef4444;">*</span></label>
+                            <select id="reg-type" class="dux-select">
+                                <option value="rag_answer">RAG Answer</option>
+                                <option value="classification">Classification</option>
+                                <option value="risk_assessment">Risk Assessment</option>
+                                <option value="recommendation">Recommendation</option>
+                                <option value="eligibility">Eligibility</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Subject ID</label>
+                            <input id="reg-subject" class="dux-input" type="text" placeholder="e.g. user_456 or contract_789">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Citations JSON (optional)</label>
+                            <textarea id="reg-citations" class="dux-textarea" rows="3" placeholder='[{"doc_id":"doc_1","chunk_id":"chunk_5","score":0.92}]'></textarea>
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Context JSON (optional)</label>
+                            <textarea id="reg-context" class="dux-textarea" rows="3" placeholder='{"query":"...","answer":"...","model":"gemini-1.5-pro"}'></textarea>
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Bearer Token (optional)</label>
+                            <input id="reg-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                        </div>
+                        <button class="dux-btn dux-btn-primary" onclick="registerDecision()" style="width:100%;">Register Decision</button>
+                        <div id="reg-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
+                    </div>
+                </div>
+
+                <div class="dux-card">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">Response</h2>
+                        <p class="dux-card-subtitle">Server response</p>
+                    </div>
+                    <div class="dux-card-body">
+                        <div id="reg-idle" style="text-align:center;padding:40px 0;color:#9ca3af;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;margin:0 auto 16px;display:block;opacity:0.4;">
+                                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <p>Register a decision to see the response</p>
+                        </div>
+                        <pre id="reg-response" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;font-family:'JetBrains Mono',monospace;font-size:12px;overflow:auto;max-height:400px;white-space:pre-wrap;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== TAB: QUERY ========== -->
+        <div id="tab-query" class="tab-panel" style="display:none;">
+            <div class="dux-grid" style="grid-template-columns:340px 1fr;gap:24px;align-items:start;">
+                <div class="dux-card">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">Filter Decisions</h2>
+                        <p class="dux-card-subtitle">POST /v1/decisions/query</p>
+                    </div>
+                    <div class="dux-card-body">
+                        <div class="dux-form-group">
+                            <label class="dux-label">Tenant ID <span style="color:#ef4444;">*</span></label>
+                            <input id="dq-tenant" class="dux-input" type="text" placeholder="acme-corp">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Trace ID (optional)</label>
+                            <input id="dq-trace-id" class="dux-input" type="text" placeholder="trace_abc123">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Subject ID (optional)</label>
+                            <input id="dq-subject" class="dux-input" type="text" placeholder="user_456">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Decision Type (optional)</label>
+                            <select id="dq-type" class="dux-select">
+                                <option value="">— all types —</option>
+                                <option value="rag_answer">RAG Answer</option>
+                                <option value="classification">Classification</option>
+                                <option value="risk_assessment">Risk Assessment</option>
+                                <option value="recommendation">Recommendation</option>
+                                <option value="eligibility">Eligibility</option>
+                            </select>
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">From Date</label>
+                            <input id="dq-from" class="dux-input" type="date">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">To Date</label>
+                            <input id="dq-to" class="dux-input" type="date">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Limit</label>
+                            <input id="dq-limit" class="dux-input" type="number" value="50" min="1" max="500">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Bearer Token (optional)</label>
+                            <input id="dq-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                        </div>
+                        <button class="dux-btn dux-btn-primary" onclick="queryDecisions()" style="width:100%;">Search</button>
+                        <div id="dq-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
+                    </div>
+                </div>
+                <div class="dux-card">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">Results</h2>
+                        <p id="dq-count" class="dux-card-subtitle">—</p>
+                    </div>
+                    <div class="dux-card-body" style="padding:0;">
+                        <div id="dq-empty" style="text-align:center;padding:40px;color:#9ca3af;">Run a search to see decisions</div>
+                        <table class="dux-table" id="dq-table" style="display:none;">
+                            <thead>
+                                <tr><th>Trace ID</th><th>Type</th><th>Subject</th><th>Citations</th><th>Registered</th></tr>
+                            </thead>
+                            <tbody id="dq-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== TAB: REPORT ========== -->
+        <div id="tab-report" class="tab-panel" style="display:none;">
+            <div class="dux-grid" style="grid-template-columns:340px 1fr;gap:24px;align-items:start;">
+                <div class="dux-card">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">Compliance Report</h2>
+                        <p class="dux-card-subtitle">GET /v1/decisions/report</p>
+                    </div>
+                    <div class="dux-card-body">
+                        <div class="dux-form-group">
+                            <label class="dux-label">Tenant ID <span style="color:#ef4444;">*</span></label>
+                            <input id="rpt-tenant" class="dux-input" type="text" placeholder="acme-corp">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">From Date</label>
+                            <input id="rpt-from" class="dux-input" type="date">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">To Date</label>
+                            <input id="rpt-to" class="dux-input" type="date">
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Bearer Token (optional)</label>
+                            <input id="rpt-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                        </div>
+                        <button class="dux-btn dux-btn-primary" onclick="getReport()" style="width:100%;">Generate Report</button>
+                        <div id="rpt-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
+                    </div>
+                </div>
+                <div class="dux-card">
+                    <div class="dux-card-header"><h2 class="dux-card-title">Report Output</h2></div>
+                    <div class="dux-card-body">
+                        <div id="rpt-empty" style="text-align:center;padding:40px;color:#9ca3af;">Generate a report to see results</div>
+                        <pre id="rpt-output" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;font-family:'JetBrains Mono',monospace;font-size:12px;overflow:auto;max-height:500px;white-space:pre-wrap;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== TAB: BUNDLE ========== -->
+        <div id="tab-bundle" class="tab-panel" style="display:none;">
+            <div class="dux-grid" style="grid-template-columns:1fr 1fr;gap:24px;">
+                <div class="dux-card">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">Export Bundle</h2>
+                        <p class="dux-card-subtitle">POST /v1/decisions/export → /bundle → /package</p>
+                    </div>
+                    <div class="dux-card-body">
+                        <div class="dux-form-group">
+                            <label class="dux-label">Payload JSON</label>
+                            <textarea id="bundle-body" class="dux-textarea" rows="8" placeholder='{"tenant":"acme-corp","trace_ids":["trace_abc","trace_def"]}'></textarea>
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Bearer Token (optional)</label>
+                            <input id="bundle-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                        </div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <button class="dux-btn dux-btn-secondary" onclick="callBundle('export')">Export</button>
+                            <button class="dux-btn dux-btn-secondary" onclick="callBundle('bundle')">Bundle</button>
+                            <button class="dux-btn dux-btn-secondary" onclick="callBundle('package')">Package</button>
+                        </div>
+                        <div id="bundle-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
+                    </div>
+                </div>
+                <div class="dux-card">
+                    <div class="dux-card-header"><h2 class="dux-card-title">Response</h2></div>
+                    <div class="dux-card-body">
+                        <div id="bundle-empty" style="text-align:center;padding:40px;color:#9ca3af;">Run an operation to see the response</div>
+                        <pre id="bundle-output" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;font-family:'JetBrains Mono',monospace;font-size:12px;overflow:auto;max-height:500px;white-space:pre-wrap;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== TAB: VERIFY ========== -->
+        <div id="tab-verify" class="tab-panel" style="display:none;">
+            <div class="dux-grid" style="grid-template-columns:1fr 1fr;gap:24px;">
+                <div class="dux-card">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">Verify Artifact</h2>
+                        <p class="dux-card-subtitle">POST /v1/decisions/verify — check immutable artifact integrity</p>
+                    </div>
+                    <div class="dux-card-body">
+                        <div class="dux-form-group">
+                            <label class="dux-label">Payload JSON</label>
+                            <textarea id="verify-body" class="dux-textarea" rows="8" placeholder='{"artifact_id":"artifact_xyz","checksum":"sha256:..."}'></textarea>
+                        </div>
+                        <div class="dux-form-group">
+                            <label class="dux-label">Bearer Token (optional)</label>
+                            <input id="verify-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                        </div>
+                        <button class="dux-btn dux-btn-primary" onclick="verifyArtifact()" style="width:100%;">Verify</button>
+                        <div id="verify-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
+                    </div>
+                </div>
+                <div class="dux-card">
+                    <div class="dux-card-header"><h2 class="dux-card-title">Verification Result</h2></div>
+                    <div class="dux-card-body">
+                        <div id="verify-empty" style="text-align:center;padding:40px;color:#9ca3af;">Submit an artifact to verify its integrity</div>
+                        <div id="verify-result" style="display:none;">
+                            <div id="verify-status-banner" style="padding:16px;border-radius:8px;margin-bottom:16px;font-weight:600;text-align:center;font-size:16px;"></div>
+                            <pre id="verify-output" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;font-family:'JetBrains Mono',monospace;font-size:12px;overflow:auto;max-height:400px;white-space:pre-wrap;"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .dux-tabs { display:flex;gap:4px;border-bottom:1px solid #e5e7eb;padding-bottom:0; }
+        .dux-tab { padding:10px 18px;font-size:14px;font-weight:500;color:#6b7280;background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all 0.15s; }
+        .dux-tab:hover { color:#111827; }
+        .dux-tab.active { color:#4f46e5;border-bottom-color:#4f46e5; }
+        .dux-textarea { width:100%;padding:10px 14px;border:1px solid #e5e7eb;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:13px;resize:vertical;color:#111827;box-sizing:border-box; }
+        .dux-textarea:focus { outline:none;border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,0.1); }
+    </style>
+
+    <script>
+        // Load pending decision from query page
+        window.addEventListener('DOMContentLoaded', () => {
+            const pending = sessionStorage.getItem('pending_decision');
+            if (pending) {
+                try {
+                    const d = JSON.parse(pending);
+                    document.getElementById('reg-tenant').value = d.tenant || '';
+                    document.getElementById('reg-trace-id').value = d.trace_id || '';
+                    if (d.decision_type) document.getElementById('reg-type').value = d.decision_type;
+                    if (d.citations?.length) document.getElementById('reg-citations').value = JSON.stringify(d.citations, null, 2);
+                    sessionStorage.removeItem('pending_decision');
+                } catch(e) {}
+            }
+        });
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+            document.querySelectorAll('.dux-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(`tab-${name}`).style.display = 'block';
+            event.currentTarget.classList.add('active');
+        }
+
+        function genTraceId() {
+            const id = 'trace_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now().toString(36);
+            document.getElementById('reg-trace-id').value = id;
+        }
+
+        async function registerDecision() {
+            const tenant = document.getElementById('reg-tenant').value.trim();
+            const traceId = document.getElementById('reg-trace-id').value.trim();
+            const type = document.getElementById('reg-type').value;
+            const subject = document.getElementById('reg-subject').value.trim();
+            const token = document.getElementById('reg-token').value.trim();
+            const errBox = document.getElementById('reg-error');
+
+            if (!tenant || !traceId) {
+                errBox.textContent = 'Tenant ID and Trace ID are required.';
+                errBox.style.display = 'block';
+                return;
+            }
+            errBox.style.display = 'none';
+
+            const body = { tenant, trace_id: traceId, decision_type: type };
+            if (subject) body.subject_id = subject;
+            try {
+                const citRaw = document.getElementById('reg-citations').value.trim();
+                if (citRaw) body.citations = JSON.parse(citRaw);
+                const ctxRaw = document.getElementById('reg-context').value.trim();
+                if (ctxRaw) body.context = JSON.parse(ctxRaw);
+            } catch(e) {
+                errBox.textContent = 'Invalid JSON in Citations or Context field.';
+                errBox.style.display = 'block';
+                return;
+            }
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            try {
+                const resp = await fetch('/api/v1/decisions', { method:'POST', headers, body: JSON.stringify(body) });
+                const data = await resp.json();
+                document.getElementById('reg-idle').style.display = 'none';
+                const pre = document.getElementById('reg-response');
+                pre.style.display = 'block';
+                pre.textContent = JSON.stringify(data, null, 2);
+                pre.style.borderColor = resp.ok ? '#10b981' : '#ef4444';
+                if (!resp.ok) {
+                    errBox.textContent = `HTTP ${resp.status}: ${data.detail || JSON.stringify(data)}`;
+                    errBox.style.display = 'block';
+                }
+            } catch(e) {
+                errBox.textContent = `Error: ${e.message}`;
+                errBox.style.display = 'block';
+            }
+        }
+
+        async function queryDecisions() {
+            const tenant = document.getElementById('dq-tenant').value.trim();
+            const token = document.getElementById('dq-token').value.trim();
+            const errBox = document.getElementById('dq-error');
+            if (!tenant) { errBox.textContent = 'Tenant ID is required.'; errBox.style.display = 'block'; return; }
+            errBox.style.display = 'none';
+
+            const body = { tenant, limit: parseInt(document.getElementById('dq-limit').value) || 50 };
+            const traceId = document.getElementById('dq-trace-id').value.trim();
+            const subject = document.getElementById('dq-subject').value.trim();
+            const type = document.getElementById('dq-type').value;
+            const from = document.getElementById('dq-from').value;
+            const to = document.getElementById('dq-to').value;
+            if (traceId) body.trace_id = traceId;
+            if (subject) body.subject_id = subject;
+            if (type) body.decision_type = type;
+            if (from) body.from_date = from;
+            if (to) body.to_date = to;
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            try {
+                const resp = await fetch('/api/v1/decisions/query', { method:'POST', headers, body: JSON.stringify(body) });
+                if (!resp.ok) throw new Error(await resp.text());
+                const data = await resp.json();
+                const decisions = data.decisions || data.items || (Array.isArray(data) ? data : []);
+
+                document.getElementById('dq-count').textContent = `${decisions.length} decision(s) found`;
+                document.getElementById('dq-empty').style.display = 'none';
+                const table = document.getElementById('dq-table');
+                table.style.display = 'table';
+                document.getElementById('dq-tbody').innerHTML = decisions.map(d => `
+                    <tr>
+                        <td><code style="font-size:12px;">${d.trace_id || '—'}</code></td>
+                        <td>${d.decision_type || '—'}</td>
+                        <td>${d.subject_id || '—'}</td>
+                        <td>${(d.citations || []).length}</td>
+                        <td style="font-size:13px;color:#6b7280;">${d.created_at ? new Date(d.created_at).toLocaleString() : '—'}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:24px;">No decisions found</td></tr>';
+            } catch(e) {
+                errBox.textContent = `Error: ${e.message}`;
+                errBox.style.display = 'block';
+            }
+        }
+
+        async function getReport() {
+            const tenant = document.getElementById('rpt-tenant').value.trim();
+            const token = document.getElementById('rpt-token').value.trim();
+            const from = document.getElementById('rpt-from').value;
+            const to = document.getElementById('rpt-to').value;
+            const errBox = document.getElementById('rpt-error');
+            if (!tenant) { errBox.textContent = 'Tenant ID is required.'; errBox.style.display = 'block'; return; }
+            errBox.style.display = 'none';
+
+            let url = `/api/v1/decisions/report?tenant=${encodeURIComponent(tenant)}`;
+            if (from) url += `&from_date=${from}`;
+            if (to) url += `&to_date=${to}`;
+
+            const headers = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            try {
+                const resp = await fetch(url, { headers });
+                if (!resp.ok) throw new Error(await resp.text());
+                const data = await resp.json();
+                document.getElementById('rpt-empty').style.display = 'none';
+                const pre = document.getElementById('rpt-output');
+                pre.style.display = 'block';
+                pre.textContent = JSON.stringify(data, null, 2);
+            } catch(e) {
+                errBox.textContent = `Error: ${e.message}`;
+                errBox.style.display = 'block';
+            }
+        }
+
+        async function callBundle(operation) {
+            const bodyRaw = document.getElementById('bundle-body').value.trim();
+            const token = document.getElementById('bundle-token').value.trim();
+            const errBox = document.getElementById('bundle-error');
+            errBox.style.display = 'none';
+
+            let body;
+            try { body = bodyRaw ? JSON.parse(bodyRaw) : {}; } catch(e) {
+                errBox.textContent = 'Invalid JSON payload.'; errBox.style.display = 'block'; return;
+            }
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            try {
+                const resp = await fetch(`/api/v1/decisions/${operation}`, { method:'POST', headers, body: JSON.stringify(body) });
+                const data = await resp.json();
+                document.getElementById('bundle-empty').style.display = 'none';
+                const pre = document.getElementById('bundle-output');
+                pre.style.display = 'block';
+                pre.textContent = JSON.stringify(data, null, 2);
+                pre.style.borderColor = resp.ok ? '#10b981' : '#ef4444';
+            } catch(e) {
+                errBox.textContent = `Error: ${e.message}`;
+                errBox.style.display = 'block';
+            }
+        }
+
+        async function verifyArtifact() {
+            const bodyRaw = document.getElementById('verify-body').value.trim();
+            const token = document.getElementById('verify-token').value.trim();
+            const errBox = document.getElementById('verify-error');
+            errBox.style.display = 'none';
+
+            let body;
+            try { body = bodyRaw ? JSON.parse(bodyRaw) : {}; } catch(e) {
+                errBox.textContent = 'Invalid JSON payload.'; errBox.style.display = 'block'; return;
+            }
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            try {
+                const resp = await fetch('/api/v1/decisions/verify', { method:'POST', headers, body: JSON.stringify(body) });
+                const data = await resp.json();
+                document.getElementById('verify-empty').style.display = 'none';
+                const result = document.getElementById('verify-result');
+                result.style.display = 'block';
+                const banner = document.getElementById('verify-status-banner');
+                const valid = data.valid === true || data.status === 'valid' || resp.ok;
+                banner.textContent = valid ? '✓ Artifact integrity verified' : '✗ Integrity check failed';
+                banner.style.background = valid ? '#d1fae5' : '#fee2e2';
+                banner.style.color = valid ? '#065f46' : '#991b1b';
+                document.getElementById('verify-output').textContent = JSON.stringify(data, null, 2);
+            } catch(e) {
+                errBox.textContent = `Error: ${e.message}`;
+                errBox.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,877 @@
+/*
+ * DUX - Soviet Sputnik Style (1950s)
+ * Constructivist, austere, geometric
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Roboto+Condensed:wght@400;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+    --white: #ffffff;
+    --off-white: #f5f5f0;
+    --gray-100: #e8e8e3;
+    --gray-200: #d0d0c8;
+    --gray-300: #a0a098;
+    --gray-400: #707068;
+    --gray-500: #505048;
+    --gray-600: #383830;
+    --gray-700: #282820;
+    --gray-800: #181810;
+    --gray-900: #0a0a08;
+    --black: #000000;
+
+    --navy: #0c1929;
+    --navy-light: #1a2d44;
+    --navy-dark: #060d14;
+
+    --accent: #1e3a5f;
+    --accent-light: #2d4a6f;
+    --accent-dark: #0f1f33;
+
+    --red: #8b1a1a;
+    --red-light: #a62626;
+
+    --success: #1a5f1a;
+    --warning: #8b6914;
+    --error: #8b1a1a;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Roboto Condensed', 'Inter', sans-serif;
+    background: var(--off-white);
+    color: var(--gray-900);
+    line-height: 1.5;
+    min-height: 100vh;
+}
+
+/* ========================================
+   HEADER / NAVIGATION
+   ======================================== */
+.dux-header {
+    background: var(--navy);
+    border-bottom: 4px solid var(--black);
+    padding: 0 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: stretch;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    min-height: 64px;
+}
+
+.dux-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    padding: 12px 0;
+}
+
+.dux-logo-icon {
+    width: 44px;
+    height: 44px;
+    background: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 20px;
+    color: var(--navy);
+    border: 2px solid var(--white);
+}
+
+.dux-logo-text {
+    font-family: 'Oswald', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+}
+
+/* Navigation */
+.dux-nav {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+}
+
+.dux-nav-item {
+    padding: 20px 24px;
+    color: var(--gray-200);
+    text-decoration: none;
+    font-family: 'Oswald', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: all 0.15s;
+    border-left: 1px solid var(--navy-light);
+    display: flex;
+    align-items: center;
+}
+
+.dux-nav-item:last-child {
+    border-right: 1px solid var(--navy-light);
+}
+
+.dux-nav-item:hover {
+    background: var(--navy-light);
+    color: var(--white);
+}
+
+.dux-nav-item.active {
+    background: var(--white);
+    color: var(--navy);
+}
+
+/* ========================================
+   CONTAINER / LAYOUT
+   ======================================== */
+.dux-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px;
+}
+
+/* Page Title */
+.dux-page-title {
+    margin-bottom: 32px;
+    padding-bottom: 24px;
+    border-bottom: 3px solid var(--navy);
+}
+
+.dux-page-title h1 {
+    font-family: 'Oswald', sans-serif;
+    font-size: 42px;
+    font-weight: 700;
+    color: var(--navy);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+.dux-page-title p {
+    font-size: 16px;
+    color: var(--gray-500);
+    letter-spacing: 1px;
+}
+
+/* ========================================
+   STATS GRID
+   ======================================== */
+.dux-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin-bottom: 32px;
+    border: 3px solid var(--navy);
+}
+
+.dux-stat-card {
+    background: var(--white);
+    border-right: 1px solid var(--gray-200);
+    padding: 28px 24px;
+    transition: all 0.15s;
+    position: relative;
+}
+
+.dux-stat-card:last-child {
+    border-right: none;
+}
+
+.dux-stat-card:hover {
+    background: var(--navy);
+}
+
+.dux-stat-card:hover .dux-stat-value,
+.dux-stat-card:hover .dux-stat-label,
+.dux-stat-card:hover .dux-stat-icon {
+    color: var(--white);
+}
+
+.dux-stat-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--navy);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    color: var(--white);
+}
+
+.dux-stat-card:hover .dux-stat-icon {
+    background: var(--white);
+    color: var(--navy);
+}
+
+.dux-stat-icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+.dux-stat-value {
+    font-family: 'Oswald', sans-serif;
+    font-size: 40px;
+    font-weight: 700;
+    color: var(--navy);
+    margin-bottom: 4px;
+    letter-spacing: 1px;
+}
+
+.dux-stat-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+/* ========================================
+   CARDS
+   ======================================== */
+.dux-card {
+    background: var(--white);
+    border: 2px solid var(--navy);
+    overflow: hidden;
+}
+
+.dux-card-header {
+    padding: 16px 24px;
+    background: var(--navy);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.dux-card-title {
+    font-family: 'Oswald', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--white);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.dux-card-body {
+    padding: 24px;
+}
+
+/* ========================================
+   GRID LAYOUTS
+   ======================================== */
+.dux-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+}
+
+.dux-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border: 2px solid var(--navy);
+}
+
+.dux-grid-3 > * {
+    border-right: 2px solid var(--navy);
+}
+
+.dux-grid-3 > *:last-child {
+    border-right: none;
+}
+
+.dux-main-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+/* ========================================
+   BUTTONS
+   ======================================== */
+.dux-btn {
+    padding: 14px 28px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    transition: all 0.15s;
+    cursor: pointer;
+    border: 2px solid var(--navy);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.dux-btn-primary {
+    background: var(--navy);
+    color: var(--white);
+    border-color: var(--navy);
+}
+
+.dux-btn-primary:hover {
+    background: var(--black);
+    border-color: var(--black);
+}
+
+.dux-btn-secondary {
+    background: var(--white);
+    color: var(--navy);
+    border-color: var(--navy);
+}
+
+.dux-btn-secondary:hover {
+    background: var(--navy);
+    color: var(--white);
+}
+
+.dux-btn-danger {
+    background: var(--white);
+    color: var(--red);
+    border-color: var(--red);
+}
+
+.dux-btn-danger:hover {
+    background: var(--red);
+    color: var(--white);
+}
+
+.dux-btn-sm {
+    padding: 10px 18px;
+    font-size: 12px;
+}
+
+/* ========================================
+   INPUTS
+   ======================================== */
+.dux-input-group {
+    margin-bottom: 20px;
+}
+
+.dux-input-label {
+    display: block;
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.dux-input {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--white);
+    border: 2px solid var(--gray-300);
+    font-family: 'Roboto Condensed', sans-serif;
+    font-size: 15px;
+    color: var(--gray-900);
+    transition: all 0.15s;
+}
+
+.dux-input:focus {
+    outline: none;
+    border-color: var(--navy);
+    box-shadow: 4px 4px 0 var(--navy);
+}
+
+.dux-input::placeholder {
+    color: var(--gray-400);
+}
+
+.dux-select {
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--white);
+    border: 2px solid var(--gray-300);
+    font-family: 'Roboto Condensed', sans-serif;
+    font-size: 15px;
+    color: var(--gray-900);
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%230c1929' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+}
+
+.dux-select:focus {
+    outline: none;
+    border-color: var(--navy);
+}
+
+/* ========================================
+   CONNECTOR LIST
+   ======================================== */
+.dux-connector-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.dux-connector-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    background: var(--white);
+    border-bottom: 1px solid var(--gray-200);
+    transition: all 0.15s;
+    cursor: pointer;
+}
+
+.dux-connector-item:hover {
+    background: var(--off-white);
+}
+
+.dux-connector-item:last-child {
+    border-bottom: none;
+}
+
+.dux-connector-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--navy);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--white);
+    letter-spacing: 1px;
+}
+
+.dux-connector-info {
+    flex: 1;
+}
+
+.dux-connector-name {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 2px;
+}
+
+.dux-connector-desc {
+    font-size: 13px;
+    color: var(--gray-500);
+}
+
+.dux-connector-status {
+    padding: 8px 16px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.dux-connector-status.active {
+    background: var(--success);
+    color: var(--white);
+}
+
+.dux-connector-status.pending {
+    background: var(--warning);
+    color: var(--white);
+}
+
+.dux-connector-status.syncing {
+    background: var(--accent);
+    color: var(--white);
+}
+
+/* ========================================
+   QUALITY METRICS
+   ======================================== */
+.dux-quality-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+    border: 1px solid var(--gray-200);
+}
+
+.dux-quality-item {
+    background: var(--white);
+    border-right: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--gray-200);
+    padding: 20px;
+    text-align: center;
+}
+
+.dux-quality-item:nth-child(2n) {
+    border-right: none;
+}
+
+.dux-quality-item:nth-last-child(-n+2) {
+    border-bottom: none;
+}
+
+.dux-quality-score {
+    font-family: 'Oswald', sans-serif;
+    font-size: 36px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.dux-quality-score.high { color: var(--success); }
+.dux-quality-score.medium { color: var(--warning); }
+.dux-quality-score.low { color: var(--error); }
+
+.dux-quality-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 11px;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* ========================================
+   PROGRESS BAR
+   ======================================== */
+.dux-progress {
+    height: 12px;
+    background: var(--gray-200);
+    overflow: hidden;
+}
+
+.dux-progress-bar {
+    height: 100%;
+    background: var(--navy);
+    transition: width 0.5s ease;
+}
+
+.dux-progress-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.dux-progress-label span:first-child {
+    color: var(--gray-600);
+}
+
+.dux-progress-label span:last-child {
+    font-weight: 700;
+    color: var(--navy);
+}
+
+/* ========================================
+   TERMINAL / LOG
+   ======================================== */
+.dux-terminal {
+    background: var(--black);
+    padding: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 2px solid var(--navy);
+}
+
+.dux-terminal-line {
+    display: flex;
+    margin-bottom: 8px;
+    line-height: 1.6;
+}
+
+.dux-terminal-time {
+    color: var(--gray-500);
+    margin-right: 16px;
+    min-width: 80px;
+}
+
+.dux-terminal-msg {
+    color: var(--gray-300);
+}
+
+.dux-terminal-msg.success { color: #4ade80; }
+.dux-terminal-msg.error { color: #f87171; }
+.dux-terminal-msg.info { color: #60a5fa; }
+.dux-terminal-msg.warning { color: #fbbf24; }
+
+/* ========================================
+   TABLES
+   ======================================== */
+.dux-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.dux-table th {
+    text-align: left;
+    padding: 16px 20px;
+    background: var(--navy);
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--white);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.dux-table td {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--gray-200);
+    font-size: 14px;
+}
+
+.dux-table tr:hover td {
+    background: var(--off-white);
+}
+
+/* ========================================
+   BADGES
+   ======================================== */
+.dux-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.dux-badge-success {
+    background: var(--success);
+    color: var(--white);
+}
+
+.dux-badge-warning {
+    background: var(--warning);
+    color: var(--white);
+}
+
+.dux-badge-error {
+    background: var(--error);
+    color: var(--white);
+}
+
+.dux-badge-info {
+    background: var(--accent);
+    color: var(--white);
+}
+
+/* ========================================
+   COST CARDS
+   ======================================== */
+.dux-cost-card {
+    background: var(--off-white);
+    border: 1px solid var(--gray-200);
+    padding: 20px;
+    margin-bottom: 12px;
+}
+
+.dux-cost-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.dux-cost-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.dux-cost-value {
+    font-family: 'Oswald', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--navy);
+}
+
+.dux-cost-unit {
+    font-size: 14px;
+    color: var(--gray-500);
+    margin-left: 4px;
+}
+
+/* ========================================
+   FOOTER
+   ======================================== */
+.dux-footer {
+    text-align: center;
+    padding: 40px 32px;
+    margin-top: 48px;
+    background: var(--navy);
+    border-top: 4px solid var(--black);
+}
+
+.dux-footer-logo {
+    font-family: 'Oswald', sans-serif;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+.dux-footer-text {
+    font-size: 13px;
+    color: var(--gray-400);
+    letter-spacing: 1px;
+}
+
+/* ========================================
+   DECORATIVE ELEMENTS
+   ======================================== */
+.soviet-star {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background: var(--navy);
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+
+.soviet-divider {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin: 32px 0;
+}
+
+.soviet-divider::before,
+.soviet-divider::after {
+    content: '';
+    flex: 1;
+    height: 3px;
+    background: var(--navy);
+}
+
+.soviet-divider .star {
+    width: 16px;
+    height: 16px;
+    background: var(--navy);
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+@media (max-width: 1200px) {
+    .dux-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .dux-stats-grid .dux-stat-card:nth-child(2) {
+        border-right: none;
+    }
+
+    .dux-stats-grid .dux-stat-card:nth-child(1),
+    .dux-stats-grid .dux-stat-card:nth-child(2) {
+        border-bottom: 1px solid var(--gray-200);
+    }
+
+    .dux-main-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .dux-header {
+        padding: 0 20px;
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .dux-nav {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: center;
+        border-top: 1px solid var(--navy-light);
+    }
+
+    .dux-nav-item {
+        padding: 14px 16px;
+        font-size: 12px;
+    }
+
+    .dux-container {
+        padding: 20px;
+    }
+
+    .dux-stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dux-stats-grid .dux-stat-card {
+        border-right: none;
+        border-bottom: 1px solid var(--gray-200);
+    }
+
+    .dux-stats-grid .dux-stat-card:last-child {
+        border-bottom: none;
+    }
+
+    .dux-grid-2, .dux-grid-3 {
+        grid-template-columns: 1fr;
+    }
+
+    .dux-page-title h1 {
+        font-size: 32px;
+    }
+}
+
+/* ========================================
+   SCROLLBAR
+   ======================================== */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--gray-200);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--navy);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--black);
+}
+
+/* ========================================
+   ANIMATIONS (subtle, industrial)
+   ======================================== */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.dux-fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* No rounded corners anywhere - override any inline styles */
+* {
+    border-radius: 0 !important;
+}

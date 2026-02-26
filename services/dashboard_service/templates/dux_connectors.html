@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alchimista - GCS Connectors</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dux-minimal.css">
+</head>
+<body>
+    <header class="dux-header">
+        <a href="/" class="dux-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none;">
+            <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height:32px;width:auto;">
+            <span style="font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#111827;letter-spacing:-0.5px;">Alchimista</span>
+        </a>
+        <nav class="dux-nav">
+            <a href="/dashboard" class="dux-nav-item">Dashboard</a>
+            <a href="/ingest" class="dux-nav-item">Ingest</a>
+            <a href="/connectors" class="dux-nav-item active">Connectors</a>
+            <a href="/query" class="dux-nav-item">Query</a>
+            <a href="/decisions" class="dux-nav-item">Decisions</a>
+            <a href="/governance" class="dux-nav-item">Governance</a>
+            <a href="/monitoring" class="dux-nav-item">Monitoring</a>
+            <a href="/quality" class="dux-nav-item">Quality</a>
+            <a href="/settings" class="dux-nav-item">Settings</a>
+            <a href="/guide" class="dux-nav-item">Guide</a>
+        </nav>
+    </header>
+
+    <div class="dux-container">
+        <div class="dux-page-title dux-fade-in">
+            <h1>GCS Connectors</h1>
+            <p>Bulk-import documents from Google Cloud Storage buckets into the ingestion pipeline via <code>POST /v1/connectors/gcs/import</code>.</p>
+        </div>
+
+        <div class="dux-grid" style="grid-template-columns:400px 1fr;gap:24px;align-items:start;">
+
+            <!-- Import Form -->
+            <div class="dux-card dux-fade-in">
+                <div class="dux-card-header">
+                    <h2 class="dux-card-title">GCS Bulk Import</h2>
+                    <p class="dux-card-subtitle">POST /v1/connectors/gcs/import</p>
+                </div>
+                <div class="dux-card-body">
+                    <div class="dux-form-group">
+                        <label class="dux-label">Tenant ID <span style="color:#ef4444;">*</span></label>
+                        <input id="gcs-tenant" class="dux-input" type="text" placeholder="e.g. acme-corp">
+                    </div>
+                    <div class="dux-form-group">
+                        <label class="dux-label">GCS Bucket <span style="color:#ef4444;">*</span></label>
+                        <input id="gcs-bucket" class="dux-input" type="text" placeholder="e.g. my-documents-bucket">
+                        <small style="color:#6b7280;font-size:12px;">Bucket name without gs:// prefix</small>
+                    </div>
+                    <div class="dux-form-group">
+                        <label class="dux-label">Prefix (optional)</label>
+                        <input id="gcs-prefix" class="dux-input" type="text" placeholder="e.g. regulations/2025/">
+                        <small style="color:#6b7280;font-size:12px;">Only import objects with this prefix</small>
+                    </div>
+                    <div class="dux-form-group">
+                        <label class="dux-label">Document Type (optional)</label>
+                        <select id="gcs-doctype" class="dux-select">
+                            <option value="">— auto-detect —</option>
+                            <option value="regulation">Regulation</option>
+                            <option value="directive">Directive</option>
+                            <option value="ruling">Court Ruling</option>
+                            <option value="policy">Policy</option>
+                            <option value="contract">Contract</option>
+                            <option value="report">Report</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="dux-form-group">
+                        <label class="dux-label">Bearer Token (optional)</label>
+                        <input id="gcs-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                    </div>
+                    <button class="dux-btn dux-btn-primary" onclick="triggerImport()" style="width:100%;" id="gcs-submit-btn">
+                        Start GCS Import
+                    </button>
+                    <div id="gcs-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
+                </div>
+            </div>
+
+            <!-- Right side: info + response -->
+            <div class="dux-fade-in" style="display:flex;flex-direction:column;gap:20px;">
+
+                <!-- How it works -->
+                <div class="dux-card">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">How GCS Import Works</h2>
+                    </div>
+                    <div class="dux-card-body">
+                        <div style="display:flex;flex-direction:column;gap:16px;">
+                            <div style="display:flex;gap:14px;align-items:flex-start;">
+                                <div style="width:28px;height:28px;border-radius:50%;background:#4f46e5;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">1</div>
+                                <div>
+                                    <div style="font-weight:600;font-size:14px;margin-bottom:2px;">Object Enumeration</div>
+                                    <div style="font-size:13px;color:#6b7280;">The ingestion service lists all objects in the bucket matching the optional prefix filter.</div>
+                                </div>
+                            </div>
+                            <div style="display:flex;gap:14px;align-items:flex-start;">
+                                <div style="width:28px;height:28px;border-radius:50%;background:#4f46e5;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">2</div>
+                                <div>
+                                    <div style="font-weight:600;font-size:14px;margin-bottom:2px;">Pub/Sub Queue</div>
+                                    <div style="font-size:13px;color:#6b7280;">Each object is queued as an individual ingest job in Pub/Sub for parallel processing.</div>
+                                </div>
+                            </div>
+                            <div style="display:flex;gap:14px;align-items:flex-start;">
+                                <div style="width:28px;height:28px;border-radius:50%;background:#4f46e5;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">3</div>
+                                <div>
+                                    <div style="font-weight:600;font-size:14px;margin-bottom:2px;">Document Processing</div>
+                                    <div style="font-size:13px;color:#6b7280;">The processor chunks each document, generates embeddings via Vertex AI or OpenAI, and stores results in PostgreSQL + Vertex Vector Search.</div>
+                                </div>
+                            </div>
+                            <div style="display:flex;gap:14px;align-items:flex-start;">
+                                <div style="width:28px;height:28px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">✓</div>
+                                <div>
+                                    <div style="font-weight:600;font-size:14px;margin-bottom:2px;">Ready for Query</div>
+                                    <div style="font-size:13px;color:#6b7280;">Documents with job status <code>SUCCEEDED</code> are indexed and available for RAG queries.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Import response -->
+                <div class="dux-card" id="import-response-card" style="display:none;">
+                    <div class="dux-card-header">
+                        <h2 class="dux-card-title">Import Response</h2>
+                    </div>
+                    <div class="dux-card-body">
+                        <div id="import-response-stats" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;"></div>
+                        <pre id="import-response-raw" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px;font-family:'JetBrains Mono',monospace;font-size:12px;overflow:auto;max-height:250px;white-space:pre-wrap;"></pre>
+                        <div style="margin-top:12px;">
+                            <a href="/monitoring" class="dux-btn dux-btn-secondary" style="text-decoration:none;display:inline-block;">View Job Queue in Monitoring →</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Import History -->
+        <div class="dux-card dux-fade-in" style="margin-top:24px;">
+            <div class="dux-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <h2 class="dux-card-title">Import History</h2>
+                    <p class="dux-card-subtitle">This session</p>
+                </div>
+                <button class="dux-btn dux-btn-ghost" onclick="clearHistory()">Clear</button>
+            </div>
+            <div class="dux-card-body" style="padding:0;">
+                <table class="dux-table">
+                    <thead>
+                        <tr><th>Bucket</th><th>Prefix</th><th>Tenant</th><th>Jobs Queued</th><th>Time</th></tr>
+                    </thead>
+                    <tbody id="import-history-tbody">
+                        <tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:32px;">No imports yet</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .stat-chip { background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;text-align:center; }
+        .stat-chip-value { font-size:20px;font-weight:700;color:#111827;word-break:break-all; }
+        .stat-chip-label { font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;margin-top:2px; }
+    </style>
+
+    <script>
+        const importHistory = [];
+
+        async function triggerImport() {
+            const tenant  = document.getElementById('gcs-tenant').value.trim();
+            const bucket  = document.getElementById('gcs-bucket').value.trim();
+            const prefix  = document.getElementById('gcs-prefix').value.trim();
+            const docType = document.getElementById('gcs-doctype').value;
+            const token   = document.getElementById('gcs-token').value.trim();
+            const errBox  = document.getElementById('gcs-error');
+
+            if (!tenant || !bucket) {
+                errBox.textContent = 'Tenant ID and GCS Bucket are required.';
+                errBox.style.display = 'block';
+                return;
+            }
+            errBox.style.display = 'none';
+
+            const body = { tenant, bucket };
+            if (prefix)  body.prefix   = prefix;
+            if (docType) body.doc_type = docType;
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const btn = document.getElementById('gcs-submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Starting…';
+
+            try {
+                const resp = await fetch('/api/v1/connectors/gcs/import', {
+                    method: 'POST', headers, body: JSON.stringify(body),
+                });
+                if (!resp.ok) throw new Error(await resp.text());
+                const data = await resp.json();
+
+                const queued = data.jobs_queued ?? data.queued ?? data.count ?? '?';
+
+                const card = document.getElementById('import-response-card');
+                card.style.display = 'block';
+                document.getElementById('import-response-stats').innerHTML = `
+                    <div class="stat-chip"><div class="stat-chip-value">${queued}</div><div class="stat-chip-label">Jobs Queued</div></div>
+                    <div class="stat-chip"><div class="stat-chip-value" style="font-size:14px;">${bucket}</div><div class="stat-chip-label">Bucket</div></div>
+                    <div class="stat-chip"><div class="stat-chip-value" style="font-size:14px;">${tenant}</div><div class="stat-chip-label">Tenant</div></div>
+                `;
+                document.getElementById('import-response-raw').textContent = JSON.stringify(data, null, 2);
+
+                importHistory.unshift({ bucket, prefix: prefix || '(all)', tenant, queued, time: new Date().toLocaleTimeString() });
+                renderHistory();
+
+            } catch(e) {
+                errBox.textContent = `Error: ${e.message}`;
+                errBox.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Start GCS Import';
+            }
+        }
+
+        function renderHistory() {
+            const tbody = document.getElementById('import-history-tbody');
+            if (importHistory.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#9ca3af;padding:32px;">No imports yet</td></tr>';
+                return;
+            }
+            tbody.innerHTML = importHistory.map(h => `
+                <tr>
+                    <td><code style="font-size:12px;">gs://${h.bucket}</code></td>
+                    <td style="color:#6b7280;font-size:13px;">${h.prefix}</td>
+                    <td>${h.tenant}</td>
+                    <td><span class="dux-badge">${h.queued}</span></td>
+                    <td style="color:#6b7280;font-size:13px;">${h.time}</td>
+                </tr>
+            `).join('');
+        }
+
+        function clearHistory() {
+            importHistory.length = 0;
+            renderHistory();
+        }
+    </script>
+</body>
+</html>
