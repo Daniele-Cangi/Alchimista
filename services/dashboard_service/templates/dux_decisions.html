@@ -91,7 +91,13 @@
                         </div>
                         <div class="dux-form-group">
                             <label class="dux-label">Bearer Token (optional)</label>
-                            <input id="reg-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                            <div style="display:flex;gap:8px;">
+                                <input id="reg-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9..." style="flex:1;">
+                                <button class="dux-btn dux-btn-ghost" type="button" onclick="loadTestTokenForDecisionForms()" style="white-space:nowrap;">
+                                    Use Test Token
+                                </button>
+                            </div>
+                            <small style="color:#6b7280;font-size:12px;">Fills token in all Decisions tabs.</small>
                         </div>
                         <button class="dux-btn dux-btn-primary" onclick="registerDecision()" style="width:100%;">Register Decision</button>
                         <div id="reg-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
@@ -162,7 +168,10 @@
                         </div>
                         <div class="dux-form-group">
                             <label class="dux-label">Bearer Token (optional)</label>
-                            <input id="dq-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                            <div style="display:flex;gap:8px;">
+                                <input id="dq-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9..." style="flex:1;">
+                                <button class="dux-btn dux-btn-ghost" type="button" onclick="loadTestTokenForDecisionForms()">Use Test Token</button>
+                            </div>
                         </div>
                         <button class="dux-btn dux-btn-primary" onclick="queryDecisions()" style="width:100%;">Search</button>
                         <div id="dq-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
@@ -209,7 +218,10 @@
                         </div>
                         <div class="dux-form-group">
                             <label class="dux-label">Bearer Token (optional)</label>
-                            <input id="rpt-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                            <div style="display:flex;gap:8px;">
+                                <input id="rpt-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9..." style="flex:1;">
+                                <button class="dux-btn dux-btn-ghost" type="button" onclick="loadTestTokenForDecisionForms()">Use Test Token</button>
+                            </div>
                         </div>
                         <button class="dux-btn dux-btn-primary" onclick="getReport()" style="width:100%;">Generate Report</button>
                         <div id="rpt-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
@@ -240,7 +252,10 @@
                         </div>
                         <div class="dux-form-group">
                             <label class="dux-label">Bearer Token (optional)</label>
-                            <input id="bundle-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                            <div style="display:flex;gap:8px;">
+                                <input id="bundle-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9..." style="flex:1;">
+                                <button class="dux-btn dux-btn-ghost" type="button" onclick="loadTestTokenForDecisionForms()">Use Test Token</button>
+                            </div>
                         </div>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;">
                             <button class="dux-btn dux-btn-secondary" onclick="callBundle('export')">Export</button>
@@ -275,7 +290,10 @@
                         </div>
                         <div class="dux-form-group">
                             <label class="dux-label">Bearer Token (optional)</label>
-                            <input id="verify-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                            <div style="display:flex;gap:8px;">
+                                <input id="verify-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9..." style="flex:1;">
+                                <button class="dux-btn dux-btn-ghost" type="button" onclick="loadTestTokenForDecisionForms()">Use Test Token</button>
+                            </div>
                         </div>
                         <button class="dux-btn dux-btn-primary" onclick="verifyArtifact()" style="width:100%;">Verify</button>
                         <div id="verify-error" class="dux-alert dux-alert-error" style="display:none;margin-top:12px;"></div>
@@ -305,8 +323,46 @@
     </style>
 
     <script>
+        const TOKEN_STORE_KEY = 'alchimista_ui_bearer_token';
+        const DECISION_TOKEN_FIELDS = ['reg-token', 'dq-token', 'rpt-token', 'bundle-token', 'verify-token'];
+
+        function getStoredToken() {
+            try { return sessionStorage.getItem(TOKEN_STORE_KEY) || ''; } catch (e) { return ''; }
+        }
+
+        function setStoredToken(token) {
+            if (!token) return;
+            try { sessionStorage.setItem(TOKEN_STORE_KEY, token); } catch (e) {}
+        }
+
+        function applyTokenToDecisionForms(token) {
+            DECISION_TOKEN_FIELDS.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = token;
+            });
+        }
+
+        async function loadTestTokenForDecisionForms() {
+            const errBox = document.getElementById('reg-error');
+            try {
+                const resp = await fetch('/api/v1/auth/test-token', { method: 'POST' });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
+                const token = String(data.access_token || '').trim();
+                if (!token) throw new Error('Missing access_token in response');
+                applyTokenToDecisionForms(token);
+                setStoredToken(token);
+                errBox.style.display = 'none';
+            } catch (e) {
+                errBox.textContent = `Token error: ${e.message}`;
+                errBox.style.display = 'block';
+            }
+        }
+
         // Load pending decision from query page
         window.addEventListener('DOMContentLoaded', () => {
+            const storedToken = getStoredToken();
+            if (storedToken) applyTokenToDecisionForms(storedToken);
             const pending = sessionStorage.getItem('pending_decision');
             if (pending) {
                 try {
@@ -362,6 +418,7 @@
 
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
+            if (token) setStoredToken(token);
 
             try {
                 const resp = await fetch('/api/v1/decisions', { method:'POST', headers, body: JSON.stringify(body) });
@@ -402,6 +459,7 @@
 
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
+            if (token) setStoredToken(token);
 
             try {
                 const resp = await fetch('/api/v1/decisions/query', { method:'POST', headers, body: JSON.stringify(body) });
@@ -443,6 +501,7 @@
 
             const headers = {};
             if (token) headers['Authorization'] = `Bearer ${token}`;
+            if (token) setStoredToken(token);
 
             try {
                 const resp = await fetch(url, { headers });
@@ -471,6 +530,7 @@
 
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
+            if (token) setStoredToken(token);
 
             try {
                 const resp = await fetch(`/api/v1/decisions/${operation}`, { method:'POST', headers, body: JSON.stringify(body) });
@@ -499,6 +559,7 @@
 
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
+            if (token) setStoredToken(token);
 
             try {
                 const resp = await fetch('/api/v1/decisions/verify', { method:'POST', headers, body: JSON.stringify(body) });

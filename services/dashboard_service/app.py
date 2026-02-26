@@ -24,6 +24,19 @@ PROCESSOR_URL = os.getenv("PROCESSOR_URL", "http://localhost:8012")
 RAG_URL = os.getenv("RAG_URL", "http://localhost:8013")
 ADMIN_KEY = os.getenv("ADMIN_KEY", "")
 
+# Optional demo convenience mode. Keep disabled in hardened environments.
+DASHBOARD_ENABLE_TEST_TOKEN = os.getenv("DASHBOARD_ENABLE_TEST_TOKEN", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+AUTH0_TEST_DOMAIN = os.getenv("AUTH0_TEST_DOMAIN", "alchimista.eu.auth0.com").strip()
+AUTH0_TEST_AUDIENCE = os.getenv("AUTH0_TEST_AUDIENCE", "https://api.alchimista.ai").strip()
+AUTH0_TEST_CLIENT_ID = os.getenv("AUTH0_TEST_CLIENT_ID", "").strip()
+AUTH0_TEST_CLIENT_SECRET = os.getenv("AUTH0_TEST_CLIENT_SECRET", "").strip()
+_TEST_TOKEN_CACHE: dict[str, Any] = {"access_token": "", "token_type": "Bearer", "expires_in": 0, "expires_at": 0.0}
+
 
 # ==================== APP SETUP ====================
 
@@ -104,6 +117,74 @@ def _effective_admin_key(x_admin_key: str | None) -> str | None:
     if ADMIN_KEY:
         return ADMIN_KEY
     return None
+
+
+def _mint_auth0_test_token() -> dict[str, Any]:
+    if not DASHBOARD_ENABLE_TEST_TOKEN:
+        raise HTTPException(
+            status_code=403,
+            detail="Test token endpoint is disabled. Enable DASHBOARD_ENABLE_TEST_TOKEN=true for test environments.",
+        )
+    if not AUTH0_TEST_CLIENT_ID or not AUTH0_TEST_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=503,
+            detail="AUTH0_TEST_CLIENT_ID/AUTH0_TEST_CLIENT_SECRET are not configured.",
+        )
+    if not AUTH0_TEST_DOMAIN or not AUTH0_TEST_AUDIENCE:
+        raise HTTPException(
+            status_code=503,
+            detail="AUTH0_TEST_DOMAIN/AUTH0_TEST_AUDIENCE are not configured.",
+        )
+
+    now = time.time()
+    cached_token = str(_TEST_TOKEN_CACHE.get("access_token") or "")
+    cached_expiry = float(_TEST_TOKEN_CACHE.get("expires_at") or 0.0)
+    if cached_token and cached_expiry > now + 30:
+        return {
+            "access_token": cached_token,
+            "token_type": str(_TEST_TOKEN_CACHE.get("token_type") or "Bearer"),
+            "expires_in": max(0, int(cached_expiry - now)),
+        }
+
+    token_url = f"https://{AUTH0_TEST_DOMAIN}/oauth/token"
+    payload = {
+        "grant_type": "client_credentials",
+        "client_id": AUTH0_TEST_CLIENT_ID,
+        "client_secret": AUTH0_TEST_CLIENT_SECRET,
+        "audience": AUTH0_TEST_AUDIENCE,
+    }
+    try:
+        response = requests.post(token_url, json=payload, timeout=15)
+        body = _decode_json(response)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Unable to reach Auth0 token endpoint: {exc}") from exc
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Auth0 token request failed ({response.status_code}): {body.get('error_description') or body.get('detail') or body}",
+        )
+
+    token = str(body.get("access_token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=502, detail=f"Auth0 token response missing access_token: {body}")
+
+    token_type = str(body.get("token_type") or "Bearer")
+    expires_in = int(body.get("expires_in") or 3600)
+    _TEST_TOKEN_CACHE.update(
+        {
+            "access_token": token,
+            "token_type": token_type,
+            "expires_in": expires_in,
+            "expires_at": now + max(1, expires_in),
+        }
+    )
+
+    return {
+        "access_token": token,
+        "token_type": token_type,
+        "expires_in": expires_in,
+    }
 
 
 def _date_floor(value: str | None) -> str | None:
@@ -926,6 +1007,11 @@ async def api_health_all():
 
 # ==================== SETTINGS API ====================
 
+@app.post("/api/v1/auth/test-token")
+async def api_auth_test_token():
+    return _mint_auth0_test_token()
+
+
 @app.get("/api/settings")
 async def api_get_settings():
     return {
@@ -934,6 +1020,7 @@ async def api_get_settings():
         "rag_url": RAG_URL,
         "decisions_and_governance_url": INGEST_URL,
         "admin_key_configured": bool(ADMIN_KEY),
+        "test_token_enabled": DASHBOARD_ENABLE_TEST_TOKEN,
     }
 
 

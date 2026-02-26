@@ -69,7 +69,11 @@
                     </div>
                     <div class="dux-form-group">
                         <label class="dux-label">Bearer Token (optional)</label>
-                        <input id="ingest-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                        <div style="display:flex;gap:8px;">
+                            <input id="ingest-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9..." style="flex:1;">
+                            <button class="dux-btn dux-btn-ghost" type="button" onclick="loadIngestTestToken()">Use Test Token</button>
+                        </div>
+                        <small style="color:#6b7280;font-size:12px;">Uses server endpoint <code>/api/v1/auth/test-token</code> when enabled.</small>
                     </div>
                     <button class="dux-btn dux-btn-primary" onclick="submitIngest()" style="width:100%;">
                         Submit Ingest Job
@@ -186,6 +190,33 @@
     <script>
         const sessionJobs = [];
         let pollInterval = null;
+        const TOKEN_STORE_KEY = 'alchimista_ui_bearer_token';
+
+        function getStoredToken() {
+            try { return sessionStorage.getItem(TOKEN_STORE_KEY) || ''; } catch (e) { return ''; }
+        }
+
+        function setStoredToken(token) {
+            if (!token) return;
+            try { sessionStorage.setItem(TOKEN_STORE_KEY, token); } catch (e) {}
+        }
+
+        async function loadIngestTestToken() {
+            const errBox = document.getElementById('ingest-error');
+            try {
+                const resp = await fetch('/api/v1/auth/test-token', { method: 'POST' });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
+                const token = String(data.access_token || '').trim();
+                if (!token) throw new Error('Missing access_token in response');
+                document.getElementById('ingest-token').value = token;
+                setStoredToken(token);
+                errBox.style.display = 'none';
+            } catch (e) {
+                errBox.textContent = `Token error: ${e.message}`;
+                errBox.style.display = 'block';
+            }
+        }
 
         async function submitIngest() {
             const tenant   = document.getElementById('ingest-tenant').value.trim();
@@ -206,6 +237,7 @@
 
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
+            if (token) setStoredToken(token);
 
             try {
                 const resp = await fetch('/api/v1/ingest', {
@@ -261,6 +293,7 @@
 
             const headers = {};
             if (token) headers['Authorization'] = `Bearer ${token}`;
+            if (token) setStoredToken(token);
 
             try {
                 const resp = await fetch(`/api/v1/doc/${jobId}`, { headers });
@@ -331,6 +364,11 @@
             sessionJobs.length = 0;
             renderJobsTable();
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const storedToken = getStoredToken();
+            if (storedToken) document.getElementById('ingest-token').value = storedToken;
+        });
     </script>
 </body>
 </html>

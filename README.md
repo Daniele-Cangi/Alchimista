@@ -79,6 +79,7 @@ uvicorn services.dashboard_service.app:app --reload --port 8000
 
 ## Query Quickstart (Step-by-step)
 This is the fastest end-to-end path to run real queries without reading the full ops sections.
+If dashboard test-token mode is enabled, you can skip terminal token mint and click **Use Test Token** directly in `/ingest`, `/query`, and `/decisions`.
 
 1. Mint an Auth0 M2M token:
 ```bash
@@ -214,6 +215,14 @@ TOKEN="$(./scripts/get_auth0_m2m_token.sh \
 - Verify auth boundary (`healthz` open, protected endpoints denied without token, allowed with token):
 ```bash
 ./scripts/smoke_p3_auth_enforcement.sh "$TOKEN" default
+```
+- Optional UI one-click token mode for test/demo environments (do not enable on hardened public environments):
+```bash
+DASHBOARD_ENABLE_TEST_TOKEN=true
+AUTH0_TEST_DOMAIN=alchimista.eu.auth0.com
+AUTH0_TEST_AUDIENCE=https://api.alchimista.ai
+AUTH0_TEST_CLIENT_ID=<AUTH0_CLIENT_ID>
+AUTH0_TEST_CLIENT_SECRET=<AUTH0_CLIENT_SECRET>
 ```
 
 ## P3.1 Benchmark

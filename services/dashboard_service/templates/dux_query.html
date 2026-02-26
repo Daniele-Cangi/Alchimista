@@ -55,7 +55,13 @@
                     </div>
                     <div class="dux-form-group">
                         <label class="dux-label">Bearer Token (optional)</label>
-                        <input id="q-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9...">
+                        <div style="display:flex;gap:8px;">
+                            <input id="q-token" class="dux-input" type="password" placeholder="eyJhbGciOiJSUzI1NiJ9..." style="flex:1;">
+                            <button class="dux-btn dux-btn-ghost" type="button" onclick="loadServerTestToken('q-token', 'q-error')" style="white-space:nowrap;">
+                                Use Test Token
+                            </button>
+                        </div>
+                        <small style="color:#6b7280;font-size:12px;">Uses server endpoint <code>/api/v1/auth/test-token</code> when enabled.</small>
                     </div>
                     <div class="dux-form-group">
                         <label class="dux-label">Query <span style="color:#ef4444;">*</span></label>
@@ -159,6 +165,35 @@
     <script>
         const queryHistory = [];
         let lastResult = null;
+        const TOKEN_STORE_KEY = 'alchimista_ui_bearer_token';
+
+        function getStoredToken() {
+            try { return sessionStorage.getItem(TOKEN_STORE_KEY) || ''; } catch (e) { return ''; }
+        }
+
+        function setStoredToken(token) {
+            if (!token) return;
+            try { sessionStorage.setItem(TOKEN_STORE_KEY, token); } catch (e) {}
+        }
+
+        async function loadServerTestToken(inputId, errorId) {
+            const errBox = document.getElementById(errorId);
+            try {
+                const resp = await fetch('/api/v1/auth/test-token', { method: 'POST' });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    throw new Error(data.detail || JSON.stringify(data));
+                }
+                const token = String(data.access_token || '').trim();
+                if (!token) throw new Error('Missing access_token in response');
+                document.getElementById(inputId).value = token;
+                setStoredToken(token);
+                errBox.style.display = 'none';
+            } catch (e) {
+                errBox.textContent = `Token error: ${e.message}`;
+                errBox.style.display = 'block';
+            }
+        }
 
         async function submitQuery() {
             const tenant = document.getElementById('q-tenant').value.trim();
@@ -183,6 +218,7 @@
 
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
+            if (token) setStoredToken(token);
 
             try {
                 const resp = await fetch('/api/v1/query', {
@@ -280,6 +316,8 @@
 
         // Submit on Ctrl+Enter
         document.addEventListener('DOMContentLoaded', () => {
+            const storedToken = getStoredToken();
+            if (storedToken) document.getElementById('q-token').value = storedToken;
             document.getElementById('q-query').addEventListener('keydown', e => {
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitQuery();
             });
