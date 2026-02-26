@@ -1,1 +1,1 @@
-from app.src.main import app
+from services.dashboard_service.app import app
