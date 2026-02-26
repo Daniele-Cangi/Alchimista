@@ -2,6 +2,16 @@
 
 Alchimista is an enterprise **Document Processing + RAG + AI Audit Trail Engine** (not a generic chatbot).
 
+## Integration Guide for Vendors
+For a vendor CTO, integration can start in 3 API calls:
+1. `POST /v1/decisions`: send each AI decision with `decision_id`, `tenant`, model metadata, input/output, confidence, and context docs.
+2. `GET /v1/decisions/{id}/report?tenant=...`: retrieve an auditable single-decision report with full traceability.
+3. `POST /v1/decisions/package`: generate a regulator-ready evidence package (manifest + signed artifacts).
+Authentication: use bearer token (Auth0 M2M) on every call; admin flows additionally require `x-admin-key`.
+Tenant model: every request is tenant-scoped; token tenant claim must match payload/query tenant.
+Idempotency: resend of the same `decision_id` for the same tenant updates deterministically (no duplicate decision trail).
+Expected outcome: your platform can prove what was decided, why, and with which evidence bundle.
+
 ## North Star
 Upload documents and AI decisions, convert them into auditable knowledge (chunks, entities, embeddings, metadata), answer with mandatory citations (`doc_id`, `chunk_id`), and enforce governance controls (retention policies, legal holds, immutable artifacts, traceability via `trace_id`/`job_id`).
 
