@@ -61,5 +61,11 @@ The service account referenced by `GCP_DEPLOY_SERVICE_ACCOUNT` must have at leas
 
 ## Operator notes
 - Keep `benchmark.gates` in `spec/project.yaml` as the single source of truth.
+- Minimum gate set for release quality:
+  - `max_error_rate`
+  - `min_citation_coverage`
+  - `min_recall_at_k`
+  - `min_mrr`
+  - `max_p95_latency_ms`
 - Use `deploy-cloud-run` with `target=all` for synchronized revision rollout.
 - Keep `benchmark-gate` green before major production changes.

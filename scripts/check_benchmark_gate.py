@@ -8,6 +8,23 @@ from typing import Any
 
 import yaml
 
+SUPPORTED_GATES = {
+    "min_success_rate",
+    "max_error_rate",
+    "min_citation_coverage",
+    "min_recall_at_k",
+    "min_mrr",
+    "max_p95_latency_ms",
+}
+
+REQUIRED_GATES = {
+    "max_error_rate",
+    "min_citation_coverage",
+    "min_recall_at_k",
+    "min_mrr",
+    "max_p95_latency_ms",
+}
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate benchmark summary against gates in spec/project.yaml.")
@@ -50,16 +67,17 @@ def main() -> int:
 def load_gates(spec_path: Path) -> dict[str, float]:
     raw = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
     gates = (((raw or {}).get("benchmark") or {}).get("gates") or {})
-    required = {
-        "min_success_rate",
-        "min_citation_coverage",
-        "min_recall_at_k",
-        "min_mrr",
-    }
-    missing = [key for key in sorted(required) if key not in gates]
+    if not isinstance(gates, dict):
+        raise RuntimeError("benchmark.gates must be a mapping in spec/project.yaml")
+
+    unknown = [key for key in sorted(gates.keys()) if key not in SUPPORTED_GATES]
+    if unknown:
+        raise RuntimeError(f"Unknown benchmark gates in spec: {', '.join(unknown)}")
+
+    missing = [key for key in sorted(REQUIRED_GATES) if key not in gates]
     if missing:
         raise RuntimeError(f"Missing benchmark gates in spec: {', '.join(missing)}")
-    return {key: float(gates[key]) for key in required}
+    return {key: float(value) for key, value in gates.items()}
 
 
 def evaluate_gates(*, gates: dict[str, float], summary: dict[str, Any]) -> list[dict[str, Any]]:
@@ -69,21 +87,38 @@ def evaluate_gates(*, gates: dict[str, float], summary: dict[str, Any]) -> list[
 
     actual_values = {
         "min_success_rate": success_rate,
+        "max_error_rate": float(summary.get("error_rate") or 0.0),
         "min_citation_coverage": float(summary.get("citation_coverage") or 0.0),
         "min_recall_at_k": float(summary.get("recall_at_k") or 0.0),
         "min_mrr": float(summary.get("mrr") or 0.0),
+        "max_p95_latency_ms": float(summary.get("p95_latency_ms") if summary.get("p95_latency_ms") is not None else float("inf")),
     }
 
     checks: list[dict[str, Any]] = []
     for key in sorted(gates.keys()):
+        if key not in actual_values:
+            raise RuntimeError(f"Unsupported gate at evaluation time: {key}")
         expected = float(gates[key])
         actual = float(actual_values.get(key, 0.0))
+        if key.startswith("min_"):
+            comparator = ">="
+            passed = actual >= expected
+            expected_field = {"expected_min": expected}
+        elif key.startswith("max_"):
+            comparator = "<="
+            passed = actual <= expected
+            expected_field = {"expected_max": expected}
+        else:
+            raise RuntimeError(f"Invalid gate naming convention: {key}")
+
         checks.append(
             {
                 "gate": key,
-                "expected_min": expected,
+                "operator": comparator,
+                "expected": expected,
                 "actual": actual,
-                "passed": actual >= expected,
+                "passed": passed,
+                **expected_field,
             }
         )
     return checks

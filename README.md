@@ -146,6 +146,7 @@ TOKEN="$(./scripts/get_auth0_m2m_token.sh \
 ```bash
 ./scripts/run_p3_benchmark.py --dataset benchmark/dataset_v1.json --output-dir reports/benchmarks
 ```
+- Core KPI tracked in `summary`: `error_rate`, `citation_coverage`, `recall_at_k`, `mrr`, `p95_latency_ms` (plus `p50_latency_ms`/`max_latency_ms`).
 - Processing defaults to `event-driven` (no direct `/v1/process` call; waits for terminal job status via `/v1/doc/{id}`).
 - Optional explicit processing controls:
 ```bash
@@ -179,6 +180,12 @@ BENCHMARK_BEARER_TOKEN='REPLACE_ME' ./scripts/run_p3_benchmark.py
 ```bash
 python scripts/check_benchmark_gate.py --spec spec/project.yaml --report reports/benchmarks/latest.json
 ```
+- Gate thresholds are defined in `spec/project.yaml` (`benchmark.gates`) and include:
+  - `max_error_rate`
+  - `min_citation_coverage`
+  - `min_recall_at_k`
+  - `min_mrr`
+  - `max_p95_latency_ms`
 - Full operational details:
   - `docs/p4-cicd.md`
 

@@ -183,6 +183,7 @@ def main() -> int:
                     expected_doc_hit=expected_doc_hit,
                     expected_doc_rank=expected_doc_rank,
                     keyword_hit=keyword_hit,
+                    latency_ms=elapsed_ms,
                 )
             )
         except Exception as exc:
@@ -214,6 +215,7 @@ def main() -> int:
                     expected_doc_hit=False,
                     expected_doc_rank=None,
                     keyword_hit=False,
+                    latency_ms=elapsed_ms,
                 )
             )
 

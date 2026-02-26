@@ -275,10 +275,11 @@ benchmark:
       min_mrr_required: 0.65
       min_mrr_passed: true
   gates:
-    min_success_rate: 0.99
+    max_error_rate: 0.01
     min_citation_coverage: 1.0
     min_recall_at_k: 0.95
     min_mrr: 0.65
+    max_p95_latency_ms: 2500
 
 p0_p1_progress:
   p0_direction_lock: done

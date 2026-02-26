@@ -9,11 +9,14 @@ This benchmark is the objective baseline for retrieval and citation quality.
   2. processor completion (`QUEUED/RUNNING` -> `SUCCEEDED`)
   3. query rag
 - Metrics:
+  - `error_rate`
   - `recall_at_k`
   - `citation_coverage`
   - `keyword_hit_rate`
   - `mrr`
-  - `error_rate`
+  - `p50_latency_ms`
+  - `p95_latency_ms`
+  - `max_latency_ms`
 
 ## Run
 ```bash

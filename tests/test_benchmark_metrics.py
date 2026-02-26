@@ -10,6 +10,7 @@ def test_compute_summary_basic() -> None:
             expected_doc_hit=True,
             expected_doc_rank=1,
             keyword_hit=True,
+            latency_ms=100,
         ),
         QueryBenchmarkResult(
             query_id="q2",
@@ -18,6 +19,7 @@ def test_compute_summary_basic() -> None:
             expected_doc_hit=False,
             expected_doc_rank=None,
             keyword_hit=False,
+            latency_ms=200,
         ),
         QueryBenchmarkResult(
             query_id="q3",
@@ -26,6 +28,7 @@ def test_compute_summary_basic() -> None:
             expected_doc_hit=False,
             expected_doc_rank=None,
             keyword_hit=False,
+            latency_ms=300,
         ),
     ]
 
@@ -38,3 +41,6 @@ def test_compute_summary_basic() -> None:
     assert summary["recall_at_k"] == 1 / 3
     assert summary["keyword_hit_rate"] == 1 / 3
     assert summary["mrr"] == 1 / 3
+    assert summary["p50_latency_ms"] == 200
+    assert summary["p95_latency_ms"] == 300
+    assert summary["max_latency_ms"] == 300
