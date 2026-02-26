@@ -67,6 +67,68 @@ uvicorn services.dashboard_service.app:app --reload --port 8000
 - `chunks` populated in SQL
 - `/v1/query` returns `answers[]` with non-empty `citations[]`
 
+## Query Quickstart (Step-by-step)
+This is the fastest end-to-end path to run real queries without reading the full ops sections.
+
+1. Mint an Auth0 M2M token:
+```bash
+TOKEN="$(./scripts/get_auth0_m2m_token.sh \
+  alchimista.eu.auth0.com \
+  '<AUTH0_CLIENT_ID>' \
+  '<AUTH0_CLIENT_SECRET>' \
+  'https://api.alchimista.ai')"
+```
+
+2. Create a small local file:
+```bash
+printf "Quickstart document for Alchimista query test\n" > /tmp/quickstart.txt
+```
+
+3. Ingest the sample document (tenant must match the token claim, usually `default`):
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/ingest" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -F "tenant=default" \
+  -F "doc_id=default::quickstart-001" \
+  -F "file=@/tmp/quickstart.txt;type=text/plain" \
+  | jq .
+```
+
+4. Check processing status:
+```bash
+curl -sS "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/doc/default::quickstart-001?tenant=default" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  | jq .
+```
+Expected terminal status: `job.status = SUCCEEDED`.
+
+5. Run a RAG query (`/v1/query`):
+```bash
+curl -sS -X POST "https://rag-query-service-pe7qslbcvq-ez.a.run.app/v1/query" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query":"What does quickstart-001 contain?",
+    "tenant":"default",
+    "top_k":3
+  }' | jq .
+```
+You should always see `answers[].citations[]` with `doc_id` and `chunk_id`.
+
+6. Run an AI decision trail query (`/v1/decisions/query`):
+```bash
+curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/query" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant":"default",
+    "limit":20,
+    "offset":0,
+    "order":"desc"
+  }' | jq .
+```
+If this returns empty `items`, first ingest decisions with `POST /v1/decisions` (see P5 section below).
+
 ## Runtime hardening operations
 - Cut over Cloud Run services to dedicated service accounts:
 ```bash
