@@ -32,3 +32,5 @@ dist/
 
 # Generated benchmark outputs
 reports/benchmarks/*.json
+.vercel
+.env*.local
