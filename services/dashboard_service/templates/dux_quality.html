@@ -33,7 +33,7 @@
     <div class="dux-container">
         <div class="dux-page-title dux-fade-in">
             <h1>Audit Quality</h1>
-            <p>Evaluate citation coverage from RAG responses, test query quality, and verify EU AI Act compliance readiness.</p>
+            <p>Evaluate citation coverage from RAG responses, test query quality, and review documented EU AI Act control coverage.</p>
         </div>
 
         <!-- Citation Coverage Test -->
@@ -101,8 +101,8 @@
         <!-- Compliance Checklist -->
         <div class="dux-card dux-fade-in" style="margin-bottom:24px;">
             <div class="dux-card-header">
-                <h2 class="dux-card-title">EU AI Act Compliance Checklist</h2>
-                <p class="dux-card-subtitle">Self-assessment for high-risk AI system audit trail requirements</p>
+                <h2 class="dux-card-title">EU AI Act Control Reference</h2>
+                <p class="dux-card-subtitle">Reference checklist for documented capabilities and manual setup steps</p>
             </div>
             <div class="dux-card-body">
                 <div style="display:flex;flex-direction:column;gap:8px;" id="checklist">
@@ -120,7 +120,7 @@
             <div class="dux-card-header" style="display:flex;justify-content:space-between;align-items:center;">
                 <div>
                     <h2 class="dux-card-title">Benchmark Queries</h2>
-                    <p class="dux-card-subtitle">Run a set of standard compliance queries and evaluate citation quality across all</p>
+                    <p class="dux-card-subtitle">Run a set of standard compliance queries and evaluate citation quality across your indexed corpus</p>
                 </div>
                 <button class="dux-btn dux-btn-secondary" onclick="runBenchmark()">Run Benchmark</button>
             </div>
@@ -145,30 +145,32 @@
         .checklist-item { display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-radius:8px;background:#f9fafb; }
         .checklist-check { width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;margin-top:1px; }
         .check-yes { background:#d1fae5;color:#065f46; }
+        .check-ref { background:#dbeafe;color:#1d4ed8; }
         .check-no  { background:#fee2e2;color:#991b1b; }
         .check-manual { background:#fef3c7;color:#92400e; }
     </style>
 
     <script>
         const CHECKLIST_ITEMS = [
-            { id: 'audit-trail',    label: 'Immutable audit trail for AI decisions', ref: 'Art. 9, 12', check: 'auto',   desc: 'POST /v1/decisions stores write-once records with trace_id.' },
-            { id: 'citations',      label: 'Every answer includes source citations',   ref: 'Art. 13',   check: 'auto',   desc: 'POST /v1/query always returns citations[].' },
-            { id: 'trace-id',       label: 'Unique trace_id per decision',             ref: 'Art. 9',    check: 'auto',   desc: 'duplicate trace_id returns HTTP 409.' },
-            { id: 'retention',      label: 'Data retention policy configured',          ref: 'Art. 17',   check: 'manual', desc: 'Configure via POST /v1/admin/retention-policies.' },
-            { id: 'legal-hold',     label: 'Legal hold mechanism available',           ref: 'Art. 17',   check: 'auto',   desc: 'POST /v1/admin/legal-holds prevents retention deletion.' },
-            { id: 'export',         label: 'Compliance bundle export capability',       ref: 'Art. 20',   check: 'auto',   desc: 'POST /v1/decisions/bundle creates signed artifact.' },
-            { id: 'verify',         label: 'Artifact integrity verification',           ref: 'Art. 12',   check: 'auto',   desc: 'POST /v1/decisions/verify checks checksum.' },
-            { id: 'health',         label: 'Service health monitoring active',          ref: 'Art. 9',    check: 'manual', desc: 'All services expose GET /v1/healthz.' },
+            { id: 'audit-trail',    label: 'Decision records support exportable audit artifacts', ref: 'Art. 9, 12', check: 'documented', desc: 'POST /v1/decisions stores traceable records; reports and bundles can be hashed and optionally signed.' },
+            { id: 'citations',      label: 'RAG responses can expose source citations',           ref: 'Art. 13',    check: 'documented', desc: 'When matches are found, the query flow returns structured doc_id/chunk_id citations.' },
+            { id: 'trace-id',       label: 'Decision records support trace correlation IDs',      ref: 'Art. 9',     check: 'documented', desc: 'The dashboard flow requires trace_id for correlation, but uniqueness is not enforced by the API.' },
+            { id: 'retention',      label: 'Data retention policy configured',                     ref: 'Art. 17',    check: 'manual',     desc: 'Configure via POST /v1/admin/retention-policies.' },
+            { id: 'legal-hold',     label: 'Legal hold mechanism available',                       ref: 'Art. 17',    check: 'documented', desc: 'POST /v1/admin/legal-holds creates holds that block retention deletion.' },
+            { id: 'export',         label: 'Compliance bundle export capability',                  ref: 'Art. 20',    check: 'documented', desc: 'POST /v1/decisions/bundle creates export artifacts for later review.' },
+            { id: 'verify',         label: 'Artifact integrity verification',                      ref: 'Art. 12',    check: 'documented', desc: 'POST /v1/decisions/verify validates checksums and signatures when configured.' },
+            { id: 'health',         label: 'Service health endpoints exposed',                     ref: 'Art. 9',     check: 'documented', desc: 'Core services expose GET /v1/healthz and GET /v1/readyz.' },
         ];
 
         function renderChecklist() {
             const container = document.getElementById('checklist');
             const manualItems = CHECKLIST_ITEMS.filter(i => i.check === 'manual').length;
-            const autoItems = CHECKLIST_ITEMS.filter(i => i.check === 'auto').length;
+            const documentedItems = CHECKLIST_ITEMS.filter(i => i.check === 'documented').length;
 
             container.innerHTML = CHECKLIST_ITEMS.map(item => {
-                const cssClass = item.check === 'auto' ? 'check-yes' : 'check-manual';
-                const icon = item.check === 'auto' ? '✓' : '!';
+                const isDocumented = item.check === 'documented';
+                const cssClass = isDocumented ? 'check-ref' : 'check-manual';
+                const icon = isDocumented ? 'i' : '!';
                 return `
                     <div class="checklist-item">
                         <div class="checklist-check ${cssClass}">${icon}</div>
@@ -178,18 +180,18 @@
                         </div>
                         <div style="text-align:right;flex-shrink:0;">
                             <span class="dux-badge" style="font-size:10px;">${item.ref}</span>
-                            <div style="font-size:11px;color:#9ca3af;margin-top:4px;">${item.check === 'auto' ? 'automated' : 'manual config'}</div>
+                            <div style="font-size:11px;color:#9ca3af;margin-top:4px;">${isDocumented ? 'documented' : 'manual setup'}</div>
                         </div>
                     </div>
                 `;
             }).join('');
 
-            const score = `${autoItems}/${CHECKLIST_ITEMS.length} automated`;
+            const score = `${documentedItems}/${CHECKLIST_ITEMS.length} documented`;
             document.getElementById('checklist-score').textContent = score;
             const badge = document.getElementById('checklist-badge');
-            badge.textContent = manualItems === 0 ? 'Fully Automated' : `${manualItems} Manual Steps`;
-            badge.style.background = manualItems === 0 ? '#d1fae5' : '#fef3c7';
-            badge.style.color = manualItems === 0 ? '#065f46' : '#92400e';
+            badge.textContent = manualItems === 0 ? 'Reference Checklist' : `${manualItems} Manual Step${manualItems === 1 ? '' : 's'}`;
+            badge.style.background = manualItems === 0 ? '#dbeafe' : '#fef3c7';
+            badge.style.color = manualItems === 0 ? '#1d4ed8' : '#92400e';
         }
 
         const BENCHMARK_QUERIES = [

@@ -201,7 +201,7 @@ print(f"Trace ID: {trace_id}")</pre>
                 <div class="step-number">5</div>
                 <div>
                     <h2 class="step-title">Register an AI Decision</h2>
-                    <p class="step-desc">Write an immutable decision record linking the answer to its citations. The <code>trace_id</code> from the query is used. Returns 409 on duplicate.</p>
+                    <p class="step-desc">Register a decision record linking the answer to its citations. The <code>trace_id</code> from the query can be reused here for correlation.</p>
                 </div>
             </div>
             <div class="step-body">
@@ -250,7 +250,7 @@ print(f"Decision registered: {decision_resp.status_code}")</pre>
                 <div class="step-number">6</div>
                 <div>
                     <h2 class="step-title">Export a Compliance Bundle</h2>
-                    <p class="step-desc">Package multiple decisions into a cryptographically signed, immutable bundle for regulatory submission or audit.</p>
+                    <p class="step-desc">Package multiple decisions into an export bundle for regulatory review or audit. Artifacts are signed when a signing key is configured.</p>
                 </div>
             </div>
             <div class="step-body">

@@ -959,7 +959,7 @@
                     </div>
                     <div class="step">
                         <div class="step-number">3</div>
-                        <div class="step-text"><h3>Audit</h3><p>Build immutable trail with citations</p></div>
+                        <div class="step-text"><h3>Audit</h3><p>Build traceable trail with citations</p></div>
                     </div>
                     <div class="step">
                         <div class="step-number">4</div>
@@ -977,16 +977,16 @@
                         <!-- Code Cards -->
                         <div class="scroll-card code-card">
                             <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
-                            <pre><code><span class="kw">from</span> alchimista <span class="kw">import</span> Engine
-engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</span>)</code></pre>
+                            <pre><code><span class="kw">POST</span> /v1/query
+tenant=<span class="str">"your-vendor"</span>
+query=<span class="str">"Find article 9"</span></code></pre>
                         </div>
                         <div class="scroll-card code-card">
                             <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
-                            <pre><code>engine.<span class="fn">capture</span>(
-  decision_id=<span class="str">"d-001"</span>,
-  output=<span class="str">"approved"</span>,
-  trace_id=<span class="str">"uuid-here"</span>
-)</code></pre>
+                            <pre><code><span class="kw">POST</span> /v1/decisions
+decision_id=<span class="str">"d-001"</span>
+trace_id=<span class="str">"uuid-here"</span>
+tenant=<span class="str">"your-vendor"</span></code></pre>
                         </div>
                         <div class="scroll-card chart-card">
                             <div class="mini-chart">
@@ -996,11 +996,11 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
                         </div>
                         <div class="scroll-card code-card">
                             <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
-                            <pre><code>engine.<span class="fn">trace</span>(
-  doc_id=<span class="str">"contract-42"</span>,
-  chunk_id=<span class="str">"chunk-7"</span>,
-  score=<span class="fn">0.94</span>
-)</code></pre>
+                            <pre><code>citation = {
+  doc_id: <span class="str">"contract-42"</span>,
+  chunk_id: <span class="str">"chunk-7"</span>,
+  score: <span class="fn">0.94</span>
+}</code></pre>
                         </div>
                         <div class="scroll-card chart-card">
                             <div class="mini-bars">
@@ -1015,16 +1015,16 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
                         <!-- Duplicate for seamless -->
                         <div class="scroll-card code-card">
                             <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
-                            <pre><code><span class="kw">from</span> alchimista <span class="kw">import</span> Engine
-engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</span>)</code></pre>
+                            <pre><code><span class="kw">POST</span> /v1/query
+tenant=<span class="str">"your-vendor"</span>
+query=<span class="str">"Find article 9"</span></code></pre>
                         </div>
                         <div class="scroll-card code-card">
                             <div class="card-header"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span></div>
-                            <pre><code>engine.<span class="fn">capture</span>(
-  decision_id=<span class="str">"d-001"</span>,
-  output=<span class="str">"approved"</span>,
-  trace_id=<span class="str">"uuid-here"</span>
-)</code></pre>
+                            <pre><code><span class="kw">POST</span> /v1/decisions
+decision_id=<span class="str">"d-001"</span>
+trace_id=<span class="str">"uuid-here"</span>
+tenant=<span class="str">"your-vendor"</span></code></pre>
                         </div>
                         <div class="scroll-card chart-card">
                             <div class="mini-chart">
@@ -1064,7 +1064,7 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
                         </div>
                         <div class="scroll-card code-card sm">
                             <pre><code><span class="fn">audit</span>()
-<span class="cmt"># immutable</span></code></pre>
+<span class="cmt"># traceable</span></code></pre>
                         </div>
                         <div class="scroll-card chart-card">
                             <div class="mini-dots">
@@ -1091,7 +1091,7 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
                         </div>
                         <div class="scroll-card code-card sm">
                             <pre><code><span class="fn">audit</span>()
-<span class="cmt"># immutable</span></code></pre>
+<span class="cmt"># traceable</span></code></pre>
                         </div>
                         <div class="scroll-card chart-card">
                             <div class="mini-dots">
@@ -1529,16 +1529,16 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
                         </div>
                     </div>
                     <div class="hero-card-code">
-                        <div class="code-line"><span class="code-keyword">from</span> alchimista <span class="code-keyword">import</span> Engine</div>
+                        <div class="code-line"><span class="code-keyword">POST</span> /v1/query</div>
                         <div class="code-line"></div>
-                        <div class="code-line"><span class="code-comment"># Initialize the engine</span></div>
-                        <div class="code-line">engine = Engine.<span class="code-function">connect</span>(<span class="code-string">tenant="your-vendor"</span>)</div>
+                        <div class="code-line"><span class="code-comment"># Query indexed documents</span></div>
+                        <div class="code-line">tenant=<span class="code-string">"your-vendor"</span></div>
                         <div class="code-line"></div>
-                        <div class="code-line"><span class="code-comment"># Capture AI decisions</span></div>
-                        <div class="code-line">engine.<span class="code-function">capture</span>(decision_id=<span class="code-string">"d-001"</span>)</div>
+                        <div class="code-line"><span class="code-comment"># Register a decision record</span></div>
+                        <div class="code-line"><span class="code-keyword">POST</span> /v1/decisions</div>
                         <div class="code-line"></div>
-                        <div class="code-line"><span class="code-comment"># EU AI Act ready audit trail</span></div>
-                        <div class="code-line">report = engine.<span class="code-function">audit</span>(trace_id=<span class="code-string">"uuid-here"</span>)</div>
+                        <div class="code-line"><span class="code-comment"># Export an audit bundle</span></div>
+                        <div class="code-line"><span class="code-keyword">POST</span> /v1/decisions/bundle</div>
                     </div>
                 </div>
             </div>
@@ -1641,7 +1641,7 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
                     </svg>
                 </div>
                 <h3>Multi-tenant Isolation</h3>
-                <p>Vendor and client data fully isolated at the engine level. Each tenant's audit trail is cryptographically separated and independently exportable.</p>
+                <p>Vendor and client data are isolated by tenant boundaries in storage and query paths. Audit artifacts remain independently exportable per tenant.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon">
@@ -1683,9 +1683,9 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
     <section class="connectors" id="connectors">
         <div class="section-header">
             <div class="section-label">Connectors</div>
-            <h2 class="section-title">Works With Every AI Stack</h2>
+            <h2 class="section-title">Fits Into Your Existing AI Stack</h2>
             <p class="section-desc">
-                Connect any model or API — Alchimista captures outputs regardless of the source
+                Alchimista records model outputs via API, even when inference happens outside the platform
             </p>
         </div>
         <div class="connectors-grid" style="grid-template-columns: repeat(5, 1fr); max-width: 1100px;">
@@ -1697,7 +1697,7 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
                     </svg>
                 </div>
                 <h4>OpenAI API</h4>
-                <p>GPT-4o, o3, embeddings</p>
+                <p>Capture outputs via <code>/v1/decisions</code></p>
             </div>
             <div class="connector-card">
                 <div class="connector-flag">
@@ -1708,7 +1708,7 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
                     </svg>
                 </div>
                 <h4>Anthropic</h4>
-                <p>Claude 3.5, Claude 4</p>
+                <p>Capture outputs via <code>/v1/decisions</code></p>
             </div>
             <div class="connector-card">
                 <div class="connector-flag">
@@ -1720,7 +1720,7 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
                     </svg>
                 </div>
                 <h4>Azure AI</h4>
-                <p>Azure OpenAI, ML Studio</p>
+                <p>Capture outputs via <code>/v1/decisions</code></p>
             </div>
             <div class="connector-card">
                 <div class="connector-flag">
@@ -1733,7 +1733,7 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
                     </svg>
                 </div>
                 <h4>Google Vertex AI</h4>
-                <p>Gemini, PaLM, custom</p>
+                <p>Native embeddings + vector search support</p>
             </div>
             <div class="connector-card">
                 <div class="connector-flag">
@@ -1744,7 +1744,7 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
                     </svg>
                 </div>
                 <h4>Custom Models</h4>
-                <p>Any REST endpoint</p>
+                <p>Audit any response you can POST</p>
             </div>
         </div>
     </section>
@@ -1824,32 +1824,21 @@ engine = Engine(<span class="fn">tenant</span>=<span class="str">"your-vendor"</
             <div class="auth-modal-header">
                 <img src="/static/images/logo/logo-dark.png" alt="Alchimista" style="height: 40px; margin-bottom: 16px;">
                 <h2>Access Alchimista</h2>
-                <p>Choose how you want to proceed</p>
+                <p>Open the dashboard to use the query, audit, and export tools</p>
             </div>
 
             <div class="auth-modal-options">
-                <a href="/auth/github" class="auth-btn auth-btn-github">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                    </svg>
-                    Continue with GitHub
-                </a>
-
-                <div class="auth-divider">
-                    <span>or</span>
-                </div>
-
                 <a href="/dashboard" class="auth-btn auth-btn-guest">
                     <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
                         <circle cx="12" cy="7" r="4"/>
                     </svg>
-                    Enter as Guest
+                    Open Dashboard
                 </a>
             </div>
 
             <p class="auth-modal-note">
-                Sign in with GitHub to save your audit trail configurations and sync across devices.
+                This build opens directly in guest mode. Protected API access still depends on the tokens you provide inside the dashboard.
             </p>
         </div>
     </div>

@@ -174,7 +174,7 @@
   ]
 }</pre>
                 </div>
-                <div class="api-note">The <code>trace_id</code> can be used to register a decision with <code>POST /v1/decisions</code>, linking the answer to its citations in the immutable audit trail.</div>
+                <div class="api-note">The <code>trace_id</code> can be used to register a decision with <code>POST /v1/decisions</code>, linking the answer to its citations in the traceable audit trail.</div>
             </div>
         </div>
 
@@ -182,7 +182,7 @@
         <div id="decisions" class="dux-card dux-fade-in" style="margin-bottom:20px;">
             <div class="dux-card-header" style="background:#d1fae5;border-radius:10px 10px 0 0;padding:16px 20px;">
                 <h2 style="font-size:16px;font-weight:700;color:#065f46;margin:0;">Decision Trail API</h2>
-                <p style="margin:4px 0 0;color:#047857;font-size:13px;">ingestion-api-service · port 8011 · All decision records are immutable (write-once)</p>
+                <p style="margin:4px 0 0;color:#047857;font-size:13px;">ingestion-api-service · port 8011 · Decision records support traceable updates and exportable audit artifacts</p>
             </div>
             <div class="dux-card-body">
 
@@ -190,7 +190,7 @@
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
                         <span class="method-badge method-post">POST</span>
                         <code style="font-size:14px;font-weight:600;">/v1/decisions</code>
-                        <span style="font-size:12px;color:#6b7280;">Register an AI decision (write-once, returns 409 on duplicate trace_id)</span>
+                        <span style="font-size:12px;color:#6b7280;">Register an AI decision record (reusing the same decision_id updates the record)</span>
                     </div>
                     <pre class="code-block">{
   "decision_id":   "d-001",
@@ -240,7 +240,7 @@
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
                         <span class="method-badge method-post">POST</span>
                         <code style="font-size:14px;font-weight:600;">/v1/decisions/bundle</code>
-                        <span style="font-size:12px;color:#6b7280;">Create immutable artifact</span>
+                        <span style="font-size:12px;color:#6b7280;">Create export artifact</span>
                     </div>
                     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
                         <span class="method-badge method-post">POST</span>

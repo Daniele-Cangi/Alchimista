@@ -33,7 +33,7 @@
     <div class="dux-container">
         <div class="dux-page-title dux-fade-in">
             <h1>AI Decision Trail</h1>
-            <p>Register immutable AI decision records. Query, report, and export compliance bundles. Each artifact is write-once — a 409 is returned on duplicate <code>trace_id</code>.</p>
+            <p>Register AI decision records for tracing, reporting, and export. Audit artifacts can be hashed and optionally signed, and reusing the same <code>decision_id</code> updates the stored record.</p>
         </div>
 
         <!-- Tabs -->
@@ -51,7 +51,7 @@
                 <div class="dux-card">
                     <div class="dux-card-header">
                         <h2 class="dux-card-title">Register Decision</h2>
-                        <p class="dux-card-subtitle">POST /v1/decisions — write-once, immutable</p>
+                        <p class="dux-card-subtitle">POST /v1/decisions — register or update a decision record</p>
                     </div>
                     <div class="dux-card-body">
                         <div class="dux-form-group">
@@ -64,7 +64,7 @@
                                 <input id="reg-trace-id" class="dux-input" type="text" placeholder="e.g. trace_abc123" style="flex:1;">
                                 <button class="dux-btn dux-btn-ghost" onclick="genTraceId()" style="white-space:nowrap;">Generate</button>
                             </div>
-                            <small style="color:#6b7280;font-size:12px;">Unique per decision. Duplicate returns HTTP 409.</small>
+                            <small style="color:#6b7280;font-size:12px;">Required in this dashboard flow for correlation and reporting. Generate one here if you do not already have it.</small>
                         </div>
                         <div class="dux-form-group">
                             <label class="dux-label">Decision Type <span style="color:#ef4444;">*</span></label>
@@ -281,7 +281,7 @@
                 <div class="dux-card">
                     <div class="dux-card-header">
                         <h2 class="dux-card-title">Verify Artifact</h2>
-                        <p class="dux-card-subtitle">POST /v1/decisions/verify — check immutable artifact integrity</p>
+                        <p class="dux-card-subtitle">POST /v1/decisions/verify — check exported artifact integrity</p>
                     </div>
                     <div class="dux-card-body">
                         <div class="dux-form-group">
