@@ -1,29 +1,18 @@
-Alchimista Commercial License v1.0
+GNU AFFERO GENERAL PUBLIC LICENSE v3.0 (AGPL-3.0-only)
 
 Copyright (c) 2026 Daniele Cangi
-All rights reserved.
 
-This repository and all source code, documentation, configuration, and related
-materials (the "Software") are proprietary and confidential.
+This repository is licensed under the GNU Affero General Public License,
+version 3 only ("AGPL-3.0-only").
 
-No rights are granted to use, copy, modify, merge, publish, distribute,
-sublicense, sell, reverse engineer, decompile, disassemble, create derivative
-works from, or otherwise exploit the Software, in whole or in part, except as
-explicitly authorized in a separate written commercial agreement signed by the
-copyright holder.
+You may copy, modify, and redistribute this software under the terms of
+AGPL-3.0-only.
 
-Any unauthorized use is strictly prohibited.
+If you run a modified version over a network and let users interact with it
+remotely, you must also make the corresponding source code of your modified
+version available to those users, as required by AGPL-3.0-only.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT, EXCEPT TO THE EXTENT
-REQUIRED BY APPLICABLE LAW OR EXPRESSLY AGREED IN WRITING.
+SPDX-License-Identifier: AGPL-3.0-only
 
-IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY DIRECT, INDIRECT,
-INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES ARISING FROM OR
-RELATED TO THE SOFTWARE OR ITS USE, EXCEPT TO THE EXTENT REQUIRED BY APPLICABLE
-LAW OR EXPRESSLY AGREED IN WRITING.
-
-For commercial licensing requests, contact the copyright holder.
-
-Additional repository legal notices are provided in `NOTICE` and `TERMS.md`.
+Full license text:
+https://www.gnu.org/licenses/agpl-3.0.txt

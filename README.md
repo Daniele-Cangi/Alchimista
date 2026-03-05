@@ -24,7 +24,12 @@ Upload documents and AI decisions, convert them into auditable knowledge (chunks
 - Web control plane (`services/dashboard_service`) to operate ingest/query/decision/governance flows from one UI.
 
 ## License
-This repository is distributed under a proprietary commercial license.
+This repository is open-source under **GNU Affero General Public License v3.0 only** (`AGPL-3.0-only`).
+
+Key copyleft point: if you run a modified version as a network service, users
+interacting with that service must be able to access the corresponding source
+code of the modified version, as required by AGPL-3.0-only.
+
 See:
 - `LICENSE`
 - `NOTICE`

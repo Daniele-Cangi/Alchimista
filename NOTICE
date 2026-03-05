@@ -1,11 +1,11 @@
-Alchimista - Proprietary Notice
+Alchimista - Open Source Notice
 
 Copyright (c) 2026 Daniele Cangi.
-All rights reserved.
 
-This software and related materials are proprietary and confidential.
-Use is permitted only under a valid written commercial agreement.
+This repository is open-source and licensed under AGPL-3.0-only.
 
-No open-source license is granted for this repository.
+SPDX-License-Identifier: AGPL-3.0-only
 
-For commercial licensing requests, contact the copyright holder.
+License reference:
+- ./LICENSE
+- https://www.gnu.org/licenses/agpl-3.0.txt
