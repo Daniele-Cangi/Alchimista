@@ -8,7 +8,7 @@ on:
       - .github/workflows/cleanup-deployment-history.yml
 
 permissions:
-  contents: read
+  contents: write
   deployments: write
 
 jobs:
@@ -58,3 +58,16 @@ jobs:
                 }
               }
             }
+
+            const marker = Buffer.from(
+              `deployment cleanup completed at ${new Date().toISOString()}\n`
+            ).toString('base64');
+
+            await github.rest.repos.createOrUpdateFileContents({
+              owner,
+              repo,
+              path: '.github/deployment-cleanup-complete.txt',
+              message: 'chore: record deployment cleanup completion',
+              content: marker,
+              branch: 'main'
+            });
