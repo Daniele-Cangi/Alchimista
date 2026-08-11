@@ -46,7 +46,9 @@ jobs:
   retention:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: ${{ github.event_name == 'schedule' && 'prod' || (github.event.inputs.environment_name || 'test') }}
+    environment:
+      name: ${{ github.event.inputs.environment_name || 'test' }}
+      deployment: false
     env:
       PROJECT_ID: ${{ github.event.inputs.project_id || 'secure-electron-474908-k9' }}
       TENANT: ${{ github.event.inputs.tenant || 'default' }}
