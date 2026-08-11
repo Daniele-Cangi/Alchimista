@@ -9,3 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 License reference:
 - ./LICENSE
 - https://www.gnu.org/licenses/agpl-3.0.txt
+
+Third-party components and preserved notices:
+- ./THIRD_PARTY_NOTICES.md
+- ./third_party/rizzo_pii/LICENSE
