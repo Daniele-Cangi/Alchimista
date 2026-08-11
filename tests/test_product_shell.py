@@ -61,3 +61,11 @@ def test_health_summary_includes_privacy(monkeypatch) -> None:
     assert response.status_code == 200
     assert body["services"]["privacy"]["status"] == "healthy"
     assert body["services"]["privacy"]["policy"] == "strict"
+
+
+def test_vercel_git_deployments_are_explicitly_disabled() -> None:
+    config = json.loads((Path(__file__).parents[1] / "vercel.json").read_text(encoding="utf-8"))
+
+    assert config["git"]["deploymentEnabled"] is False
+    assert "builds" not in config
+    assert "routes" not in config

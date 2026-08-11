@@ -316,8 +316,11 @@ baseline `ci` workflow needs no GCP or Auth0 secrets.
 
 The obsolete Vercel catch-all and recovered placeholder API were removed:
 they could render a serverless dashboard but could not reach a user's private
-Compose services, so they were not a valid deployment of Alchimista. Optional
-GCP/Cloud Run adapters remain supported independently.
+Compose services, so they were not a valid deployment of Alchimista. The
+minimal `vercel.json` now only disables automatic Git deployments, preventing
+the existing Vercel integration from publishing or failing previews for this
+localhost-only product. It contains no build, route, or runtime configuration.
+Optional GCP/Cloud Run adapters remain supported independently.
 
 ## CI and container publishing
 
