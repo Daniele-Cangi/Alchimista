@@ -77,7 +77,7 @@ def main() -> int:
         raise AssertionError("Pinned Full Rizzo produced no model-origin finding for the acceptance fixture")
 
     upload = _post_multipart(
-        "http://127.0.0.1:8000/api/v1/upload",
+        "http://127.0.0.1:8000/api/v1/ingest/file",
         fields={"tenant": "default"},
         filename="full-rizzo-acceptance.txt",
         content=(MODEL_TEXT + " La clausola di conservazione è di quarantacinque giorni.").encode("utf-8"),

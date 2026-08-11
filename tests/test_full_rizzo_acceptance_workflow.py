@@ -16,4 +16,5 @@ def test_full_rizzo_acceptance_is_optional_and_pinned() -> None:
     assert job["timeout-minutes"] == 60
     assert "a1c3c83827eca22e9675e30c1111c4641caf5901" in source
     assert 'item.get("detector") == "modello"' in source
+    assert "/api/v1/ingest/file" in source
     assert '"restart", "rizzo-model-service", "privacy-service"' in source
