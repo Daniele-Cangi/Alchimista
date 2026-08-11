@@ -35,3 +35,12 @@ never `READY`. The trusted model commit is
 `a1c3c83827eca22e9675e30c1111c4641caf5901` (the resolution of `v1.5.0` at
 integration time). This test establishes implemented runtime behavior; it is not a
 legal or detection-accuracy certification.
+
+## Optional automated proof
+
+`.github/workflows/full-rizzo-acceptance.yml` runs the same lifecycle against
+the actual pinned weights on manual dispatch. On a pull request it runs only
+when the `full-rizzo-acceptance` label is present. Unlike the required fast CI,
+this job downloads the model, requires at least one model-origin finding,
+checks document and audit metadata, restarts the model/privacy services, and
+loads the persisted weights again without reinstalling them.
