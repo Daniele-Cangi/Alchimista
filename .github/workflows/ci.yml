@@ -62,7 +62,7 @@ jobs:
           python-version: "3.12"
 
       - name: Generate isolated local secrets
-        run: python scripts/init_local_env.py --privacy-policy strict
+        run: python scripts/init_local_env.py --privacy-policy protect_egress
 
       - name: Build and start self-hosted stack
         run: docker compose up --detach --build --wait

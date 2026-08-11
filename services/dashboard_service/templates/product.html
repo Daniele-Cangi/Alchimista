@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Alchimista</title>
+  <link rel="icon" href="/static/images/favicon.svg">
+  <link rel="stylesheet" href="/static/css/product.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="/home" aria-label="Alchimista Home">
+        <span class="brand-mark">A</span>
+        <span><strong>Alchimista</strong><small>Private knowledge</small></span>
+      </a>
+      <nav id="nav" aria-label="Navigazione principale">
+        <a href="/home" data-route="home"><span>⌂</span>Home</a>
+        <a href="/documents" data-route="documents"><span>▤</span>Documenti</a>
+        <a href="/ask" data-route="ask"><span>✦</span>Chiedi</a>
+        <a href="/privacy" data-route="privacy"><span>◇</span>Privacy</a>
+        <a href="/audit" data-route="audit"><span>◎</span>Audit</a>
+        <a href="/governance" data-route="governance"><span>⚖</span>Governance</a>
+        <a href="/system" data-route="system"><span>⎈</span>Sistema</a>
+      </nav>
+      <div class="sidebar-foot">
+        <span class="status-dot" id="global-status"></span>
+        <span><small>Workspace</small><strong id="workspace-label">default</strong></span>
+      </div>
+    </aside>
+    <section class="workspace">
+      <header class="topbar">
+        <button class="icon-button menu-button" id="menu-button" aria-label="Apri navigazione">☰</button>
+        <div><p class="eyebrow" id="page-eyebrow">Workspace locale</p><h1 id="page-title">Home</h1></div>
+        <div class="top-actions"><span class="local-pill">● Solo locale</span><button class="icon-button" id="refresh" aria-label="Aggiorna">↻</button></div>
+      </header>
+      <main id="app" tabindex="-1"><div class="loading-card"><span class="spinner"></span>Caricamento…</div></main>
+    </section>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <dialog id="evidence-modal"><button class="modal-close" aria-label="Chiudi">×</button><div id="evidence-content"></div></dialog>
+  <script src="/static/js/product.js" defer></script>
+</body>
+</html>

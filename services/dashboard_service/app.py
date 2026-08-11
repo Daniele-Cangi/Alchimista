@@ -22,6 +22,12 @@ logger = logging.getLogger(__name__)
 INGEST_URL = os.getenv("INGEST_URL", "http://localhost:8011")
 PROCESSOR_URL = os.getenv("PROCESSOR_URL", "http://localhost:8012")
 RAG_URL = os.getenv("RAG_URL", "http://localhost:8013")
+PRIVACY_URL = os.getenv("PRIVACY_URL", "http://localhost:8014")
+PRIVACY_SERVICE_TOKEN = os.getenv("PRIVACY_SERVICE_TOKEN", "")
+DEFAULT_WORKSPACE = os.getenv("DEFAULT_WORKSPACE", "default").strip() or "default"
+PRODUCT_RUNTIME = os.getenv("ALCHIMISTA_PROFILE", "local").strip().lower()
+PRODUCT_AUTH_MODE = os.getenv("AUTH_MODE", "local").strip().lower()
+PRODUCT_STORAGE = os.getenv("STORAGE_BACKEND", "filesystem").strip().lower()
 ADMIN_KEY = os.getenv("ADMIN_KEY", "")
 DASHBOARD_API_TOKEN = os.getenv("DASHBOARD_API_TOKEN", "")
 
@@ -147,6 +153,22 @@ async def _proxy_post(
     resp = requests.post(url, json=body or {}, headers=_headers(auth, admin_key), timeout=60)
     resp.raise_for_status()
     return _decode_json(resp)
+
+
+async def _proxy_put(
+    url: str,
+    body: dict[str, Any],
+    headers: dict[str, str],
+) -> dict[str, Any]:
+    resp = requests.put(url, json=body, headers=headers, timeout=60)
+    resp.raise_for_status()
+    return _decode_json(resp)
+
+
+def _privacy_headers() -> dict[str, str]:
+    if not PRIVACY_SERVICE_TOKEN:
+        raise HTTPException(status_code=503, detail="Privacy service is not configured")
+    return {"x-privacy-token": PRIVACY_SERVICE_TOKEN}
 
 
 def _http_err(exc: requests.HTTPError) -> HTTPException:
@@ -305,12 +327,24 @@ def _html_page(filename: str) -> FileResponse:
 
 @app.get("/")
 async def landing():
-    return _html_page("dux_landing.html")
+    return _html_page("product.html")
+
+
+@app.get("/home")
+@app.get("/documents")
+@app.get("/documents/{doc_id}")
+@app.get("/ask")
+@app.get("/privacy")
+@app.get("/audit")
+@app.get("/governance")
+@app.get("/system")
+async def product_page(doc_id: str | None = None):
+    return _html_page("product.html")
 
 
 @app.get("/dashboard")
 async def dashboard():
-    return _html_page("dux_dashboard.html")
+    return _html_page("product.html")
 
 
 @app.get("/ingest")
@@ -333,14 +367,9 @@ async def decisions_page():
     return _html_page("dux_decisions.html")
 
 
-@app.get("/governance")
-async def governance_page():
-    return _html_page("dux_governance.html")
-
-
 @app.get("/monitoring")
 async def monitoring_page():
-    return _html_page("dux_monitoring.html")
+    return _html_page("product.html")
 
 
 @app.get("/quality")
@@ -350,7 +379,7 @@ async def quality_page():
 
 @app.get("/settings")
 async def settings_page():
-    return _html_page("dux_settings.html")
+    return _html_page("product.html")
 
 
 @app.get("/guide")
@@ -361,6 +390,26 @@ async def guide_page():
 @app.get("/tutorial")
 async def tutorial_page():
     return _html_page("dux_tutorial.html")
+
+
+@app.get("/advanced/{page}")
+async def advanced_page(page: str):
+    allowed = {
+        "dashboard",
+        "ingest",
+        "connectors",
+        "query",
+        "decisions",
+        "governance",
+        "monitoring",
+        "quality",
+        "settings",
+        "guide",
+        "tutorial",
+    }
+    if page not in allowed:
+        raise HTTPException(status_code=404, detail="Advanced page not found")
+    return _html_page(f"dux_{page}.html")
 
 
 # ==================== MODELS ====================
@@ -603,9 +652,17 @@ async def api_ingest_complete(body: IngestCompleteRequest, authorization: str | 
 
 
 @app.get("/api/v1/doc/{doc_id}")
-async def api_get_doc(doc_id: str, authorization: str | None = Header(default=None)):
+async def api_get_doc(
+    doc_id: str,
+    tenant: str = DEFAULT_WORKSPACE,
+    authorization: str | None = Header(default=None),
+):
     try:
-        data = await _proxy_get(f"{INGEST_URL}/v1/doc/{doc_id}", auth=authorization)
+        data = await _proxy_get(
+            f"{INGEST_URL}/v1/doc/{doc_id}",
+            params={"tenant": tenant},
+            auth=authorization,
+        )
         job = data.get("job") or {}
         metrics = job.get("metrics") or {}
         chunk_count = (
@@ -628,6 +685,117 @@ async def api_get_doc(doc_id: str, authorization: str | None = Header(default=No
         }
     except requests.HTTPError as exc:
         raise _http_err(exc)
+    except Exception as exc:
+        raise _gw_err(exc)
+
+
+@app.get("/api/v1/documents")
+async def api_documents(
+    workspace: str = DEFAULT_WORKSPACE,
+    limit: int = 100,
+    offset: int = 0,
+    authorization: str | None = Header(default=None),
+):
+    try:
+        return await _proxy_get(
+            f"{INGEST_URL}/v1/documents",
+            params={"tenant": workspace, "limit": limit, "offset": offset},
+            auth=authorization,
+        )
+    except requests.HTTPError as exc:
+        raise _http_err(exc)
+    except Exception as exc:
+        raise _gw_err(exc)
+
+
+@app.get("/api/v1/documents/{doc_id}")
+async def api_document_detail(
+    doc_id: str,
+    workspace: str = DEFAULT_WORKSPACE,
+    authorization: str | None = Header(default=None),
+):
+    try:
+        return await _proxy_get(
+            f"{INGEST_URL}/v1/documents/{doc_id}",
+            params={"tenant": workspace},
+            auth=authorization,
+        )
+    except requests.HTTPError as exc:
+        raise _http_err(exc)
+    except Exception as exc:
+        raise _gw_err(exc)
+
+
+@app.get("/api/v1/documents/{doc_id}/evidence/{chunk_id}")
+async def api_document_evidence(
+    doc_id: str,
+    chunk_id: str,
+    workspace: str = DEFAULT_WORKSPACE,
+    authorization: str | None = Header(default=None),
+):
+    try:
+        return await _proxy_get(
+            f"{INGEST_URL}/v1/documents/{doc_id}/evidence/{chunk_id}",
+            params={"tenant": workspace},
+            auth=authorization,
+        )
+    except requests.HTTPError as exc:
+        raise _http_err(exc)
+    except Exception as exc:
+        raise _gw_err(exc)
+
+
+@app.get("/api/v1/privacy/settings")
+async def api_privacy_settings(workspace: str = DEFAULT_WORKSPACE):
+    try:
+        response = requests.get(
+            f"{PRIVACY_URL}/v1/privacy/settings",
+            params={"workspace": workspace},
+            headers=_privacy_headers(),
+            timeout=30,
+        )
+        response.raise_for_status()
+        return _decode_json(response)
+    except requests.HTTPError as exc:
+        raise _http_err(exc)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _gw_err(exc)
+
+
+@app.put("/api/v1/privacy/settings")
+async def api_update_privacy_settings(body: dict[str, Any]):
+    try:
+        return await _proxy_put(
+            f"{PRIVACY_URL}/v1/privacy/settings",
+            body,
+            _privacy_headers(),
+        )
+    except requests.HTTPError as exc:
+        raise _http_err(exc)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _gw_err(exc)
+
+
+@app.post("/api/v1/privacy/model/{action}")
+async def api_privacy_model_action(action: str):
+    if action not in {"install", "load", "unload"}:
+        raise HTTPException(status_code=404, detail="Unknown model action")
+    try:
+        response = requests.post(
+            f"{PRIVACY_URL}/v1/privacy/model/{action}",
+            headers=_privacy_headers(),
+            timeout=60,
+        )
+        response.raise_for_status()
+        return _decode_json(response)
+    except requests.HTTPError as exc:
+        raise _http_err(exc)
+    except HTTPException:
+        raise
     except Exception as exc:
         raise _gw_err(exc)
 
@@ -1125,6 +1293,20 @@ async def api_health_all():
             }
         except Exception as exc:
             results[svc] = {"status": "unreachable", "error": str(exc)}
+    try:
+        start = time.perf_counter()
+        resp = requests.get(f"{PRIVACY_URL}/v1/privacy/health", timeout=5)
+        latency_ms = round((time.perf_counter() - start) * 1000)
+        privacy_body = _decode_json(resp)
+        results["privacy"] = {
+            "status": "healthy" if resp.status_code == 200 else "degraded",
+            "latency_ms": latency_ms,
+            "policy": privacy_body.get("privacy_policy"),
+            "detector": privacy_body.get("privacy_detector"),
+            "detector_ready": privacy_body.get("detector_ready"),
+        }
+    except Exception as exc:
+        results["privacy"] = {"status": "unreachable", "error": str(exc)}
     overall = "healthy" if all(item.get("status") == "healthy" for item in results.values()) else "degraded"
     return {"overall": overall, "services": results}
 
@@ -1139,10 +1321,12 @@ async def api_auth_test_token():
 @app.get("/api/settings")
 async def api_get_settings():
     return {
-        "ingest_url": INGEST_URL,
-        "processor_url": PROCESSOR_URL,
-        "rag_url": RAG_URL,
-        "decisions_and_governance_url": INGEST_URL,
+        "workspace": DEFAULT_WORKSPACE,
+        "upload_limit_bytes": DASHBOARD_MAX_UPLOAD_BYTES,
+        "runtime": PRODUCT_RUNTIME,
+        "auth_mode": PRODUCT_AUTH_MODE,
+        "storage": PRODUCT_STORAGE,
+        "cloud_dependencies": "optional",
         "admin_key_configured": bool(ADMIN_KEY),
         "deploy_env": DASHBOARD_DEPLOY_ENV,
         "test_token_requested": DASHBOARD_ENABLE_TEST_TOKEN,
