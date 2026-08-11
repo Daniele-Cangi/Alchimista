@@ -213,7 +213,10 @@ mode, and pinned source revision. They never return the raw placeholder map.
 `PRIVACY_VAULT_ACTIVE_KEY_VERSION` selects the key for new ciphertext and
 keyed hashes. Decryption selects the key recorded in each row. The legacy
 single-key variables remain accepted for rolling upgrades. Readiness fails if
-the database references an unavailable key version.
+the database references an unavailable key version. The Compose deployment
+injects vault key material only into `privacy-service`; other application
+containers receive the internal privacy API URL and token, but no decryption
+keys.
 
 Automatic bulk re-encryption is not implemented. Keep an old key in the
 keyring until no rows reference its version; removing it earlier deliberately

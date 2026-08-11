@@ -1,6 +1,6 @@
 name: alchimista
 
-x-runtime-environment: &runtime-environment
+x-common-runtime-environment: &common-runtime-environment
   ALCHIMISTA_PROFILE: local
   ALCHIMISTA_ENV: development
   DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?run python scripts/init_local_env.py}@postgres:5432/alchimista
@@ -21,16 +21,19 @@ x-runtime-environment: &runtime-environment
   PRIVACY_POLICY: ${PRIVACY_POLICY:-protect_egress}
   PRIVACY_SERVICE_URL: http://privacy-service:8080
   PRIVACY_SERVICE_TOKEN: ${PRIVACY_SERVICE_TOKEN:?run python scripts/init_local_env.py}
-  PRIVACY_VAULT_ACTIVE_KEY_VERSION: ${PRIVACY_VAULT_ACTIVE_KEY_VERSION:-}
-  PRIVACY_VAULT_KEYS_JSON: ${PRIVACY_VAULT_KEYS_JSON:-}
-  PRIVACY_VAULT_KEY: ${PRIVACY_VAULT_KEY:-}
-  PRIVACY_VAULT_KEY_VERSION: ${PRIVACY_VAULT_KEY_VERSION:-v1}
   PRIVACY_MAPPING_ENABLED: ${PRIVACY_MAPPING_ENABLED:-true}
   PRIVACY_DETECTOR: ${PRIVACY_DETECTOR:-rizzo_regex}
   RIZZO_BASE_URL: ${RIZZO_BASE_URL:-}
   AUDIT_REPORT_SIGNING_KEY: ${AUDIT_REPORT_SIGNING_KEY:?run python scripts/init_local_env.py}
   AUDIT_REPORT_SIGNING_KEY_ID: ${AUDIT_REPORT_SIGNING_KEY_ID:-local-v1}
   ENFORCE_STORAGE_HARDENING: "false"
+
+x-privacy-runtime-environment: &privacy-runtime-environment
+  <<: *common-runtime-environment
+  PRIVACY_VAULT_ACTIVE_KEY_VERSION: ${PRIVACY_VAULT_ACTIVE_KEY_VERSION:-}
+  PRIVACY_VAULT_KEYS_JSON: ${PRIVACY_VAULT_KEYS_JSON:-}
+  PRIVACY_VAULT_KEY: ${PRIVACY_VAULT_KEY:-}
+  PRIVACY_VAULT_KEY_VERSION: ${PRIVACY_VAULT_KEY_VERSION:-v1}
 
 services:
   postgres:
@@ -74,7 +77,7 @@ services:
       dockerfile: services/privacy_service/Dockerfile
     image: alchimista-privacy:local
     restart: unless-stopped
-    environment: *runtime-environment
+    environment: *privacy-runtime-environment
     ports:
       - "127.0.0.1:8014:8080"
     depends_on:
@@ -97,7 +100,7 @@ services:
       dockerfile: services/document_processor_service/Dockerfile
     image: alchimista-processor:local
     restart: unless-stopped
-    environment: *runtime-environment
+    environment: *common-runtime-environment
     ports:
       - "127.0.0.1:8012:8080"
     volumes:
@@ -123,7 +126,7 @@ services:
       dockerfile: services/ingestion_api_service/Dockerfile
     image: alchimista-ingestion:local
     restart: unless-stopped
-    environment: *runtime-environment
+    environment: *common-runtime-environment
     ports:
       - "127.0.0.1:8011:8080"
     volumes:
@@ -151,7 +154,7 @@ services:
       dockerfile: services/rag_query_service/Dockerfile
     image: alchimista-rag:local
     restart: unless-stopped
-    environment: *runtime-environment
+    environment: *common-runtime-environment
     ports:
       - "127.0.0.1:8013:8080"
     depends_on:
