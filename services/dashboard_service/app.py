@@ -25,6 +25,25 @@ RAG_URL = os.getenv("RAG_URL", "http://localhost:8013")
 ADMIN_KEY = os.getenv("ADMIN_KEY", "")
 DASHBOARD_API_TOKEN = os.getenv("DASHBOARD_API_TOKEN", "")
 
+
+def _positive_int_env(name: str, default: int) -> int:
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be a positive integer") from exc
+    if value <= 0:
+        raise RuntimeError(f"{name} must be a positive integer")
+    return value
+
+
+DASHBOARD_MAX_UPLOAD_BYTES = _positive_int_env(
+    "DASHBOARD_MAX_UPLOAD_BYTES",
+    25 * 1024 * 1024,
+)
+_UPLOAD_READ_CHUNK_BYTES = 1024 * 1024
+_MULTIPART_OVERHEAD_ALLOWANCE_BYTES = 1024 * 1024
+
 # Optional demo convenience mode. Keep disabled in hardened environments.
 DASHBOARD_ENABLE_TEST_TOKEN = os.getenv("DASHBOARD_ENABLE_TEST_TOKEN", "false").strip().lower() in {
     "1",
@@ -447,6 +466,28 @@ class RetentionEnforceRequest(BaseModel):
 
 # ==================== INGEST ====================
 
+
+def _upload_too_large() -> HTTPException:
+    return HTTPException(
+        status_code=413,
+        detail=f"file exceeds configured limit of {DASHBOARD_MAX_UPLOAD_BYTES} bytes",
+    )
+
+
+async def _read_upload_bounded(file: UploadFile) -> bytes:
+    if file.size is not None and file.size > DASHBOARD_MAX_UPLOAD_BYTES:
+        raise _upload_too_large()
+
+    payload = bytearray()
+    while True:
+        remaining = DASHBOARD_MAX_UPLOAD_BYTES - len(payload)
+        chunk = await file.read(min(_UPLOAD_READ_CHUNK_BYTES, remaining + 1))
+        if not chunk:
+            return bytes(payload)
+        payload.extend(chunk)
+        if len(payload) > DASHBOARD_MAX_UPLOAD_BYTES:
+            raise _upload_too_large()
+
 @app.post("/api/v1/ingest")
 async def api_ingest(body: IngestRequest, authorization: str | None = Header(default=None)):
     """Compatibility endpoint used by dashboard forms."""
@@ -504,13 +545,21 @@ async def api_ingest_file(
     file: UploadFile = File(...),
     tenant: str = Form(...),
     authorization: str | None = Header(default=None),
+    content_length: int | None = Header(default=None),
 ):
     """Forward a local file as multipart data to the ingestion service."""
     tenant = tenant.strip()
     if not tenant:
         raise HTTPException(status_code=400, detail="tenant is required")
 
-    payload = await file.read()
+    if (
+        content_length is not None
+        and content_length
+        > DASHBOARD_MAX_UPLOAD_BYTES + _MULTIPART_OVERHEAD_ALLOWANCE_BYTES
+    ):
+        raise _upload_too_large()
+
+    payload = await _read_upload_bounded(file)
     if not payload:
         raise HTTPException(status_code=400, detail="file is empty")
 

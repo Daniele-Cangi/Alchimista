@@ -66,6 +66,10 @@ record `key_version`, and decryption resolves that version from the keyring.
 The legacy `PRIVACY_VAULT_KEY` and `PRIVACY_VAULT_KEY_VERSION` pair remains a
 backward-compatible one-key configuration.
 
+The self-hosted Compose profile injects this key material only into
+`privacy-service`. Processor, ingestion, RAG, dashboard, and database
+containers receive no vault decryption keys.
+
 To rotate from `v1` to `v2`, deploy both keys and select `v2` as active:
 
 ```text
