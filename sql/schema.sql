@@ -88,7 +88,8 @@ CREATE INDEX IF NOT EXISTS idx_pii_findings_tenant_doc
 CREATE TABLE IF NOT EXISTS pii_vault (
   id BIGSERIAL PRIMARY KEY,
   tenant TEXT NOT NULL,
-  doc_id TEXT NOT NULL,
+  doc_id TEXT NOT NULL CONSTRAINT pii_vault_document_fk
+    REFERENCES documents(doc_id) ON DELETE CASCADE,
   entity_type TEXT NOT NULL,
   placeholder TEXT NOT NULL,
   encrypted_value BYTEA NOT NULL,
@@ -100,11 +101,44 @@ CREATE TABLE IF NOT EXISTS pii_vault (
   UNIQUE (tenant, doc_id, placeholder)
 );
 
+-- Existing installations may predate the document lifecycle constraint.
+-- Orphaned vault rows have no valid restoration owner and retain sensitive
+-- material unnecessarily, so remove them before adding the FK in place.
+DO $$
+DECLARE
+  removed_orphans BIGINT;
+BEGIN
+  DELETE FROM pii_vault AS vault
+  WHERE NOT EXISTS (
+    SELECT 1 FROM documents AS document
+    WHERE document.doc_id = vault.doc_id
+  );
+  GET DIAGNOSTICS removed_orphans = ROW_COUNT;
+  IF removed_orphans > 0 THEN
+    RAISE NOTICE 'Removed % orphaned pii_vault row(s) before lifecycle migration', removed_orphans;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'pii_vault'::regclass
+      AND conname = 'pii_vault_document_fk'
+  ) THEN
+    ALTER TABLE pii_vault
+      ADD CONSTRAINT pii_vault_document_fk
+      FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE;
+  END IF;
+END
+$$;
+
 CREATE INDEX IF NOT EXISTS idx_pii_vault_tenant_doc
   ON pii_vault (tenant, doc_id, key_version);
 
 CREATE INDEX IF NOT EXISTS idx_pii_vault_value_hash
   ON pii_vault (tenant, doc_id, entity_type, value_hash);
+
+CREATE INDEX IF NOT EXISTS idx_pii_vault_key_version
+  ON pii_vault (key_version);
 
 CREATE TABLE IF NOT EXISTS document_privacy (
   tenant TEXT NOT NULL,

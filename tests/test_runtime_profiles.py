@@ -17,6 +17,10 @@ def _clear_profile_env(monkeypatch) -> None:
         "ALCHIMISTA_API_TOKEN",
         "PRIVACY_POLICY",
         "PRIVACY_SERVICE_TOKEN",
+        "PRIVACY_VAULT_ACTIVE_KEY_VERSION",
+        "PRIVACY_VAULT_KEYS_JSON",
+        "PRIVACY_VAULT_KEY",
+        "PRIVACY_VAULT_KEY_VERSION",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -52,3 +56,16 @@ def test_disabled_auth_fails_closed_in_production(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError, match="not allowed"):
         load_runtime_config()
+
+
+def test_runtime_config_exposes_vault_keyring(monkeypatch) -> None:
+    _clear_profile_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
+    monkeypatch.setenv("ALCHIMISTA_API_TOKEN", "a" * 32)
+    monkeypatch.setenv("PRIVACY_VAULT_ACTIVE_KEY_VERSION", "v2")
+    monkeypatch.setenv("PRIVACY_VAULT_KEYS_JSON", '{"v1":"one","v2":"two"}')
+
+    config = load_runtime_config()
+
+    assert config.privacy_vault_active_key_version == "v2"
+    assert config.privacy_vault_keys_json == '{"v1":"one","v2":"two"}'

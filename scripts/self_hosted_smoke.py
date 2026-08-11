@@ -34,6 +34,7 @@ def main() -> int:
     api_token = env.get("ALCHIMISTA_API_TOKEN") or os.getenv("ALCHIMISTA_API_TOKEN", "")
     privacy_token = env.get("PRIVACY_SERVICE_TOKEN") or os.getenv("PRIVACY_SERVICE_TOKEN", "")
     smoke_database_url = os.getenv("SMOKE_DATABASE_URL", "").strip()
+    compose = _compose_command()
     if not api_token or not privacy_token:
         raise RuntimeError("Generate .env with: python scripts/init_local_env.py")
 
@@ -104,6 +105,41 @@ def main() -> int:
     if restored.get("restored_text") != smoke_text:
         raise AssertionError("reversible placeholders did not restore exactly")
 
+    lifecycle_doc_id = f"vault-lifecycle-{uuid.uuid4().hex[:12]}"
+    _database_execute(
+        compose,
+        smoke_database_url,
+        "INSERT INTO documents (doc_id, tenant, source_uri, mime_type) "
+        "VALUES (%s, 'default', 'local://smoke/lifecycle', 'text/plain')",
+        lifecycle_doc_id,
+    )
+    lifecycle_mapping = _post_json(
+        "http://127.0.0.1:8014/v1/privacy/pseudonymize",
+        {
+            "text": "Synthetic lifecycle fixture orphan@example.invalid",
+            "tenant": "default",
+            "doc_id": lifecycle_doc_id,
+            "reversible": True,
+            "persist_mapping": True,
+        },
+        privacy_headers,
+    )
+    if not lifecycle_mapping.get("mapping_stored"):
+        raise AssertionError("vault lifecycle fixture did not create a reversible mapping")
+    mapping_count = _database_scalar(
+        compose, smoke_database_url, "SELECT count(*) FROM pii_vault WHERE doc_id = %s", lifecycle_doc_id
+    )
+    if mapping_count == "0":
+        raise AssertionError("vault lifecycle fixture did not persist a mapping")
+    _database_execute(
+        compose, smoke_database_url, "DELETE FROM documents WHERE doc_id = %s", lifecycle_doc_id
+    )
+    mapping_count = _database_scalar(
+        compose, smoke_database_url, "SELECT count(*) FROM pii_vault WHERE doc_id = %s", lifecycle_doc_id
+    )
+    if mapping_count != "0":
+        raise AssertionError("document deletion left orphaned privacy vault mappings")
+
     decision_id = f"decision-{uuid.uuid4().hex[:12]}"
     _post_json(
         "http://127.0.0.1:8011/v1/decisions",
@@ -133,7 +169,6 @@ def main() -> int:
     if privacy_evidence.get("mapping_exported") is not False:
         raise AssertionError("audit evidence must state that mappings were not exported")
 
-    compose = _compose_command()
     entity_count = _database_scalar(
         compose, smoke_database_url, "SELECT count(*) FROM entities WHERE doc_id = %s", doc_id
     )
@@ -318,6 +353,37 @@ def _database_scalar(compose: list[str], database_url: str, sql: str, value: str
             cursor.execute(sql, (value,))
             row = cursor.fetchone()
     return "" if not row else str(row[0])
+
+
+def _database_execute(compose: list[str], database_url: str, sql: str, value: str) -> None:
+    if not database_url:
+        safe_value = value.replace("'", "''")
+        rendered = sql % f"'{safe_value}'"
+        subprocess.run(
+            [
+                *compose,
+                "exec",
+                "-T",
+                "postgres",
+                "psql",
+                "-U",
+                "postgres",
+                "-d",
+                "alchimista",
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-c",
+                rendered,
+            ],
+            check=True,
+        )
+        return
+    import psycopg
+
+    with psycopg.connect(database_url) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, (value,))
+        connection.commit()
 
 
 if __name__ == "__main__":

@@ -85,6 +85,8 @@ class RuntimeConfig:
     privacy_mapping_enabled: bool = True
     privacy_vault_key: str = ""
     privacy_vault_key_version: str = "v1"
+    privacy_vault_active_key_version: str = ""
+    privacy_vault_keys_json: str = ""
     privacy_detector: str = "rizzo_regex"
     privacy_fail_closed: bool = True
 
@@ -189,6 +191,8 @@ def load_runtime_config() -> RuntimeConfig:
         privacy_mapping_enabled=get_env_bool("PRIVACY_MAPPING_ENABLED", True),
         privacy_vault_key=get_env("PRIVACY_VAULT_KEY", ""),
         privacy_vault_key_version=get_env("PRIVACY_VAULT_KEY_VERSION", "v1"),
+        privacy_vault_active_key_version=get_env("PRIVACY_VAULT_ACTIVE_KEY_VERSION", ""),
+        privacy_vault_keys_json=get_env("PRIVACY_VAULT_KEYS_JSON", ""),
         privacy_detector=get_env("PRIVACY_DETECTOR", "rizzo_regex"),
         privacy_fail_closed=get_env_bool("PRIVACY_FAIL_CLOSED", True),
     )

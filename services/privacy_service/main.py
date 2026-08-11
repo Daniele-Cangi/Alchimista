@@ -20,10 +20,12 @@ from services.shared.privacy import (
 
 
 config = load_runtime_config()
-if not config.privacy_vault_key:
-    raise RuntimeError("PRIVACY_VAULT_KEY is required by privacy-service")
-
-cipher = VaultCipher.from_base64(config.privacy_vault_key, config.privacy_vault_key_version)
+cipher = VaultCipher.from_configuration(
+    active_key_version=config.privacy_vault_active_key_version,
+    keys_json=config.privacy_vault_keys_json,
+    legacy_key=config.privacy_vault_key,
+    legacy_key_version=config.privacy_vault_key_version,
+)
 vault = PiiVaultRepository(config.database_url, cipher)
 detector = build_detector(
     config.privacy_detector,
@@ -48,9 +50,11 @@ def ready() -> dict:
                 cur.fetchone()
         if not detector.ready():
             raise RuntimeError("Privacy detector is not ready")
+        if vault.unavailable_key_versions():
+            raise RuntimeError("Privacy vault contains unavailable key versions")
         return {"status": "ready", "engine": detector.metadata.model_dump(mode="json")}
     except Exception as exc:
-        raise HTTPException(status_code=503, detail="Privacy vault database is not ready") from exc
+        raise HTTPException(status_code=503, detail="Privacy service is not ready") from exc
 
 
 @app.post("/v1/privacy/detect", response_model=PrivacyDetectResponse)

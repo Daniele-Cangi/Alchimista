@@ -56,14 +56,43 @@ only placeholders.
 
 ## Vault cryptography
 
-`PRIVACY_VAULT_KEY` is URL-safe base64 for exactly 32 bytes. Values are
-encrypted independently with AES-256-GCM and random 12-byte nonces. AAD binds
-the tenant, document, placeholder, and key version. Value hashes are HMAC-SHA256
-under the vault key, not unsalted plain hashes.
+Each value in `PRIVACY_VAULT_KEYS_JSON` is URL-safe base64 for exactly 32
+bytes. Values are encrypted independently with AES-256-GCM and random 12-byte
+nonces. AAD binds the tenant, document, placeholder, and key version. Value
+hashes are HMAC-SHA256 under the active vault key, not unsalted plain hashes.
 
-Rows record `key_version`. Rotation requires deploying the new version while
-retaining a controlled way to decrypt/re-encrypt old rows; automated rotation
-is remaining work.
+`PRIVACY_VAULT_ACTIVE_KEY_VERSION` selects the key for new encryption. Rows
+record `key_version`, and decryption resolves that version from the keyring.
+The legacy `PRIVACY_VAULT_KEY` and `PRIVACY_VAULT_KEY_VERSION` pair remains a
+backward-compatible one-key configuration.
+
+To rotate from `v1` to `v2`, deploy both keys and select `v2` as active:
+
+```text
+PRIVACY_VAULT_ACTIVE_KEY_VERSION=v2
+PRIVACY_VAULT_KEYS_JSON={"v1":"<old-key>","v2":"<new-key>"}
+```
+
+New and subsequently refreshed mappings use `v2`; existing `v1` rows remain
+restorable. Readiness fails if any stored version is absent from the keyring.
+Bulk re-encryption is not implemented, so do not remove `v1` until a database
+query confirms that no rows reference it.
+
+## Vault lifecycle
+
+`pii_vault.doc_id` has a foreign key to `documents.doc_id` with
+`ON DELETE CASCADE`. When an authorized document deletion succeeds, its
+reversible mappings are deleted in the same database transaction. Decision
+context references may independently restrict document deletion; application
+legal-hold policy remains responsible for authorizing the operation.
+Persistent reversible pseudonymization therefore requires an existing
+document with the same tenant and document identifier.
+
+When `sql/schema.sql` upgrades a database created before this constraint, it
+deletes already-orphaned vault rows and then adds the foreign key. Those rows
+cannot have a valid document restoration owner and otherwise retain encrypted
+PII indefinitely. Back up the database before applying any production schema
+upgrade.
 
 ## Failure behavior
 

@@ -38,7 +38,7 @@ to loopback by default:
 
 The generated `.env` contains the local bearer token, admin key, internal
 privacy token, audit signing key, PostgreSQL password, and a URL-safe 256-bit
-privacy vault key. It is git-ignored. Treat it as secret material and back it
+privacy vault keyring. It is git-ignored. Treat it as secret material and back it
 up if reversible mappings must survive host loss.
 
 Verify the real vertical slice:
@@ -56,8 +56,8 @@ SELF_HOSTED_SMOKE_OK
 The smoke uses only synthetic identifiers. It verifies ingest, privacy
 detection, pseudonymization and restoration, protected persistence under
 `STRICT`, SQL retrieval, citations, tenant isolation, AI decision evidence,
-audit privacy metadata, encrypted vault content, and persistence after a
-PostgreSQL restart.
+audit privacy metadata, encrypted vault content, vault cascade cleanup, and
+persistence after a PostgreSQL restart.
 
 Stop the stack without deleting persistent data:
 
@@ -201,13 +201,21 @@ mode, and pinned source revision. They never return the raw placeholder map.
 - `pii_vault` stores AES-256-GCM ciphertext, a random 96-bit nonce, keyed hash,
   and key version. Additional authenticated data binds tenant, document,
   placeholder, and key version.
+- `pii_vault.doc_id` references `documents.doc_id` with `ON DELETE CASCADE`, so
+  document deletion cannot leave encrypted PII mappings orphaned. Schema
+  upgrade removes pre-constraint orphan rows before adding the invariant.
 - `document_privacy` records the applied policy and audit-safe aggregate facts.
 - raw values are written to the legacy `entities` table only under `off`.
 
-`PRIVACY_VAULT_KEY_VERSION` prepares rotation, but this revision does not
-automatically re-encrypt old rows. Keep old key material available while old
-mappings must remain restorable. A corrupt, wrong, or unavailable key fails
-restoration closed.
+`PRIVACY_VAULT_KEYS_JSON` supplies a version-to-key keyring and
+`PRIVACY_VAULT_ACTIVE_KEY_VERSION` selects the key for new ciphertext and
+keyed hashes. Decryption selects the key recorded in each row. The legacy
+single-key variables remain accepted for rolling upgrades. Readiness fails if
+the database references an unavailable key version.
+
+Automatic bulk re-encryption is not implemented. Keep an old key in the
+keyring until no rows reference its version; removing it earlier deliberately
+fails restoration closed.
 
 See [docs/privacy.md](docs/privacy.md) for precise boundary behavior.
 
@@ -331,7 +339,8 @@ The pre-change implementation map and architectural decisions are in
 - The SQL embedding scan intentionally prioritizes easy startup over scale.
 - Local auth is a single-token model, not a user directory or identity
   platform.
-- Vault key rotation is versioned but not automated.
+- Vault key selection and backward decryption are versioned; bulk
+  re-encryption and retirement automation are not implemented.
 - OCR quality depends on host/document characteristics and is not covered by
   the synthetic text smoke.
 

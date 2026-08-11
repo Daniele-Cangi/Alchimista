@@ -3,17 +3,22 @@ from __future__ import annotations
 
 import argparse
 import base64
+import json
 import secrets
 from pathlib import Path
 
 
 def build_environment(privacy_policy: str = "protect_egress") -> str:
+    vault_key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii")
     values = {
         "POSTGRES_PASSWORD": secrets.token_urlsafe(32),
         "ALCHIMISTA_API_TOKEN": secrets.token_urlsafe(48),
         "ADMIN_API_KEY": secrets.token_urlsafe(48),
         "PRIVACY_SERVICE_TOKEN": secrets.token_urlsafe(48),
-        "PRIVACY_VAULT_KEY": base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii"),
+        "PRIVACY_VAULT_ACTIVE_KEY_VERSION": "v1",
+        "PRIVACY_VAULT_KEYS_JSON": json.dumps({"v1": vault_key}, separators=(",", ":")),
+        # Legacy mirrors keep generated environments compatible with older images.
+        "PRIVACY_VAULT_KEY": vault_key,
         "PRIVACY_VAULT_KEY_VERSION": "v1",
         "AUDIT_REPORT_SIGNING_KEY": secrets.token_urlsafe(48),
         "AUDIT_REPORT_SIGNING_KEY_ID": "local-v1",

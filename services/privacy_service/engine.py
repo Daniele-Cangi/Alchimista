@@ -126,6 +126,7 @@ class PrivacyEngine:
             raise ValueError("Reversible pseudonymization requires doc_id and an available vault")
         existing: dict[tuple[str, str], str] = {}
         if reversible and persist_mapping and self.vault and doc_id:
+            self.vault.assert_document_scope(tenant=tenant, doc_id=doc_id)
             existing = self.vault.load_value_placeholders(tenant=tenant, doc_id=doc_id)
 
         entities = self.detector.detect(text)
