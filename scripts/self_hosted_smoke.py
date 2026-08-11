@@ -40,6 +40,7 @@ def main() -> int:
     auth_headers = {"Authorization": f"Bearer {api_token}"}
     privacy_headers = {"x-privacy-token": privacy_token}
     doc_id = f"smoke-{uuid.uuid4().hex[:12]}"
+    smoke_text = f"{SYNTHETIC_TEXT} Synthetic run marker {doc_id}."
 
     _wait_json("http://127.0.0.1:8011/v1/readyz")
     _wait_json("http://127.0.0.1:8013/v1/readyz")
@@ -49,7 +50,7 @@ def main() -> int:
         "http://127.0.0.1:8011/v1/ingest",
         fields={"tenant": "default", "doc_id": doc_id},
         filename="synthetic-privacy-smoke.txt",
-        content=SYNTHETIC_TEXT.encode("utf-8"),
+        content=smoke_text.encode("utf-8"),
         headers=auth_headers,
     )
     if ingest.get("doc_id") != doc_id:
@@ -69,11 +70,18 @@ def main() -> int:
     if not citations:
         raise AssertionError("RAG response did not contain citations")
     chunk_ids = [item["chunk_id"] for item in citations]
+    cross_tenant = _post_json(
+        "http://127.0.0.1:8013/v1/query",
+        {"tenant": "other-tenant", "query": "retention policy", "top_k": 3, "doc_ids": [doc_id]},
+        auth_headers,
+    )
+    if cross_tenant.get("answers"):
+        raise AssertionError("tenant boundary leaked retrieval chunks")
 
     protected = _post_json(
         "http://127.0.0.1:8014/v1/privacy/pseudonymize",
         {
-            "text": SYNTHETIC_TEXT,
+            "text": smoke_text,
             "tenant": "default",
             "doc_id": doc_id,
             "reversible": True,
@@ -93,7 +101,7 @@ def main() -> int:
         {"text": protected_text, "tenant": "default", "doc_id": doc_id},
         privacy_headers,
     )
-    if restored.get("restored_text") != SYNTHETIC_TEXT:
+    if restored.get("restored_text") != smoke_text:
         raise AssertionError("reversible placeholders did not restore exactly")
 
     decision_id = f"decision-{uuid.uuid4().hex[:12]}"
@@ -139,6 +147,22 @@ def main() -> int:
     )
     if audit_raw_count != "0":
         raise AssertionError("raw synthetic PII entered decision evidence")
+    findings_raw_count = _database_scalar(
+        compose,
+        smoke_database_url,
+        "SELECT count(*) FROM pii_findings WHERE doc_id = %s AND row_to_json(pii_findings)::text LIKE '%%alice@example.invalid%%'",
+        doc_id,
+    )
+    if findings_raw_count != "0":
+        raise AssertionError("raw synthetic PII entered privacy findings")
+    vault_raw_count = _database_scalar(
+        compose,
+        smoke_database_url,
+        "SELECT count(*) FROM pii_vault WHERE doc_id = %s AND position(convert_to('alice@example.invalid', 'UTF8') in encrypted_value) > 0",
+        doc_id,
+    )
+    if vault_raw_count != "0":
+        raise AssertionError("privacy vault stored raw PII without encryption")
     policy = _database_scalar(
         compose, smoke_database_url, "SELECT privacy_policy FROM document_privacy WHERE doc_id = %s", doc_id
     )

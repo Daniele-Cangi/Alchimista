@@ -7,7 +7,7 @@ import secrets
 from pathlib import Path
 
 
-def build_environment() -> str:
+def build_environment(privacy_policy: str = "protect_egress") -> str:
     values = {
         "POSTGRES_PASSWORD": secrets.token_urlsafe(32),
         "ALCHIMISTA_API_TOKEN": secrets.token_urlsafe(48),
@@ -18,7 +18,7 @@ def build_environment() -> str:
         "AUDIT_REPORT_SIGNING_KEY": secrets.token_urlsafe(48),
         "AUDIT_REPORT_SIGNING_KEY_ID": "local-v1",
         "LOCAL_AUTH_TENANTS": "*",
-        "PRIVACY_POLICY": "protect_egress",
+        "PRIVACY_POLICY": privacy_policy,
         "PRIVACY_MAPPING_ENABLED": "true",
         "PRIVACY_DETECTOR": "rizzo_regex",
     }
@@ -28,13 +28,19 @@ def build_environment() -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate local Alchimista secrets")
     parser.add_argument("--force", action="store_true", help="replace an existing .env")
+    parser.add_argument(
+        "--privacy-policy",
+        choices=("off", "detect", "protect_egress", "strict"),
+        default="protect_egress",
+        help="privacy policy written to .env",
+    )
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[1]
     destination = root / ".env"
     if destination.exists() and not args.force:
         parser.error(f"{destination} already exists; use --force to replace it")
-    destination.write_text(build_environment(), encoding="utf-8", newline="\n")
+    destination.write_text(build_environment(args.privacy_policy), encoding="utf-8", newline="\n")
     try:
         destination.chmod(0o600)
     except OSError:

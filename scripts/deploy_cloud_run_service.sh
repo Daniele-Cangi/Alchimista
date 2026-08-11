@@ -83,6 +83,7 @@ gcloud run deploy "$SERVICE" \
   --project "$PROJECT_ID" \
   --region "$REGION" \
   --image "$IMAGE" \
+  --update-env-vars "ALCHIMISTA_PROFILE=gcp" \
   --quiet >/dev/null
 
 REVISION="$(gcloud run services describe "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --format='value(status.latestReadyRevisionName)')"
