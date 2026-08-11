@@ -41,21 +41,27 @@ class RizzoRegexDetector:
 class RizzoHttpDetector:
     """Optional adapter for the full upstream Rizzo CPU/ML service."""
 
-    def __init__(self, base_url: str, timeout_seconds: int = 120):
+    def __init__(self, base_url: str, timeout_seconds: int = 120, token: str = ""):
         base = base_url.rstrip("/")
         self._url = base + "/analyze"
         self._health_url = base + "/health"
         self._timeout_seconds = timeout_seconds
+        self._token = token
         self.metadata = PrivacyEngineMetadata(
             name="rizzo-pii",
-            version="upstream-http",
+            version="model-v1.5.0",
             source_revision=RIZZO_SOURCE_REVISION,
             mode="ml_plus_regex",
         )
 
     def ready(self) -> bool:
         try:
-            with urlopen(self._health_url, timeout=min(10, self._timeout_seconds)) as response:
+            request = Request(
+                self._health_url,
+                headers={"x-model-token": self._token} if self._token else {},
+                method="GET",
+            )
+            with urlopen(request, timeout=min(10, self._timeout_seconds)) as response:
                 return response.status == 200
         except Exception:
             return False
@@ -64,7 +70,10 @@ class RizzoHttpDetector:
         request = Request(
             self._url,
             data=json.dumps({"text": text, "include_mapping": True}).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                **({"x-model-token": self._token} if self._token else {}),
+            },
             method="POST",
         )
         try:
@@ -88,7 +97,7 @@ class RizzoHttpDetector:
                         "label": str(label),
                         "start": offset,
                         "end": offset + len(value),
-                        "score": 1.0 if segment.get("validated") else 0.9,
+                        "score": float(segment.get("score") or (1.0 if segment.get("validated") else 0.9)),
                         "validated": bool(segment.get("validated")),
                         "source": str(segment.get("src") or "modello"),
                     }
@@ -190,12 +199,18 @@ class PrivacyEngine:
         return ProtectionResult(protected_text=protected_text, findings=findings, raw_mappings=raw_mappings)
 
 
-def build_detector(mode: str, *, rizzo_url: str = "", timeout_seconds: int = 120) -> Detector:
+def build_detector(
+    mode: str,
+    *,
+    rizzo_url: str = "",
+    timeout_seconds: int = 120,
+    rizzo_token: str = "",
+) -> Detector:
     normalized = mode.strip().lower()
     if normalized == "rizzo_regex":
         return RizzoRegexDetector()
     if normalized == "rizzo_http" and rizzo_url:
-        return RizzoHttpDetector(rizzo_url, timeout_seconds=timeout_seconds)
+        return RizzoHttpDetector(rizzo_url, timeout_seconds=timeout_seconds, token=rizzo_token)
     raise RuntimeError("PRIVACY_DETECTOR must be rizzo_regex, or rizzo_http with RIZZO_BASE_URL")
 
 

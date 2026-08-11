@@ -15,6 +15,7 @@ def build_environment(privacy_policy: str = "protect_egress") -> str:
         "ALCHIMISTA_API_TOKEN": secrets.token_urlsafe(48),
         "ADMIN_API_KEY": secrets.token_urlsafe(48),
         "PRIVACY_SERVICE_TOKEN": secrets.token_urlsafe(48),
+        "RIZZO_MODEL_TOKEN": secrets.token_urlsafe(48),
         "PRIVACY_VAULT_ACTIVE_KEY_VERSION": "v1",
         "PRIVACY_VAULT_KEYS_JSON": json.dumps({"v1": vault_key}, separators=(",", ":")),
         # Legacy mirrors keep generated environments compatible with older images.

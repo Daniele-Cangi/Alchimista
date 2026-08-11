@@ -160,6 +160,30 @@ CREATE TABLE IF NOT EXISTS document_privacy (
 CREATE INDEX IF NOT EXISTS idx_document_privacy_tenant_policy
   ON document_privacy (tenant, privacy_policy, updated_at DESC);
 
+-- Product runtime choices are workspace-scoped and survive service restarts.
+-- Environment variables remain bootstrap defaults for workspaces without a row.
+CREATE TABLE IF NOT EXISTS runtime_settings (
+  workspace TEXT PRIMARY KEY,
+  privacy_policy TEXT NOT NULL CHECK (privacy_policy IN ('off', 'detect', 'protect_egress', 'strict')),
+  privacy_detector TEXT NOT NULL CHECK (privacy_detector IN ('rizzo_regex', 'rizzo_http')),
+  privacy_mapping_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS runtime_settings_history (
+  id BIGSERIAL PRIMARY KEY,
+  workspace TEXT NOT NULL,
+  privacy_policy TEXT NOT NULL,
+  privacy_detector TEXT NOT NULL,
+  privacy_mapping_enabled BOOLEAN NOT NULL,
+  changed_by TEXT NOT NULL,
+  changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_runtime_settings_history_workspace_changed_at
+  ON runtime_settings_history (workspace, changed_at DESC);
+
 CREATE TABLE IF NOT EXISTS ai_decisions (
   id BIGSERIAL PRIMARY KEY,
   decision_id TEXT NOT NULL,

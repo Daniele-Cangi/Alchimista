@@ -58,7 +58,7 @@ privacy_client = (
         token=config.privacy_service_token,
         timeout_seconds=config.privacy_timeout_seconds,
     )
-    if privacy_policy != PrivacyPolicy.OFF
+    if config.privacy_service_url and config.privacy_service_token
     else None
 )
 
@@ -144,6 +144,7 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
     process_job_id: str | None = None
     started_at = utcnow()
     t0 = time.perf_counter()
+    active_privacy_policy, active_mapping_enabled = _privacy_runtime(message.tenant)
 
     with get_connection(config.database_url) as conn:
         with conn.cursor() as cur:
@@ -162,7 +163,12 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
         payload = storage_client.download_bytes(message.uri)
         content_hash = sha256_bytes(payload)
         text = _extract_text(payload, message.type, message.uri)
-        index_text, privacy_findings, privacy_metadata = _apply_document_privacy(text, message)
+        index_text, privacy_findings, privacy_metadata = _apply_document_privacy(
+            text,
+            message,
+            policy=active_privacy_policy,
+            mapping_enabled=active_mapping_enabled,
+        )
         text_chunks = chunk_text(index_text)
         if not text_chunks:
             raise RuntimeError("No text extracted from document")
@@ -174,18 +180,18 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
             chunk_id = f"{message.id}:{idx:05d}"
             embedding_text = chunk
             if config.embedding_backend == "vertex_text_embedding":
-                if privacy_policy == PrivacyPolicy.PROTECT_EGRESS:
+                if active_privacy_policy == PrivacyPolicy.PROTECT_EGRESS:
                     prepared = prepare_external_text(
                         text=chunk,
                         tenant=message.tenant,
                         doc_id=message.id,
-                        policy=privacy_policy,
+                        policy=active_privacy_policy,
                         privacy_client=privacy_client,
-                        reversible=config.privacy_mapping_enabled,
+                        reversible=active_mapping_enabled,
                     )
                     embedding_text = prepared.text
                     privacy_metadata["external_payload_pseudonymized"] = prepared.pseudonymized
-                elif privacy_policy == PrivacyPolicy.STRICT:
+                elif active_privacy_policy == PrivacyPolicy.STRICT:
                     # STRICT already transformed the full document before chunking.
                     privacy_metadata["external_payload_pseudonymized"] = True
             embedding = embed_text(embedding_text)
@@ -201,7 +207,7 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
                 }
             )
 
-            if privacy_policy == PrivacyPolicy.OFF:
+            if active_privacy_policy == PrivacyPolicy.OFF:
                 for entity_type, entity_value in extract_entities(chunk):
                     entity_records.append(
                         {
@@ -239,14 +245,17 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
                     cur,
                     tenant=message.tenant,
                     doc_id=message.id,
-                    privacy_policy=privacy_policy.value,
+                    privacy_policy=active_privacy_policy.value,
                     pii_detected=int(privacy_metadata["pii_detected"]),
                     pii_types=list(privacy_metadata["pii_types"]),
                     external_payload_pseudonymized=bool(privacy_metadata["external_payload_pseudonymized"]),
                     privacy_engine=privacy_metadata.get("privacy_engine"),
                     privacy_engine_version=privacy_metadata.get("privacy_engine_version"),
                     privacy_engine_source_revision=privacy_metadata.get("privacy_engine_source_revision"),
-                    metadata={"mapping_exported": False},
+                    metadata={
+                        "mapping_exported": False,
+                        "privacy_detector": privacy_metadata.get("privacy_detector"),
+                    },
                 )
                 conn.commit()
 
@@ -288,7 +297,7 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
             chunks=len(chunk_records),
             entities=len(entity_records),
             pii_detected=privacy_metadata["pii_detected"],
-            privacy_policy=privacy_policy.value,
+            privacy_policy=active_privacy_policy.value,
             duration_ms=duration_ms,
         )
 
@@ -297,7 +306,7 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
             tenant=message.tenant,
             status=JobStatus.SUCCEEDED.value,
             chunks=len(chunk_records),
-            entities=len(privacy_findings) if privacy_policy != PrivacyPolicy.OFF else len(entity_records),
+            entities=len(privacy_findings) if active_privacy_policy != PrivacyPolicy.OFF else len(entity_records),
             trace_id=trace_id,
         )
 
@@ -333,9 +342,15 @@ def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
         raise HTTPException(status_code=500, detail=error_text) from exc
 
 
-def _apply_document_privacy(text: str, message: IngestMessage) -> tuple[str, list, dict]:
+def _apply_document_privacy(
+    text: str,
+    message: IngestMessage,
+    *,
+    policy: PrivacyPolicy,
+    mapping_enabled: bool,
+) -> tuple[str, list, dict]:
     metadata = {
-        "privacy_policy": privacy_policy.value,
+        "privacy_policy": policy.value,
         "pii_detected": 0,
         "pii_types": [],
         "external_payload_pseudonymized": False,
@@ -343,20 +358,21 @@ def _apply_document_privacy(text: str, message: IngestMessage) -> tuple[str, lis
         "privacy_engine": None,
         "privacy_engine_version": None,
         "privacy_engine_source_revision": None,
+        "privacy_detector": None,
     }
-    if privacy_policy == PrivacyPolicy.OFF:
+    if policy == PrivacyPolicy.OFF:
         return text, [], metadata
     if privacy_client is None:
         raise RuntimeError("Privacy policy enforcement failed: service is not configured")
     try:
-        if privacy_policy == PrivacyPolicy.STRICT:
+        if policy == PrivacyPolicy.STRICT:
             result = privacy_client.pseudonymize(
                 PrivacyPseudonymizeRequest(
                     text=text,
                     tenant=message.tenant,
                     doc_id=message.id,
-                    reversible=config.privacy_mapping_enabled,
-                    persist_mapping=config.privacy_mapping_enabled,
+                    reversible=mapping_enabled,
+                    persist_mapping=mapping_enabled,
                 )
             )
             index_text = result.protected_text
@@ -375,9 +391,22 @@ def _apply_document_privacy(text: str, message: IngestMessage) -> tuple[str, lis
             "privacy_engine": result.engine.name,
             "privacy_engine_version": result.engine.version,
             "privacy_engine_source_revision": result.engine.source_revision,
+            "privacy_detector": result.engine.mode,
         }
     )
     return index_text, result.findings, metadata
+
+
+def _privacy_runtime(tenant: str) -> tuple[PrivacyPolicy, bool]:
+    if privacy_client is None:
+        return privacy_policy, config.privacy_mapping_enabled
+    try:
+        selected = privacy_client.settings(tenant)
+        return selected.privacy_policy, selected.privacy_mapping_enabled
+    except PrivacyServiceError as exc:
+        if privacy_policy == PrivacyPolicy.OFF and not config.privacy_fail_closed:
+            return privacy_policy, config.privacy_mapping_enabled
+        raise RuntimeError("Unable to load workspace privacy settings") from exc
 
 
 def _sync_vector_index(*, tenant: str, chunk_records: list[dict], existing_chunk_ids: list[str]) -> None:

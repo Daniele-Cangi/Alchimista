@@ -37,7 +37,11 @@ from services.shared.contracts import (
     AIDecisionVerifyRequest,
     AIDecisionVerifyResponse,
     ConnectorIngestResponse,
+    DocumentChunkEvidence,
+    DocumentDetail,
+    DocumentListResponse,
     DocumentStatusResponse,
+    DocumentSummary,
     GCSConnectorImportRequest,
     IngestMessage,
     JobRecord,
@@ -58,9 +62,12 @@ from services.shared.contracts import (
 )
 from services.shared.db import (
     fetch_document_privacy,
+    fetch_document_detail,
     fetch_document_status,
+    fetch_chunk_evidence,
     get_connection,
     get_document_by_hash,
+    list_documents,
     upsert_document,
     upsert_process_job,
 )
@@ -89,7 +96,7 @@ privacy_client = (
         token=config.privacy_service_token,
         timeout_seconds=config.privacy_timeout_seconds,
     )
-    if privacy_policy != PrivacyPolicy.OFF
+    if config.privacy_service_url and config.privacy_service_token
     else None
 )
 _ai_schema_lock = threading.Lock()
@@ -276,6 +283,72 @@ def get_document_status(request: Request, doc_id: str, tenant: str = config.defa
     )
 
 
+@app.get("/v1/documents", response_model=DocumentListResponse)
+def get_documents(
+    request: Request,
+    tenant: str = config.default_tenant,
+    limit: int = 100,
+    offset: int = 0,
+) -> DocumentListResponse:
+    require_auth(request, config=config, tenant=tenant)
+    bounded_limit = max(1, min(limit, 200))
+    bounded_offset = max(0, min(offset, 10_000))
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            rows, total = list_documents(
+                cur,
+                tenant=tenant,
+                limit=bounded_limit,
+                offset=bounded_offset,
+            )
+    return DocumentListResponse(
+        workspace=tenant,
+        documents=[_document_summary(row) for row in rows],
+        total=total,
+    )
+
+
+@app.get("/v1/documents/{doc_id}", response_model=DocumentDetail)
+def get_document_detail(request: Request, doc_id: str, tenant: str = config.default_tenant) -> DocumentDetail:
+    require_auth(request, config=config, tenant=tenant)
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            row = fetch_document_detail(cur, tenant=tenant, doc_id=doc_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    summary = _document_summary(row)
+    return DocumentDetail(
+        **summary.model_dump(),
+        content_hash=row.get("content_hash"),
+        source_kind=str(row.get("source_uri") or "local").split(":", 1)[0],
+        evidence=[DocumentChunkEvidence(**item) for item in row.get("evidence") or []],
+        decisions_referencing=int(row.get("decisions_referencing") or 0),
+    )
+
+
+@app.get("/v1/documents/{doc_id}/evidence/{chunk_id}")
+def get_document_evidence(
+    request: Request,
+    doc_id: str,
+    chunk_id: str,
+    tenant: str = config.default_tenant,
+) -> dict[str, Any]:
+    require_auth(request, config=config, tenant=tenant)
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            row = fetch_chunk_evidence(cur, tenant=tenant, doc_id=doc_id, chunk_id=chunk_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+    return {
+        "doc_id": row["doc_id"],
+        "chunk_id": row["chunk_id"],
+        "chunk_index": row["chunk_index"],
+        "preview": row["preview"],
+        "token_count": row["token_count"],
+        "document_name": _document_name(str(row["source_uri"]), str(row["doc_id"])),
+    }
+
+
 @app.post("/v1/connectors/gcs/import", response_model=ConnectorIngestResponse)
 def connector_import_gcs(payload: GCSConnectorImportRequest, request: Request) -> ConnectorIngestResponse:
     if config.storage_backend != "gcs":
@@ -432,6 +505,13 @@ def ingest_decision(payload: AIDecisionIngestRequest, request: Request) -> AIDec
             if decision_privacy:
                 context_privacy["decision_payload_pseudonymized"] = True
                 context_privacy["decision_payload_pii_detected"] = int(decision_privacy["pii_detected"])
+                context_privacy["decision_privacy_policy"] = decision_privacy["privacy_policy"]
+                context_privacy["decision_privacy_engine"] = decision_privacy["privacy_engine"]
+                context_privacy["decision_privacy_detector"] = decision_privacy["privacy_detector"]
+                context_privacy["decision_privacy_engine_version"] = decision_privacy["privacy_engine_version"]
+                context_privacy["decision_privacy_engine_source_revision"] = decision_privacy[
+                    "privacy_engine_source_revision"
+                ]
                 context_privacy["pii_types"] = sorted(
                     set(context_privacy["pii_types"]).union(decision_privacy["pii_types"])
                 )
@@ -679,7 +759,7 @@ def bundle_decisions(payload: AIDecisionBundleRequest, request: Request) -> AIDe
                     }
                 )
 
-    policy_snapshot = _build_policy_snapshot() if payload.include_policy_snapshot else None
+    policy_snapshot = _build_policy_snapshot(payload.tenant) if payload.include_policy_snapshot else None
 
     bundle_payload: dict[str, Any] = {
         "bundle_id": bundle_id,
@@ -886,7 +966,7 @@ def package_decisions(payload: AIDecisionPackageRequest, request: Request) -> AI
                 )
 
     if payload.include_policy_snapshot:
-        policy_snapshot_payload = _build_policy_snapshot()
+        policy_snapshot_payload = _build_policy_snapshot(payload.tenant)
         policy_report_hash = _sha256_json(policy_snapshot_payload)
         policy_signature_alg = "none"
         policy_signature = None
@@ -1989,11 +2069,14 @@ def _validate_context_chunks(
 
 
 def _protect_decision_evidence(payload: AIDecisionIngestRequest) -> AIDecisionIngestRequest:
-    if privacy_policy == PrivacyPolicy.OFF:
-        return payload
     if privacy_client is None:
+        if privacy_policy == PrivacyPolicy.OFF:
+            return payload
         raise HTTPException(status_code=503, detail="Privacy policy enforcement is unavailable")
     try:
+        selected = privacy_client.settings(payload.tenant)
+        if selected.privacy_policy == PrivacyPolicy.OFF:
+            return payload
         protected_input = privacy_client.pseudonymize(
             PrivacyPseudonymizeRequest(
                 text=payload.input,
@@ -2017,9 +2100,11 @@ def _protect_decision_evidence(payload: AIDecisionIngestRequest) -> AIDecisionIn
 
     metadata = dict(payload.metadata or {})
     metadata["_decision_privacy"] = {
+        "privacy_policy": selected.privacy_policy.value,
         "pii_detected": protected_input.pii_count + protected_output.pii_count,
         "pii_types": sorted(set(protected_input.pii_types).union(protected_output.pii_types)),
         "privacy_engine": protected_input.engine.name,
+        "privacy_detector": protected_input.engine.mode,
         "privacy_engine_version": protected_input.engine.version,
         "privacy_engine_source_revision": protected_input.engine.source_revision,
         "mapping_exported": False,
@@ -2033,6 +2118,32 @@ def _protect_decision_evidence(payload: AIDecisionIngestRequest) -> AIDecisionIn
     )
 
 
+def _document_summary(row: dict[str, Any]) -> DocumentSummary:
+    raw_status = row.get("status")
+    return DocumentSummary(
+        doc_id=str(row["doc_id"]),
+        workspace=str(row["tenant"]),
+        name=_document_name(str(row.get("source_uri") or ""), str(row["doc_id"])),
+        mime_type=row.get("mime_type"),
+        size_bytes=row.get("size_bytes"),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        status=JobStatus(str(raw_status)) if raw_status else None,
+        chunks=int(row.get("chunks") or 0),
+        pii_detected=int(row.get("pii_detected") or 0),
+        pii_types=list(row.get("pii_types") or []),
+        privacy_policy=str(row.get("privacy_policy") or "off"),
+        privacy_detector=row.get("privacy_detector"),
+        privacy_engine_version=row.get("privacy_engine_version"),
+        privacy_engine_source_revision=row.get("privacy_engine_source_revision"),
+    )
+
+
+def _document_name(source_uri: str, doc_id: str) -> str:
+    candidate = posixpath.basename(source_uri.rstrip("/"))
+    return candidate or doc_id
+
+
 def _build_context_privacy_evidence(cur: Any, *, tenant: str, doc_ids: list[str]) -> dict[str, Any]:
     records = fetch_document_privacy(cur, tenant=tenant, doc_ids=doc_ids)
     pii_types: set[str] = set()
@@ -2040,6 +2151,7 @@ def _build_context_privacy_evidence(cur: Any, *, tenant: str, doc_ids: list[str]
     engines: set[str] = set()
     versions: set[str] = set()
     revisions: set[str] = set()
+    detectors: set[str] = set()
     for record in records:
         policies.add(str(record.get("privacy_policy") or "off"))
         pii_types.update(str(item) for item in (record.get("pii_types") or []))
@@ -2049,6 +2161,9 @@ def _build_context_privacy_evidence(cur: Any, *, tenant: str, doc_ids: list[str]
             versions.add(str(record["privacy_engine_version"]))
         if record.get("privacy_engine_source_revision"):
             revisions.add(str(record["privacy_engine_source_revision"]))
+        detector = (record.get("metadata") or {}).get("privacy_detector")
+        if detector:
+            detectors.add(str(detector))
 
     if len(records) < len(doc_ids):
         policies.add("off")
@@ -2063,6 +2178,7 @@ def _build_context_privacy_evidence(cur: Any, *, tenant: str, doc_ids: list[str]
         "privacy_engine": next(iter(engines)) if len(engines) == 1 else None,
         "privacy_engine_version": next(iter(versions)) if len(versions) == 1 else None,
         "privacy_engine_source_revision": next(iter(revisions)) if len(revisions) == 1 else None,
+        "privacy_detector": next(iter(detectors)) if len(detectors) == 1 else None,
         "context_documents_evaluated": len(records),
     }
 
@@ -2515,7 +2631,18 @@ def _resolve_audit_package_prefix(*, tenant: str, requested_object_prefix: str |
     return safe_object_name(f"reports/{tenant}/audit/packages/{package_id}")
 
 
-def _build_policy_snapshot() -> dict[str, Any]:
+def _build_policy_snapshot(tenant: str) -> dict[str, Any]:
+    runtime_policy = config.privacy_policy
+    runtime_detector = config.privacy_detector
+    runtime_mapping_enabled = config.privacy_mapping_enabled
+    if privacy_client is not None:
+        try:
+            selected = privacy_client.settings(tenant)
+            runtime_policy = selected.privacy_policy.value
+            runtime_detector = selected.privacy_detector.value
+            runtime_mapping_enabled = selected.privacy_mapping_enabled
+        except PrivacyServiceError as exc:
+            raise HTTPException(status_code=503, detail="Unable to snapshot runtime privacy settings") from exc
     return {
         "alchimista_profile": config.profile,
         "deploy_environment": config.deploy_environment,
@@ -2528,7 +2655,9 @@ def _build_policy_snapshot() -> dict[str, Any]:
         "pubsub_push_auth_enabled": config.pubsub_push_auth_enabled,
         "storage_backend": config.storage_backend,
         "queue_backend": config.queue_backend,
-        "privacy_policy": config.privacy_policy,
+        "privacy_policy": runtime_policy,
+        "privacy_detector": runtime_detector,
+        "privacy_mapping_enabled": runtime_mapping_enabled,
         "cloud_run_revision": os.getenv("K_REVISION", ""),
         "cloud_run_service": os.getenv("K_SERVICE", ""),
     }

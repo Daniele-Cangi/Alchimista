@@ -5,7 +5,8 @@ from contextlib import contextmanager
 import pytest
 from cryptography.exceptions import InvalidTag
 
-from services.privacy_service.engine import PrivacyEngine, RizzoRegexDetector
+from services.privacy_service import engine as engine_module
+from services.privacy_service.engine import PrivacyEngine, RizzoHttpDetector, RizzoRegexDetector
 from services.privacy_service import vault as vault_module
 from services.privacy_service.vault import EncryptedValue, PiiVaultRepository, VaultCipher
 
@@ -233,3 +234,27 @@ def test_reversible_mapping_requires_existing_tenant_document_scope() -> None:
             reversible=True,
             persist_mapping=True,
         )
+
+
+def test_full_detector_health_uses_internal_model_token(monkeypatch) -> None:
+    captured = {}
+
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(request, timeout):
+        captured["token"] = request.get_header("X-model-token")
+        captured["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr(engine_module, "urlopen", fake_urlopen)
+    detector = RizzoHttpDetector("http://model", timeout_seconds=20, token="model-secret")
+
+    assert detector.ready() is True
+    assert captured == {"token": "model-secret", "timeout": 10}

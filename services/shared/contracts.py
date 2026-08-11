@@ -34,6 +34,9 @@ class IngestMessage(BaseModel):
 class Citation(BaseModel):
     doc_id: str
     chunk_id: str
+    document_name: str | None = None
+    chunk_index: int | None = None
+    preview: str | None = None
 
 
 class QueryAnswer(BaseModel):
@@ -517,6 +520,44 @@ class DocumentStatusResponse(BaseModel):
     content_hash: str | None = None
     updated_at: datetime
     job: JobRecord | None = None
+
+
+class DocumentSummary(BaseModel):
+    doc_id: str
+    workspace: str
+    name: str
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    created_at: datetime
+    updated_at: datetime
+    status: JobStatus | None = None
+    chunks: int = 0
+    pii_detected: int = 0
+    pii_types: list[str] = Field(default_factory=list)
+    privacy_policy: str = "off"
+    privacy_detector: str | None = None
+    privacy_engine_version: str | None = None
+    privacy_engine_source_revision: str | None = None
+
+
+class DocumentListResponse(BaseModel):
+    workspace: str
+    documents: list[DocumentSummary]
+    total: int
+
+
+class DocumentChunkEvidence(BaseModel):
+    chunk_id: str
+    chunk_index: int
+    preview: str
+    token_count: int
+
+
+class DocumentDetail(DocumentSummary):
+    content_hash: str | None = None
+    source_kind: str
+    evidence: list[DocumentChunkEvidence] = Field(default_factory=list)
+    decisions_referencing: int = 0
 
 
 class PubSubPushMessage(BaseModel):

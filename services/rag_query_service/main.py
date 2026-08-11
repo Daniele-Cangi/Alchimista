@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import posixpath
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
@@ -104,10 +105,12 @@ def _query_with_sql(payload: QueryRequest, query_embedding: list[float]) -> list
             if payload.doc_ids:
                 cur.execute(
                     """
-                    SELECT doc_id, chunk_id, chunk_text, embedding
-                    FROM chunks
-                    WHERE tenant = %s AND doc_id = ANY(%s)
-                    ORDER BY created_at DESC
+                    SELECT ch.doc_id, ch.chunk_id, ch.chunk_index, ch.chunk_text,
+                           ch.embedding, d.source_uri
+                    FROM chunks ch
+                    JOIN documents d ON d.doc_id = ch.doc_id AND d.tenant = ch.tenant
+                    WHERE ch.tenant = %s AND ch.doc_id = ANY(%s)
+                    ORDER BY ch.created_at DESC
                     LIMIT %s
                     """,
                     (payload.tenant, payload.doc_ids, MAX_CANDIDATES),
@@ -115,10 +118,12 @@ def _query_with_sql(payload: QueryRequest, query_embedding: list[float]) -> list
             else:
                 cur.execute(
                     """
-                    SELECT doc_id, chunk_id, chunk_text, embedding
-                    FROM chunks
-                    WHERE tenant = %s
-                    ORDER BY created_at DESC
+                    SELECT ch.doc_id, ch.chunk_id, ch.chunk_index, ch.chunk_text,
+                           ch.embedding, d.source_uri
+                    FROM chunks ch
+                    JOIN documents d ON d.doc_id = ch.doc_id AND d.tenant = ch.tenant
+                    WHERE ch.tenant = %s
+                    ORDER BY ch.created_at DESC
                     LIMIT %s
                     """,
                     (payload.tenant, MAX_CANDIDATES),
@@ -135,6 +140,8 @@ def _query_with_sql(payload: QueryRequest, query_embedding: list[float]) -> list
                 "doc_id": row["doc_id"],
                 "chunk_id": row["chunk_id"],
                 "chunk_text": row["chunk_text"],
+                "chunk_index": row["chunk_index"],
+                "source_uri": row["source_uri"],
                 "embedding": list(emb),
             }
         )
@@ -173,6 +180,8 @@ def _query_with_vertex(payload: QueryRequest, query_embedding: list[float]) -> l
                 "doc_id": row["doc_id"],
                 "chunk_id": row["chunk_id"],
                 "chunk_text": row["chunk_text"],
+                "chunk_index": row["chunk_index"],
+                "source_uri": row["source_uri"],
                 "score": -float(item.distance),
             }
         )
@@ -189,7 +198,16 @@ def _build_answer(hits: list[dict]) -> QueryAnswer:
     for idx, hit in enumerate(hits, start=1):
         key = (hit["doc_id"], hit["chunk_id"])
         if key not in seen:
-            citations.append(Citation(doc_id=hit["doc_id"], chunk_id=hit["chunk_id"]))
+            citations.append(
+                Citation(
+                    doc_id=hit["doc_id"],
+                    chunk_id=hit["chunk_id"],
+                    document_name=posixpath.basename(str(hit.get("source_uri") or "").rstrip("/"))
+                    or hit["doc_id"],
+                    chunk_index=hit.get("chunk_index"),
+                    preview=str(hit["chunk_text"])[:420],
+                )
+            )
             seen.add(key)
         snippets.append(f"[{idx}] {hit['chunk_text'][:280]}")
 
