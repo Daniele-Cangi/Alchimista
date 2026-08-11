@@ -15,8 +15,6 @@ on:
         description: "Tenant used for benchmark data and auth smoke"
         required: false
         default: default
-  schedule:
-    - cron: "15 5 * * *"
 
 jobs:
   benchmark:
