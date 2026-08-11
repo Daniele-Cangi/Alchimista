@@ -156,7 +156,9 @@ identity rules. It is not part of the general OIDC subsystem.
 
 The dashboard can use `DASHBOARD_API_TOKEN` server-side so a loopback local
 deployment does not expose the token to browser JavaScript. Bind and reverse
-proxy choices remain the operator's security boundary.
+proxy choices remain the operator's security boundary. Dashboard multipart
+uploads are capped at 25 MiB by default; set `DASHBOARD_MAX_UPLOAD_BYTES` to a
+different positive byte limit when the deployment requires it.
 
 ## Privacy policies
 

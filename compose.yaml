@@ -179,6 +179,7 @@ services:
       RAG_URL: http://rag-query-service:8080
       DASHBOARD_API_TOKEN: ${ALCHIMISTA_API_TOKEN:?run python scripts/init_local_env.py}
       ADMIN_KEY: ${ADMIN_API_KEY:?run python scripts/init_local_env.py}
+      DASHBOARD_MAX_UPLOAD_BYTES: ${DASHBOARD_MAX_UPLOAD_BYTES:-26214400}
       DASHBOARD_DEPLOY_ENV: development
       DASHBOARD_ENABLE_TEST_TOKEN: "false"
     ports:
