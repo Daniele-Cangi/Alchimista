@@ -66,15 +66,15 @@ from services.shared.db import (
 from services.shared.dlq_replay import parse_ingest_message_from_dlq
 from services.shared.hashing import sha256_bytes
 from services.shared.logging_utils import log_event
-from services.shared.pubsub_client import PubSubPublisher, PubSubSubscriber
-from services.shared.storage import StorageClient, parse_gs_uri, safe_object_name
+from services.shared.pubsub_client import build_publisher, build_subscriber
+from services.shared.storage import build_storage_client, parse_gs_uri, parse_storage_uri, safe_object_name
 
 
 config = load_runtime_config()
 app = FastAPI(title="ingestion-api-service", version="0.1.0")
-storage_client = StorageClient(config.project_id)
-publisher = PubSubPublisher(config.project_id)
-subscriber = PubSubSubscriber(config.project_id)
+storage_client = build_storage_client(config)
+publisher = build_publisher(config)
+subscriber = build_subscriber(config)
 _ai_schema_lock = threading.Lock()
 _ai_schema_initialized = False
 
@@ -261,6 +261,8 @@ def get_document_status(request: Request, doc_id: str, tenant: str = config.defa
 
 @app.post("/v1/connectors/gcs/import", response_model=ConnectorIngestResponse)
 def connector_import_gcs(payload: GCSConnectorImportRequest, request: Request) -> ConnectorIngestResponse:
+    if config.storage_backend != "gcs":
+        raise HTTPException(status_code=400, detail="GCS connector requires STORAGE_BACKEND=gcs")
     _require_raw_bucket()
     require_auth(request, config=config, tenant=payload.tenant)
     trace_id = payload.trace_id or str(uuid4())
@@ -1048,7 +1050,10 @@ def verify_decision_artifact(payload: AIDecisionVerifyRequest, request: Request)
     trace_id = payload.trace_id or str(uuid4())
     errors: list[str] = []
 
-    bucket_name, object_name = parse_gs_uri(payload.gs_uri)
+    scheme, bucket_name, object_name = parse_storage_uri(payload.gs_uri)
+    expected_scheme = "gs" if config.storage_backend == "gcs" else "local"
+    if scheme != expected_scheme:
+        raise HTTPException(status_code=400, detail="Artifact URI does not match configured storage backend")
     if bucket_name != config.reports_bucket:
         raise HTTPException(status_code=400, detail="gs_uri bucket does not match REPORTS_BUCKET")
     if payload.strict_tenant_path and not object_name.startswith(f"reports/{payload.tenant}/audit/"):
@@ -1519,6 +1524,8 @@ def query_decisions_admin(payload: AIDecisionAdminQueryRequest, request: Request
 def replay_dlq(request: DlqReplayRequest, raw_request: Request) -> DlqReplayResponse:
     require_auth(raw_request, config=config)
     _require_admin_api_key(raw_request)
+    if subscriber is None:
+        raise HTTPException(status_code=409, detail="DLQ replay is only available with QUEUE_BACKEND=pubsub")
     trace_id = str(uuid4())
     try:
         received = subscriber.pull(config.ingest_dlq_subscription, request.max_messages)
@@ -1598,6 +1605,11 @@ def replay_dlq(request: DlqReplayRequest, raw_request: Request) -> DlqReplayResp
 
 async def _ingest_signed_url(request: Request) -> IngestResponse:
     _require_raw_bucket()
+    if config.storage_backend != "gcs":
+        raise HTTPException(
+            status_code=400,
+            detail="Signed upload is only available with STORAGE_BACKEND=gcs; use multipart upload locally",
+        )
     payload = IngestSignedUrlRequest.model_validate(await request.json())
     require_auth(request, config=config, tenant=payload.tenant)
     doc_id = payload.doc_id or str(uuid4())
@@ -2419,6 +2431,8 @@ def _upload_json_artifact_immutable(
         )
     except PreconditionFailed as exc:
         raise HTTPException(status_code=409, detail=f"Artifact already exists at gs://{bucket_name}/{object_name}") from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail="Artifact already exists") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Unable to write artifact: {exc}") from exc
 

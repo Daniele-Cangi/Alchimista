@@ -34,6 +34,21 @@ def test_ingest_message_contract() -> None:
     assert model.id == "doc_1"
 
 
+def test_ingest_message_accepts_local_object_uri() -> None:
+    model = IngestMessage.model_validate(
+        {
+            "id": "doc_local",
+            "uri": "local://raw/default/doc.txt",
+            "type": "text/plain",
+            "size": 12,
+            "tenant": "default",
+            "ts": "2026-08-11T10:00:00Z",
+            "trace_id": "trace-local",
+        }
+    )
+    assert model.uri.startswith("local://")
+
+
 def test_query_answer_requires_citations() -> None:
     answer = QueryAnswer.model_validate(
         {

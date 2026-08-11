@@ -29,15 +29,15 @@ from services.shared.embeddings import build_embedder
 from services.shared.entities import extract_entities
 from services.shared.hashing import sha256_bytes
 from services.shared.logging_utils import log_event
-from services.shared.pubsub_client import PubSubPublisher
-from services.shared.storage import StorageClient
+from services.shared.pubsub_client import build_publisher
+from services.shared.storage import build_storage_client
 from services.shared.vertex_vector_search import build_vertex_client
 
 
 config = load_runtime_config()
 app = FastAPI(title="document-processor-service", version="0.1.0")
-storage_client = StorageClient(config.project_id)
-publisher = PubSubPublisher(config.project_id)
+storage_client = build_storage_client(config)
+publisher = build_publisher(config)
 vertex_client = build_vertex_client(config)
 inflight_gate = InflightGate(config.processor_max_inflight)
 embed_text = build_embedder(config)
