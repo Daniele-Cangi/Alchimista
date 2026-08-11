@@ -33,8 +33,13 @@ class AuthPrincipal:
 
 
 def require_auth(request: Request, *, config: RuntimeConfig, tenant: str | None = None) -> AuthPrincipal | None:
-    if not config.auth_enabled:
+    mode = config.auth_mode or ("oidc" if config.auth_enabled else "disabled")
+    if mode == "disabled":
         return None
+    if mode == "local":
+        return _require_local_auth(request, config=config, tenant=tenant)
+    if mode != "oidc":
+        raise HTTPException(status_code=503, detail="Authentication mode is invalid")
 
     token = _extract_bearer_token(request)
     claims = _decode_claims(token, config)
@@ -49,6 +54,29 @@ def require_auth(request: Request, *, config: RuntimeConfig, tenant: str | None 
 
     _authorize_tenant(principal, tenant=tenant, config=config)
     return principal
+
+
+def _require_local_auth(
+    request: Request,
+    *,
+    config: RuntimeConfig,
+    tenant: str | None,
+) -> AuthPrincipal:
+    token = _extract_bearer_token(request)
+    if not config.local_auth_token:
+        raise HTTPException(status_code=503, detail="Local authentication token is not configured")
+    if not hmac.compare_digest(token, config.local_auth_token):
+        raise HTTPException(status_code=401, detail="Invalid local authentication token")
+
+    allowed_tenants = set(config.local_auth_tenants or ("*",))
+    if tenant and "*" not in allowed_tenants and tenant not in allowed_tenants:
+        raise HTTPException(status_code=403, detail="Forbidden: tenant mismatch")
+    return AuthPrincipal(
+        subject="local-admin",
+        issuer="alchimista-local",
+        audiences=("alchimista-api",),
+        claims={"sub": "local-admin", "tenant": sorted(allowed_tenants)},
+    )
 
 
 def require_pubsub_push_auth(request: Request, *, config: RuntimeConfig) -> AuthPrincipal:

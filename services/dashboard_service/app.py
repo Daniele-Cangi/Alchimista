@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import requests
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
@@ -23,6 +23,7 @@ INGEST_URL = os.getenv("INGEST_URL", "http://localhost:8011")
 PROCESSOR_URL = os.getenv("PROCESSOR_URL", "http://localhost:8012")
 RAG_URL = os.getenv("RAG_URL", "http://localhost:8013")
 ADMIN_KEY = os.getenv("ADMIN_KEY", "")
+DASHBOARD_API_TOKEN = os.getenv("DASHBOARD_API_TOKEN", "")
 
 # Optional demo convenience mode. Keep disabled in hardened environments.
 DASHBOARD_ENABLE_TEST_TOKEN = os.getenv("DASHBOARD_ENABLE_TEST_TOKEN", "false").strip().lower() in {
@@ -89,6 +90,8 @@ def _headers(auth: str | None = None, admin_key: str | None = None) -> dict[str,
     headers: dict[str, str] = {}
     if auth:
         headers["Authorization"] = auth
+    elif DASHBOARD_API_TOKEN:
+        headers["Authorization"] = f"Bearer {DASHBOARD_API_TOKEN}"
     if admin_key:
         headers["x-admin-key"] = admin_key
     return headers
@@ -492,6 +495,43 @@ async def api_ingest(body: IngestRequest, authorization: str | None = Header(def
         raise _http_err(exc)
     except HTTPException:
         raise
+    except Exception as exc:
+        raise _gw_err(exc)
+
+
+@app.post("/api/v1/ingest/file")
+async def api_ingest_file(
+    file: UploadFile = File(...),
+    tenant: str = Form(...),
+    authorization: str | None = Header(default=None),
+):
+    """Forward a local file as multipart data to the ingestion service."""
+    tenant = tenant.strip()
+    if not tenant:
+        raise HTTPException(status_code=400, detail="tenant is required")
+
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="file is empty")
+
+    try:
+        response = requests.post(
+            f"{INGEST_URL}/v1/ingest",
+            data={"tenant": tenant},
+            files={
+                "file": (
+                    file.filename or "document.bin",
+                    payload,
+                    file.content_type or "application/octet-stream",
+                )
+            },
+            headers=_headers(authorization),
+            timeout=120,
+        )
+        response.raise_for_status()
+        return _decode_json(response)
+    except requests.HTTPError as exc:
+        raise _http_err(exc)
     except Exception as exc:
         raise _gw_err(exc)
 

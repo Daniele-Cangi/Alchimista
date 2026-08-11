@@ -8,3 +8,4 @@ python-multipart==0.0.20
 pypdf==5.8.0
 Pillow==11.3.0
 pytesseract==0.3.13
+cryptography==45.0.5

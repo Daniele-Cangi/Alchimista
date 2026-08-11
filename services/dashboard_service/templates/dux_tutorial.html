@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alchimista - Tutorial</title>
     <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dux-minimal.css">
 </head>
 <body>
@@ -41,8 +38,8 @@
             <div class="step-header">
                 <div class="step-number">1</div>
                 <div>
-                    <h2 class="step-title">Obtain an Auth Token</h2>
-                    <p class="step-desc">Alchimista uses OIDC / JWT Bearer tokens (Auth0 M2M or any OIDC provider). Include the token in every request.</p>
+                    <h2 class="step-title">Use the Local API Token</h2>
+                    <p class="step-desc">The self-hosted profile uses the bearer token generated in <code>.env</code>. OIDC remains available as an explicit production auth mode.</p>
                 </div>
             </div>
             <div class="step-body">
@@ -50,24 +47,12 @@
                     <button class="lang-tab active" onclick="showLang(this,'auth','curl')">cURL</button>
                     <button class="lang-tab" onclick="showLang(this,'auth','python')">Python</button>
                 </div>
-                <pre class="code-block" id="auth-curl"># Auth0 client credentials flow
-curl -s -X POST https://YOUR_DOMAIN/oauth/token \
-  -H "Content-Type: application/json" \
-  -d '{
-    "client_id":     "YOUR_CLIENT_ID",
-    "client_secret": "YOUR_CLIENT_SECRET",
-    "audience":      "https://alchimista.api",
-    "grant_type":    "client_credentials"
-  }' | jq -r .access_token</pre>
-                <pre class="code-block hidden" id="auth-python">import httpx
+                <pre class="code-block" id="auth-curl"># Copy LOCAL_API_TOKEN from the generated .env file
+TOKEN="replace-with-your-generated-local-token"</pre>
+                <pre class="code-block hidden" id="auth-python">import os
+import httpx
 
-resp = httpx.post("https://YOUR_DOMAIN/oauth/token", json={
-    "client_id":     "YOUR_CLIENT_ID",
-    "client_secret": "YOUR_CLIENT_SECRET",
-    "audience":      "https://alchimista.api",
-    "grant_type":    "client_credentials",
-})
-TOKEN = resp.json()["access_token"]
+TOKEN = os.environ["LOCAL_API_TOKEN"]
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"}</pre>
             </div>
         </div>
@@ -78,7 +63,7 @@ HEADERS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json
                 <div class="step-number">2</div>
                 <div>
                     <h2 class="step-title">Ingest a Document</h2>
-                    <p class="step-desc">Submit a GCS URI to the ingestion API. The service queues the job via Pub/Sub and returns a <code>job_id</code>.</p>
+                    <p class="step-desc">Upload a local file as multipart data. The direct queue adapter processes it and returns a <code>doc_id</code>.</p>
                 </div>
             </div>
             <div class="step-body">
@@ -86,27 +71,25 @@ HEADERS = {"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json
                     <button class="lang-tab active" onclick="showLang(this,'ingest','curl')">cURL</button>
                     <button class="lang-tab" onclick="showLang(this,'ingest','python')">Python</button>
                 </div>
-                <pre class="code-block" id="ingest-curl">curl -s -X POST https://ingest.yourdomain.com/v1/ingest \
+                <pre class="code-block" id="ingest-curl">curl -s -X POST http://localhost:8011/v1/ingest \
   -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant":     "acme-corp",
-    "source_uri": "gs://my-docs-bucket/eu-ai-act-2024.pdf",
-    "doc_type":   "regulation"
-  }'
+  -F "tenant=acme-corp" \
+  -F "file=@./eu-ai-act-2024.pdf"
 
 # Response:
-# { "job_id": "job_abc123", "status": "QUEUED", "tenant": "acme-corp" }</pre>
-                <pre class="code-block hidden" id="ingest-python">INGEST_URL = "https://ingest.yourdomain.com"
+# { "doc_id": "doc_abc123", "status": "QUEUED", "published": true }</pre>
+                <pre class="code-block hidden" id="ingest-python">INGEST_URL = "http://localhost:8011"
 
-resp = httpx.post(f"{INGEST_URL}/v1/ingest", headers=HEADERS, json={
-    "tenant":     "acme-corp",
-    "source_uri": "gs://my-docs-bucket/eu-ai-act-2024.pdf",
-    "doc_type":   "regulation",
-})
+with open("eu-ai-act-2024.pdf", "rb") as source:
+    resp = httpx.post(
+        f"{INGEST_URL}/v1/ingest",
+        headers={"Authorization": f"Bearer {TOKEN}"},
+        data={"tenant": "acme-corp"},
+        files={"file": ("eu-ai-act-2024.pdf", source, "application/pdf")},
+    )
 job = resp.json()
-job_id = job["job_id"]
-print(f"Job queued: {job_id}")</pre>
+doc_id = job["doc_id"]
+print(f"Document queued: {doc_id}")</pre>
             </div>
         </div>
 
@@ -116,7 +99,7 @@ print(f"Job queued: {job_id}")</pre>
                 <div class="step-number">3</div>
                 <div>
                     <h2 class="step-title">Poll Job Status</h2>
-                    <p class="step-desc">Poll <code>GET /v1/doc/{job_id}</code> until status is <code>SUCCEEDED</code>. The document is then indexed and queryable.</p>
+                    <p class="step-desc">Poll <code>GET /v1/doc/{doc_id}</code> until status is <code>SUCCEEDED</code>. The document is then indexed and queryable.</p>
                 </div>
             </div>
             <div class="step-body">
@@ -124,12 +107,12 @@ print(f"Job queued: {job_id}")</pre>
                     <button class="lang-tab active" onclick="showLang(this,'poll','curl')">cURL</button>
                     <button class="lang-tab" onclick="showLang(this,'poll','python')">Python</button>
                 </div>
-                <pre class="code-block" id="poll-curl">curl -s https://ingest.yourdomain.com/v1/doc/job_abc123 \
+                <pre class="code-block" id="poll-curl">curl -s http://localhost:8011/v1/doc/doc_abc123 \
   -H "Authorization: Bearer $TOKEN"
 
 # Response when done:
 # {
-#   "job_id": "job_abc123",
+#   "doc_id": "doc_abc123",
 #   "status": "SUCCEEDED",
 #   "chunk_count": 42,
 #   "updated_at": "2025-03-01T12:05:00Z"
@@ -137,7 +120,7 @@ print(f"Job queued: {job_id}")</pre>
                 <pre class="code-block hidden" id="poll-python">import time
 
 while True:
-    resp = httpx.get(f"{INGEST_URL}/v1/doc/{job_id}", headers=HEADERS)
+    resp = httpx.get(f"{INGEST_URL}/v1/doc/{doc_id}", headers=HEADERS)
     status = resp.json()["status"]
     print(f"Status: {status}")
     if status in ("SUCCEEDED", "FAILED"):
@@ -163,7 +146,7 @@ print(f"Indexed {chunks} chunks")</pre>
                     <button class="lang-tab active" onclick="showLang(this,'query','curl')">cURL</button>
                     <button class="lang-tab" onclick="showLang(this,'query','python')">Python</button>
                 </div>
-                <pre class="code-block" id="query-curl">curl -s -X POST https://rag.yourdomain.com/v1/query \
+                <pre class="code-block" id="query-curl">curl -s -X POST http://localhost:8013/v1/query \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -180,7 +163,7 @@ print(f"Indexed {chunks} chunks")</pre>
 #     { "doc_id": "doc_abc", "chunk_id": "chunk_7", "score": 0.94 }
 #   ]
 # }</pre>
-                <pre class="code-block hidden" id="query-python">RAG_URL = "https://rag.yourdomain.com"
+                <pre class="code-block hidden" id="query-python">RAG_URL = "http://localhost:8013"
 
 resp = httpx.post(f"{RAG_URL}/v1/query", headers=HEADERS, json={
     "tenant": "acme-corp",
@@ -209,7 +192,7 @@ print(f"Trace ID: {trace_id}")</pre>
                     <button class="lang-tab active" onclick="showLang(this,'decision','curl')">cURL</button>
                     <button class="lang-tab" onclick="showLang(this,'decision','python')">Python</button>
                 </div>
-                <pre class="code-block" id="decision-curl">curl -s -X POST https://ingest.yourdomain.com/v1/decisions \
+                <pre class="code-block" id="decision-curl">curl -s -X POST http://localhost:8011/v1/decisions \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -225,7 +208,7 @@ print(f"Trace ID: {trace_id}")</pre>
     "context_chunks":["chunk_7"],
     "metadata":      {"decision_type":"rag_answer","subject_id":"user_456"}
   }'</pre>
-                <pre class="code-block hidden" id="decision-python">INGEST_URL = "https://ingest.yourdomain.com"
+                <pre class="code-block hidden" id="decision-python">INGEST_URL = "http://localhost:8011"
 
 decision_resp = httpx.post(f"{INGEST_URL}/v1/decisions", headers=HEADERS, json={
     "decision_id":   "d-001",
@@ -259,7 +242,7 @@ print(f"Decision registered: {decision_resp.status_code}")</pre>
                     <button class="lang-tab" onclick="showLang(this,'bundle','python')">Python</button>
                 </div>
                 <pre class="code-block" id="bundle-curl"># 1. Create bundle
-curl -s -X POST https://ingest.yourdomain.com/v1/decisions/bundle \
+curl -s -X POST http://localhost:8011/v1/decisions/bundle \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -268,7 +251,7 @@ curl -s -X POST https://ingest.yourdomain.com/v1/decisions/bundle \
   }'
 
 # 2. Verify integrity later
-curl -s -X POST https://ingest.yourdomain.com/v1/decisions/verify \
+curl -s -X POST http://localhost:8011/v1/decisions/verify \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -276,7 +259,7 @@ curl -s -X POST https://ingest.yourdomain.com/v1/decisions/verify \
     "gs_uri": "gs://YOUR_REPORTS_BUCKET/reports/acme-corp/audit/bundles/bundle-001.json",
     "expected_report_hash_sha256": "e3b0c44298fc1c149afb..."
   }'</pre>
-                <pre class="code-block hidden" id="bundle-python">INGEST_URL = "https://ingest.yourdomain.com"
+                <pre class="code-block hidden" id="bundle-python">INGEST_URL = "http://localhost:8011"
 
 # Create bundle
 bundle = httpx.post(f"{INGEST_URL}/v1/decisions/bundle", headers=HEADERS, json={
@@ -304,7 +287,7 @@ print(f"Verified: {verify.get('verified')}")</pre>
                 <div class="step-number">7</div>
                 <div>
                     <h2 class="step-title">Set Up Retention Policy</h2>
-                    <p class="step-desc">Configuring a GDPR-compliant 7-year retention policy. Admin endpoints require the <code>x-admin-key</code> header.</p>
+                    <p class="step-desc">Example seven-year retention configuration. Select periods with your legal and governance teams; no compliance outcome is implied. Admin endpoints require <code>x-admin-key</code>.</p>
                 </div>
             </div>
             <div class="step-body">
@@ -312,7 +295,7 @@ print(f"Verified: {verify.get('verified')}")</pre>
                     <button class="lang-tab active" onclick="showLang(this,'retain','curl')">cURL</button>
                     <button class="lang-tab" onclick="showLang(this,'retain','python')">Python</button>
                 </div>
-                <pre class="code-block" id="retain-curl">curl -s -X POST https://ingest.yourdomain.com/v1/admin/retention-policies \
+                <pre class="code-block" id="retain-curl">curl -s -X POST http://localhost:8011/v1/admin/retention-policies \
   -H "x-admin-key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -324,11 +307,11 @@ print(f"Verified: {verify.get('verified')}")</pre>
   }'
 
 # Run dry-run enforcement
-curl -s -X POST https://ingest.yourdomain.com/v1/admin/retention/enforce \
+curl -s -X POST http://localhost:8011/v1/admin/retention/enforce \
   -H "x-admin-key: $ADMIN_KEY" \
   -H "Content-Type: application/json" \
   -d '{"tenant":"acme-corp","dry_run":true}'</pre>
-                <pre class="code-block hidden" id="retain-python">INGEST_URL = "https://ingest.yourdomain.com"
+                <pre class="code-block hidden" id="retain-python">INGEST_URL = "http://localhost:8011"
 ADMIN_HEADERS = {"x-admin-key": "YOUR_ADMIN_KEY", "Content-Type": "application/json"}
 
 # Create retention policy

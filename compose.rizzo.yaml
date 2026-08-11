@@ -1,0 +1,43 @@
+services:
+  rizzo-engine:
+    build:
+      context: https://github.com/Rizzo-AI-Academy/rizzo-pii.git#42d4a40ecfe31acbbe3e1d78cf4d79d38cd8c3f5
+      dockerfile: Dockerfile
+      args:
+        MODEL_REPO: rizzoaiacademy/rizzo-pii-0.3B
+        MODEL_REVISION: v1.5.0
+    image: rizzo-pii:42d4a40-v1.5.0
+    restart: unless-stopped
+    expose:
+      - "5005"
+    environment:
+      PII_HOST: 0.0.0.0
+      PII_PORT: "5005"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      OMP_NUM_THREADS: "4"
+    volumes:
+      - rizzo-home:/home/app
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:5005/health', timeout=4)
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+
+  privacy-service:
+    environment:
+      PRIVACY_DETECTOR: rizzo_http
+      RIZZO_BASE_URL: http://rizzo-engine:5005
+    depends_on:
+      rizzo-engine:
+        condition: service_healthy
+
+volumes:
+  rizzo-home:

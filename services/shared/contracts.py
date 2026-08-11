@@ -16,7 +16,7 @@ class JobStatus(str, Enum):
 
 class IngestMessage(BaseModel):
     id: str = Field(..., description="Document identifier")
-    uri: str = Field(..., description="GCS URI (gs://bucket/path)")
+    uri: str = Field(..., description="Object URI (gs://bucket/path or local://namespace/path)")
     type: str = Field(..., description="MIME type")
     size: int = Field(..., ge=0, description="Object size in bytes")
     tenant: str = Field(default="default")
@@ -26,8 +26,8 @@ class IngestMessage(BaseModel):
     @field_validator("uri")
     @classmethod
     def validate_uri(cls, value: str) -> str:
-        if not value.startswith("gs://"):
-            raise ValueError("uri must start with gs://")
+        if not value.startswith(("gs://", "local://")):
+            raise ValueError("uri must start with gs:// or local://")
         return value
 
 
@@ -262,8 +262,8 @@ class AIDecisionVerifyRequest(BaseModel):
     @classmethod
     def validate_gs_uri(cls, value: str) -> str:
         candidate = value.strip()
-        if not candidate.startswith("gs://"):
-            raise ValueError("gs_uri must start with gs://")
+        if not candidate.startswith(("gs://", "local://")):
+            raise ValueError("gs_uri must start with gs:// or local://")
         return candidate
 
 

@@ -183,6 +183,111 @@ def replace_entities(
         )
 
 
+def replace_pii_findings(
+    cur: psycopg.Cursor,
+    *,
+    doc_id: str,
+    tenant: str,
+    findings: list[dict[str, Any]],
+) -> None:
+    cur.execute("DELETE FROM pii_findings WHERE doc_id = %s AND tenant = %s", (doc_id, tenant))
+    for finding in findings:
+        cur.execute(
+            """
+            INSERT INTO pii_findings (
+              tenant, doc_id, chunk_id, entity_type, detector, confidence,
+              start_offset, end_offset, placeholder, value_hash, validation_metadata
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                tenant,
+                doc_id,
+                finding.get("chunk_id"),
+                finding["type"],
+                finding["detector"],
+                finding["confidence"],
+                finding["start"],
+                finding["end"],
+                finding["placeholder"],
+                finding["value_hash"],
+                Json(finding.get("metadata") or {}),
+            ),
+        )
+
+
+def upsert_document_privacy(
+    cur: psycopg.Cursor,
+    *,
+    tenant: str,
+    doc_id: str,
+    privacy_policy: str,
+    pii_detected: int,
+    pii_types: list[str],
+    external_payload_pseudonymized: bool,
+    privacy_engine: str | None,
+    privacy_engine_version: str | None,
+    privacy_engine_source_revision: str | None,
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    cur.execute(
+        """
+        INSERT INTO document_privacy (
+          tenant, doc_id, privacy_policy, pii_detected, pii_types,
+          external_payload_pseudonymized, mapping_exported, privacy_engine,
+          privacy_engine_version, privacy_engine_source_revision, metadata, updated_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, FALSE, %s, %s, %s, %s, NOW())
+        ON CONFLICT (tenant, doc_id)
+        DO UPDATE SET
+          privacy_policy = EXCLUDED.privacy_policy,
+          pii_detected = EXCLUDED.pii_detected,
+          pii_types = EXCLUDED.pii_types,
+          external_payload_pseudonymized = EXCLUDED.external_payload_pseudonymized,
+          mapping_exported = FALSE,
+          privacy_engine = EXCLUDED.privacy_engine,
+          privacy_engine_version = EXCLUDED.privacy_engine_version,
+          privacy_engine_source_revision = EXCLUDED.privacy_engine_source_revision,
+          metadata = EXCLUDED.metadata,
+          updated_at = NOW()
+        """,
+        (
+            tenant,
+            doc_id,
+            privacy_policy,
+            pii_detected,
+            pii_types,
+            external_payload_pseudonymized,
+            privacy_engine,
+            privacy_engine_version,
+            privacy_engine_source_revision,
+            Json(metadata or {}),
+        ),
+    )
+
+
+def fetch_document_privacy(
+    cur: psycopg.Cursor,
+    *,
+    tenant: str,
+    doc_ids: list[str],
+) -> list[dict[str, Any]]:
+    if not doc_ids:
+        return []
+    cur.execute(
+        """
+        SELECT tenant, doc_id, privacy_policy, pii_detected, pii_types,
+               external_payload_pseudonymized, mapping_exported, privacy_engine,
+               privacy_engine_version, privacy_engine_source_revision, metadata, updated_at
+        FROM document_privacy
+        WHERE tenant = %s AND doc_id = ANY(%s)
+        ORDER BY doc_id
+        """,
+        (tenant, doc_ids),
+    )
+    return cur.fetchall()
+
+
 def get_chunk_ids_for_doc(cur: psycopg.Cursor, doc_id: str, tenant: str) -> list[str]:
     cur.execute(
         """

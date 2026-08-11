@@ -57,6 +57,7 @@ from services.shared.contracts import (
     now_iso8601,
 )
 from services.shared.db import (
+    fetch_document_privacy,
     fetch_document_status,
     get_connection,
     get_document_by_hash,
@@ -66,15 +67,31 @@ from services.shared.db import (
 from services.shared.dlq_replay import parse_ingest_message_from_dlq
 from services.shared.hashing import sha256_bytes
 from services.shared.logging_utils import log_event
-from services.shared.pubsub_client import PubSubPublisher, PubSubSubscriber
-from services.shared.storage import StorageClient, parse_gs_uri, safe_object_name
+from services.shared.pubsub_client import build_publisher, build_subscriber
+from services.shared.privacy import (
+    PrivacyClient,
+    PrivacyPolicy,
+    PrivacyPseudonymizeRequest,
+    PrivacyServiceError,
+)
+from services.shared.storage import build_storage_client, parse_gs_uri, parse_storage_uri, safe_object_name
 
 
 config = load_runtime_config()
 app = FastAPI(title="ingestion-api-service", version="0.1.0")
-storage_client = StorageClient(config.project_id)
-publisher = PubSubPublisher(config.project_id)
-subscriber = PubSubSubscriber(config.project_id)
+storage_client = build_storage_client(config)
+publisher = build_publisher(config)
+subscriber = build_subscriber(config)
+privacy_policy = PrivacyPolicy(config.privacy_policy)
+privacy_client = (
+    PrivacyClient(
+        base_url=config.privacy_service_url,
+        token=config.privacy_service_token,
+        timeout_seconds=config.privacy_timeout_seconds,
+    )
+    if privacy_policy != PrivacyPolicy.OFF
+    else None
+)
 _ai_schema_lock = threading.Lock()
 _ai_schema_initialized = False
 
@@ -261,6 +278,8 @@ def get_document_status(request: Request, doc_id: str, tenant: str = config.defa
 
 @app.post("/v1/connectors/gcs/import", response_model=ConnectorIngestResponse)
 def connector_import_gcs(payload: GCSConnectorImportRequest, request: Request) -> ConnectorIngestResponse:
+    if config.storage_backend != "gcs":
+        raise HTTPException(status_code=400, detail="GCS connector requires STORAGE_BACKEND=gcs")
     _require_raw_bucket()
     require_auth(request, config=config, tenant=payload.tenant)
     trace_id = payload.trace_id or str(uuid4())
@@ -371,6 +390,7 @@ def connector_import_gcs(payload: GCSConnectorImportRequest, request: Request) -
 def ingest_decision(payload: AIDecisionIngestRequest, request: Request) -> AIDecisionIngestResponse:
     require_auth(request, config=config, tenant=payload.tenant)
     trace_id = payload.trace_id or str(uuid4())
+    payload = _protect_decision_evidence(payload)
 
     with get_connection(config.database_url) as conn:
         with conn.cursor() as cur:
@@ -401,6 +421,22 @@ def ingest_decision(payload: AIDecisionIngestRequest, request: Request) -> AIDec
                         "mismatched_chunk_ids": mismatched_chunk_ids,
                     },
                 )
+
+            context_privacy = _build_context_privacy_evidence(
+                cur,
+                tenant=payload.tenant,
+                doc_ids=payload.context_docs,
+            )
+            metadata = dict(payload.metadata or {})
+            decision_privacy = metadata.pop("_decision_privacy", None)
+            if decision_privacy:
+                context_privacy["decision_payload_pseudonymized"] = True
+                context_privacy["decision_payload_pii_detected"] = int(decision_privacy["pii_detected"])
+                context_privacy["pii_types"] = sorted(
+                    set(context_privacy["pii_types"]).union(decision_privacy["pii_types"])
+                )
+            metadata["privacy"] = context_privacy
+            payload = payload.model_copy(update={"metadata": metadata})
 
             decision_ref_id, created_at, updated_at = _upsert_ai_decision(cur, payload=payload, trace_id=trace_id)
             _replace_ai_decision_context_docs(
@@ -1048,7 +1084,10 @@ def verify_decision_artifact(payload: AIDecisionVerifyRequest, request: Request)
     trace_id = payload.trace_id or str(uuid4())
     errors: list[str] = []
 
-    bucket_name, object_name = parse_gs_uri(payload.gs_uri)
+    scheme, bucket_name, object_name = parse_storage_uri(payload.gs_uri)
+    expected_scheme = "gs" if config.storage_backend == "gcs" else "local"
+    if scheme != expected_scheme:
+        raise HTTPException(status_code=400, detail="Artifact URI does not match configured storage backend")
     if bucket_name != config.reports_bucket:
         raise HTTPException(status_code=400, detail="gs_uri bucket does not match REPORTS_BUCKET")
     if payload.strict_tenant_path and not object_name.startswith(f"reports/{payload.tenant}/audit/"):
@@ -1519,6 +1558,8 @@ def query_decisions_admin(payload: AIDecisionAdminQueryRequest, request: Request
 def replay_dlq(request: DlqReplayRequest, raw_request: Request) -> DlqReplayResponse:
     require_auth(raw_request, config=config)
     _require_admin_api_key(raw_request)
+    if subscriber is None:
+        raise HTTPException(status_code=409, detail="DLQ replay is only available with QUEUE_BACKEND=pubsub")
     trace_id = str(uuid4())
     try:
         received = subscriber.pull(config.ingest_dlq_subscription, request.max_messages)
@@ -1598,6 +1639,11 @@ def replay_dlq(request: DlqReplayRequest, raw_request: Request) -> DlqReplayResp
 
 async def _ingest_signed_url(request: Request) -> IngestResponse:
     _require_raw_bucket()
+    if config.storage_backend != "gcs":
+        raise HTTPException(
+            status_code=400,
+            detail="Signed upload is only available with STORAGE_BACKEND=gcs; use multipart upload locally",
+        )
     payload = IngestSignedUrlRequest.model_validate(await request.json())
     require_auth(request, config=config, tenant=payload.tenant)
     doc_id = payload.doc_id or str(uuid4())
@@ -1942,6 +1988,85 @@ def _validate_context_chunks(
     return missing, mismatched
 
 
+def _protect_decision_evidence(payload: AIDecisionIngestRequest) -> AIDecisionIngestRequest:
+    if privacy_policy == PrivacyPolicy.OFF:
+        return payload
+    if privacy_client is None:
+        raise HTTPException(status_code=503, detail="Privacy policy enforcement is unavailable")
+    try:
+        protected_input = privacy_client.pseudonymize(
+            PrivacyPseudonymizeRequest(
+                text=payload.input,
+                tenant=payload.tenant,
+                doc_id=f"decision:{payload.decision_id}:input",
+                reversible=False,
+                persist_mapping=False,
+            )
+        )
+        protected_output = privacy_client.pseudonymize(
+            PrivacyPseudonymizeRequest(
+                text=payload.output,
+                tenant=payload.tenant,
+                doc_id=f"decision:{payload.decision_id}:output",
+                reversible=False,
+                persist_mapping=False,
+            )
+        )
+    except PrivacyServiceError as exc:
+        raise HTTPException(status_code=503, detail="Privacy policy enforcement failed") from exc
+
+    metadata = dict(payload.metadata or {})
+    metadata["_decision_privacy"] = {
+        "pii_detected": protected_input.pii_count + protected_output.pii_count,
+        "pii_types": sorted(set(protected_input.pii_types).union(protected_output.pii_types)),
+        "privacy_engine": protected_input.engine.name,
+        "privacy_engine_version": protected_input.engine.version,
+        "privacy_engine_source_revision": protected_input.engine.source_revision,
+        "mapping_exported": False,
+    }
+    return payload.model_copy(
+        update={
+            "input": protected_input.protected_text,
+            "output": protected_output.protected_text,
+            "metadata": metadata,
+        }
+    )
+
+
+def _build_context_privacy_evidence(cur: Any, *, tenant: str, doc_ids: list[str]) -> dict[str, Any]:
+    records = fetch_document_privacy(cur, tenant=tenant, doc_ids=doc_ids)
+    pii_types: set[str] = set()
+    policies: set[str] = set()
+    engines: set[str] = set()
+    versions: set[str] = set()
+    revisions: set[str] = set()
+    for record in records:
+        policies.add(str(record.get("privacy_policy") or "off"))
+        pii_types.update(str(item) for item in (record.get("pii_types") or []))
+        if record.get("privacy_engine"):
+            engines.add(str(record["privacy_engine"]))
+        if record.get("privacy_engine_version"):
+            versions.add(str(record["privacy_engine_version"]))
+        if record.get("privacy_engine_source_revision"):
+            revisions.add(str(record["privacy_engine_source_revision"]))
+
+    if len(records) < len(doc_ids):
+        policies.add("off")
+    return {
+        "privacy_policy": next(iter(policies)) if len(policies) == 1 else "mixed",
+        "pii_detected": sum(int(record.get("pii_detected") or 0) for record in records),
+        "pii_types": sorted(pii_types),
+        "external_payload_pseudonymized": any(
+            bool(record.get("external_payload_pseudonymized")) for record in records
+        ),
+        "mapping_exported": any(bool(record.get("mapping_exported")) for record in records),
+        "privacy_engine": next(iter(engines)) if len(engines) == 1 else None,
+        "privacy_engine_version": next(iter(versions)) if len(versions) == 1 else None,
+        "privacy_engine_source_revision": next(iter(revisions)) if len(revisions) == 1 else None,
+        "context_documents_evaluated": len(records),
+    }
+
+
 def _upsert_ai_decision(
     cur: Any,
     *,
@@ -2261,9 +2386,16 @@ def _fetch_ai_decision(cur: Any, *, tenant: str, decision_id: str) -> dict[str, 
 def _fetch_ai_decision_context_documents(cur: Any, *, tenant: str, decision_ref_id: int) -> list[dict[str, Any]]:
     cur.execute(
         """
-        SELECT d.doc_id, d.source_uri, d.mime_type, d.size_bytes, d.updated_at
+        SELECT
+          d.doc_id,
+          CASE WHEN COALESCE(dp.privacy_policy, 'off') = 'off' THEN d.source_uri ELSE NULL END AS source_uri,
+          d.mime_type,
+          d.size_bytes,
+          d.updated_at,
+          COALESCE(dp.privacy_policy, 'off') AS privacy_policy
         FROM ai_decision_context_docs c
         JOIN documents d ON d.doc_id = c.doc_id
+        LEFT JOIN document_privacy dp ON dp.doc_id = d.doc_id AND dp.tenant = d.tenant
         WHERE c.decision_ref_id = %s AND c.tenant = %s AND d.tenant = %s
         ORDER BY d.doc_id ASC
         """,
@@ -2275,9 +2407,19 @@ def _fetch_ai_decision_context_documents(cur: Any, *, tenant: str, decision_ref_
 def _fetch_ai_decision_context_chunks(cur: Any, *, tenant: str, decision_ref_id: int) -> list[dict[str, Any]]:
     cur.execute(
         """
-        SELECT ch.chunk_id, ch.doc_id, ch.chunk_index, ch.token_count, LEFT(ch.chunk_text, 280) AS preview
+        SELECT
+          ch.chunk_id,
+          ch.doc_id,
+          ch.chunk_index,
+          ch.token_count,
+          CASE
+            WHEN COALESCE(dp.privacy_policy, 'off') = 'off' THEN LEFT(ch.chunk_text, 280)
+            ELSE '[privacy-enabled preview omitted]'
+          END AS preview,
+          COALESCE(dp.privacy_policy, 'off') AS privacy_policy
         FROM ai_decision_context_chunks c
         JOIN chunks ch ON ch.chunk_id = c.chunk_id
+        LEFT JOIN document_privacy dp ON dp.doc_id = ch.doc_id AND dp.tenant = ch.tenant
         WHERE c.decision_ref_id = %s AND c.tenant = %s AND ch.tenant = %s
         ORDER BY ch.doc_id ASC, ch.chunk_index ASC
         """,
@@ -2375,12 +2517,18 @@ def _resolve_audit_package_prefix(*, tenant: str, requested_object_prefix: str |
 
 def _build_policy_snapshot() -> dict[str, Any]:
     return {
+        "alchimista_profile": config.profile,
+        "deploy_environment": config.deploy_environment,
+        "auth_mode": config.auth_mode,
         "auth_enabled": config.auth_enabled,
         "auth_issuer": config.auth_issuer,
         "auth_audiences": list(config.auth_audiences),
         "auth_require_tenant_claim": config.auth_require_tenant_claim,
         "enforce_storage_hardening": config.enforce_storage_hardening,
         "pubsub_push_auth_enabled": config.pubsub_push_auth_enabled,
+        "storage_backend": config.storage_backend,
+        "queue_backend": config.queue_backend,
+        "privacy_policy": config.privacy_policy,
         "cloud_run_revision": os.getenv("K_REVISION", ""),
         "cloud_run_service": os.getenv("K_SERVICE", ""),
     }
@@ -2395,7 +2543,7 @@ def _infer_decision_artifact_type(payload: dict[str, Any]) -> str:
         return "decision_export"
     if "decision" in payload and "context_documents" in payload:
         return "decision_report"
-    if "auth_enabled" in payload and "cloud_run_revision" in payload:
+    if "auth_enabled" in payload and "privacy_policy" in payload:
         return "policy_snapshot"
     return "unknown"
 
@@ -2419,6 +2567,8 @@ def _upload_json_artifact_immutable(
         )
     except PreconditionFailed as exc:
         raise HTTPException(status_code=409, detail=f"Artifact already exists at gs://{bucket_name}/{object_name}") from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail="Artifact already exists") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Unable to write artifact: {exc}") from exc
 

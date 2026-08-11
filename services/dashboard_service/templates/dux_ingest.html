@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alchimista - Ingest Documents</title>
     <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dux-minimal.css">
 </head>
 <body>
@@ -33,7 +30,7 @@
     <div class="dux-container">
         <div class="dux-page-title dux-fade-in">
             <h1>Ingest Documents</h1>
-            <p>Submit a document to the ingestion pipeline. The job is queued via Pub/Sub, processed (chunk + embed), and stored in PostgreSQL + Vertex Vector Search.</p>
+            <p>Upload a local document or submit a GCS URI. The configured local or GCP adapters process, protect, chunk, and index it.</p>
         </div>
 
         <div class="dux-grid" style="grid-template-columns:1fr 1fr;gap:24px;">
@@ -50,9 +47,14 @@
                         <input id="ingest-tenant" class="dux-input" type="text" placeholder="e.g. acme-corp" required>
                     </div>
                     <div class="dux-form-group">
-                        <label class="dux-label">Source URI <span style="color:#ef4444;">*</span></label>
-                        <input id="ingest-uri" class="dux-input" type="text" placeholder="gs://bucket/path/document.pdf or https://...">
-                        <small style="color:#6b7280;font-size:12px;">GCS URI (gs://…) or HTTPS URL</small>
+                        <label class="dux-label">Local file</label>
+                        <input id="ingest-file" class="dux-input" type="file">
+                        <small style="color:#6b7280;font-size:12px;">Recommended for the self-hosted profile.</small>
+                    </div>
+                    <div class="dux-form-group">
+                        <label class="dux-label">GCS source URI</label>
+                        <input id="ingest-uri" class="dux-input" type="text" placeholder="gs://bucket/path/document.pdf">
+                        <small style="color:#6b7280;font-size:12px;">Optional alternative for the GCP profile.</small>
                     </div>
                     <div class="dux-form-group">
                         <label class="dux-label">Document Type</label>
@@ -221,30 +223,37 @@
         async function submitIngest() {
             const tenant   = document.getElementById('ingest-tenant').value.trim();
             const uri      = document.getElementById('ingest-uri').value.trim();
+            const file     = document.getElementById('ingest-file').files[0];
             const docType  = document.getElementById('ingest-doctype').value;
             const token    = document.getElementById('ingest-token').value.trim();
             const errBox   = document.getElementById('ingest-error');
 
-            if (!tenant || !uri) {
-                errBox.textContent = 'Tenant ID and Source URI are required.';
+            if (!tenant || (!file && !uri)) {
+                errBox.textContent = 'Tenant ID and either a local file or GCS source URI are required.';
                 errBox.style.display = 'block';
                 return;
             }
             errBox.style.display = 'none';
 
-            const body = { tenant, source_uri: uri };
-            if (docType) body.doc_type = docType;
-
-            const headers = { 'Content-Type': 'application/json' };
+            const headers = {};
             if (token) headers['Authorization'] = `Bearer ${token}`;
             if (token) setStoredToken(token);
 
             try {
-                const resp = await fetch('/api/v1/ingest', {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(body),
-                });
+                let endpoint = '/api/v1/ingest';
+                let body;
+                if (file) {
+                    endpoint = '/api/v1/ingest/file';
+                    body = new FormData();
+                    body.append('tenant', tenant);
+                    body.append('file', file);
+                } else {
+                    headers['Content-Type'] = 'application/json';
+                    const jsonBody = { tenant, source_uri: uri };
+                    if (docType) jsonBody.doc_type = docType;
+                    body = JSON.stringify(jsonBody);
+                }
+                const resp = await fetch(endpoint, { method: 'POST', headers, body });
 
                 if (!resp.ok) {
                     const err = await resp.text();
@@ -255,7 +264,7 @@
                 const jobId = data.job_id || data.id || JSON.stringify(data);
 
                 // Add to session list
-                sessionJobs.unshift({ jobId, uri, tenant, status: 'QUEUED', submitted: new Date().toISOString() });
+                sessionJobs.unshift({ jobId, uri: file ? file.name : uri, tenant, status: 'QUEUED', submitted: new Date().toISOString() });
                 renderJobsTable();
 
                 // Show status panel

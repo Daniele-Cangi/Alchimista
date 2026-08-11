@@ -4,6 +4,7 @@ import hmac
 import json
 import time
 
+import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
@@ -16,6 +17,41 @@ def test_require_auth_disabled_returns_none() -> None:
     config = _make_config(auth_enabled=False)
     request = _build_request("")
     assert require_auth(request, config=config, tenant="default") is None
+
+
+def test_require_auth_local_success() -> None:
+    config = _make_config(
+        auth_enabled=True,
+        auth_mode="local",
+        local_auth_token="local-secret-token",
+        local_auth_tenants=("default",),
+    )
+    principal = require_auth(_build_request("local-secret-token"), config=config, tenant="default")
+    assert principal is not None
+    assert principal.subject == "local-admin"
+
+
+def test_require_auth_local_rejects_invalid_token() -> None:
+    config = _make_config(
+        auth_enabled=True,
+        auth_mode="local",
+        local_auth_token="local-secret-token",
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        require_auth(_build_request("wrong-token"), config=config, tenant="default")
+    assert exc_info.value.status_code == 401
+
+
+def test_require_auth_local_rejects_tenant_mismatch() -> None:
+    config = _make_config(
+        auth_enabled=True,
+        auth_mode="local",
+        local_auth_token="local-secret-token",
+        local_auth_tenants=("default",),
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        require_auth(_build_request("local-secret-token"), config=config, tenant="other")
+    assert exc_info.value.status_code == 403
 
 
 def test_require_auth_hs256_success() -> None:

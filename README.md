@@ -1,589 +1,350 @@
-# Alchimista Engine
+# Alchimista
 
-Alchimista is an enterprise **Document Processing + RAG + AI Audit Trail Engine** (not a generic chatbot).
+Alchimista is a self-hostable AI governance, document intelligence, RAG,
+audit, and privacy infrastructure layer. It ingests evidence, builds a
+tenant-scoped retrieval index, returns mandatory citations, and records AI
+decision evidence with factual privacy metadata.
 
-## Integration Guide for Vendors
-For a vendor CTO, integration can start in 3 API calls:
-1. `POST /v1/decisions`: send each AI decision with `decision_id`, `tenant`, model metadata, input/output, confidence, and context docs.
-2. `GET /v1/decisions/{id}/report?tenant=...`: retrieve an auditable single-decision report with full traceability.
-3. `POST /v1/decisions/package`: generate a regulator-ready evidence package (manifest + signed artifacts).
-Authentication: use bearer token (Auth0 M2M) on every call; admin flows additionally require `x-admin-key`.
-Tenant model: every request is tenant-scoped; token tenant claim must match payload/query tenant.
-Idempotency: resend of the same `decision_id` for the same tenant updates deterministically (no duplicate decision trail).
-Expected outcome: your platform can prove what was decided, why, and with which evidence bundle.
+The baseline needs no GCP project, Auth0 tenant, external vector database,
+object store, or paid service. GCP, Vertex, Pub/Sub, GCS, Cloud Run, and OIDC
+remain optional adapters.
 
-## North Star
-Upload documents and AI decisions, convert them into auditable knowledge (chunks, entities, embeddings, metadata), answer with mandatory citations (`doc_id`, `chunk_id`), and enforce governance controls (retention policies, legal holds, immutable artifacts, traceability via `trace_id`/`job_id`).
+Alchimista implements technical controls. It does not certify GDPR, AI Act,
+or other legal compliance, and its PII detectors are not guaranteed to find
+every sensitive value.
 
-## What The Software Does
-- Document intake and processing pipeline (`/v1/ingest` -> Pub/Sub -> processor -> SQL + vector index).
-- RAG query engine with mandatory citations (`/v1/query`).
-- AI decision trail ingestion/query/export/package (`/v1/decisions*`) for regulator-grade evidence.
-- Governance controls for retention policies and legal holds (`/v1/admin/retention-policies`, `/v1/admin/legal-holds`).
-- Retention enforcement engine (`/v1/admin/retention/enforce`) with dry-run, hold-aware deletion, and audit trail of deletion actions.
-- Web control plane (`services/dashboard_service`) to operate ingest/query/decision/governance flows from one UI.
+## Self-hosted quickstart
+
+Prerequisites: Docker Engine with Compose v2 and Python 3.11 or newer.
+
+```bash
+git clone https://github.com/Daniele-Cangi/Alchimista.git
+cd Alchimista
+python scripts/init_local_env.py
+docker compose up --detach --build --wait
+```
+
+Open the dashboard at <http://127.0.0.1:8000>. All published service ports bind
+to loopback by default:
+
+| Port | Service |
+| --- | --- |
+| `8000` | dashboard and local compatibility proxy |
+| `8011` | ingestion, governance, decisions, and audit |
+| `8012` | document processor |
+| `8013` | RAG query API |
+| `8014` | privacy API |
+| `5432` | PostgreSQL |
+
+The generated `.env` contains the local bearer token, admin key, internal
+privacy token, audit signing key, PostgreSQL password, and a URL-safe 256-bit
+privacy vault keyring. It is git-ignored. Treat it as secret material and back it
+up if reversible mappings must survive host loss.
+
+Verify the real vertical slice:
+
+```bash
+python scripts/self_hosted_smoke.py --verify-restart
+```
+
+Success ends with:
+
+```text
+SELF_HOSTED_SMOKE_OK
+```
+
+The smoke uses only synthetic identifiers. It verifies ingest, privacy
+detection, pseudonymization and restoration, protected persistence under
+`STRICT`, SQL retrieval, citations, tenant isolation, AI decision evidence,
+audit privacy metadata, encrypted vault content, vault cascade cleanup, and
+persistence after a PostgreSQL restart.
+
+Stop the stack without deleting persistent data:
+
+```bash
+docker compose down
+```
+
+Delete the named volumes only when you intentionally want to erase the local
+database, stored documents, and privacy mappings:
+
+```bash
+docker compose down --volumes
+```
+
+### Minimal API example
+
+Load `ALCHIMISTA_API_TOKEN` from `.env`, then upload a file:
+
+```bash
+curl -fsS -X POST http://127.0.0.1:8011/v1/ingest \
+  -H "Authorization: Bearer ${ALCHIMISTA_API_TOKEN}" \
+  -F tenant=default \
+  -F doc_id=example-001 \
+  -F file=@example.txt
+```
+
+Query it with citations:
+
+```bash
+curl -fsS -X POST http://127.0.0.1:8013/v1/query \
+  -H "Authorization: Bearer ${ALCHIMISTA_API_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"tenant":"default","query":"What does the evidence say?","top_k":3,"doc_ids":["example-001"]}'
+```
+
+## Local runtime topology
+
+```text
+dashboard ───────────────┬──> ingestion ──direct HTTP──> processor
+                         │         │                       │
+                         └──> RAG  │                       ├──> privacy-service
+                                   │                       │
+                                   └────────┬──────────────┘
+                                            v
+                                       PostgreSQL
+
+ingestion + processor ──> shared filesystem object volume
+```
+
+`schema-init` applies `sql/schema.sql` on every Compose start. PostgreSQL and
+the object store use named volumes. The local queue adapter calls the existing
+processor HTTP contract directly; no broker is added merely to imitate
+Pub/Sub.
+
+The local RAG baseline reuses the existing SQL embedding scan and deterministic
+offline embedder. This is easy to start and proves retrieval/citation
+correctness, but it is not a claim of production semantic quality. Vertex
+embeddings and Vertex Vector Search remain optional.
+
+## Runtime profiles
+
+`ALCHIMISTA_PROFILE=local` is the self-hosted baseline:
+
+- PostgreSQL;
+- `local://` object URIs backed by the mounted filesystem volume;
+- direct internal HTTP processing;
+- SQL retrieval and offline deterministic embeddings;
+- local bearer-token authentication.
+
+`ALCHIMISTA_PROFILE=gcp` retains:
+
+- GCS storage;
+- Pub/Sub and its Google service-to-service authentication boundary;
+- optional Vertex embeddings and Vector Search;
+- Cloud Run deployment scripts and Terraform;
+- provider-independent OIDC for human/API authentication.
+
+The existing API response field names such as `gs_uri` are retained for
+compatibility. In filesystem mode those fields can contain a `local://` URI.
+
+## Authentication modes
+
+Set `AUTH_MODE` to one of:
+
+- `local`: validates a constant-time-compared bearer token from
+  `LOCAL_AUTH_TOKEN` or `ALCHIMISTA_API_TOKEN`. `LOCAL_AUTH_TENANTS` limits its
+  tenants; `*` is the single-admin default generated for a loopback deployment.
+- `oidc`: validates issuer, audience, signature, time claims, principal, and
+  tenant claims. It is provider-independent and can be configured for Auth0,
+  Keycloak, Entra ID, Okta, or another standards-compliant provider.
+- `disabled`: allowed only in explicit development, test, or CI environments.
+  Startup fails if it is selected for `production` or `external`.
+
+Pub/Sub push identity is still validated separately with Google's service
+identity rules. It is not part of the general OIDC subsystem.
+
+The dashboard can use `DASHBOARD_API_TOKEN` server-side so a loopback local
+deployment does not expose the token to browser JavaScript. Bind and reverse
+proxy choices remain the operator's security boundary.
+
+## Privacy policies
+
+Set `PRIVACY_POLICY` to:
+
+| Policy | Detection | Retrieval/index storage | External model text |
+| --- | --- | --- | --- |
+| `off` | legacy regex entity extraction | original chunks and legacy raw `entities` values | unchanged |
+| `detect` | Rizzo findings, hashes, and metadata | original chunks; no raw values in `entities` | unchanged |
+| `protect_egress` | Rizzo findings and metadata | original chunks may remain inside the trusted deployment | pseudonymized before a configured external embedding call |
+| `strict` | Rizzo findings and metadata | pseudonymized before chunking and embedding | only the protected representation |
+
+All enabled privacy policies fail closed if the privacy service is unavailable
+or returns a malformed response. Decision `input` and `output` fields are
+pseudonymized irreversibly before entering audit evidence whenever privacy is
+enabled. Context previews and source URIs are omitted from privacy-enabled
+audit reports.
+
+The raw uploaded object remains in the trusted raw object volume according to
+the operator's retention policy. `STRICT` specifically prevents cleartext from
+normal retrieval/index storage; it does not pretend the original upload never
+existed.
+
+Privacy endpoints:
+
+```text
+GET  /v1/privacy/health
+GET  /v1/privacy/ready
+POST /v1/privacy/detect
+POST /v1/privacy/pseudonymize
+POST /v1/privacy/restore
+```
+
+Operational endpoints require `x-privacy-token` and are intended for the
+private deployment network. API responses include detector name, version,
+mode, and pinned source revision. They never return the raw placeholder map.
+
+### PII persistence and vault
+
+- `pii_findings` stores tenant/document scope, type, detector, confidence,
+  offsets, type-aware placeholder, keyed value hash, and validation metadata.
+- `pii_vault` stores AES-256-GCM ciphertext, a random 96-bit nonce, keyed hash,
+  and key version. Additional authenticated data binds tenant, document,
+  placeholder, and key version.
+- `pii_vault.doc_id` references `documents.doc_id` with `ON DELETE CASCADE`, so
+  document deletion cannot leave encrypted PII mappings orphaned. Schema
+  upgrade removes pre-constraint orphan rows before adding the invariant.
+- `document_privacy` records the applied policy and audit-safe aggregate facts.
+- raw values are written to the legacy `entities` table only under `off`.
+
+`PRIVACY_VAULT_KEYS_JSON` supplies a version-to-key keyring and
+`PRIVACY_VAULT_ACTIVE_KEY_VERSION` selects the key for new ciphertext and
+keyed hashes. Decryption selects the key recorded in each row. The legacy
+single-key variables remain accepted for rolling upgrades. Readiness fails if
+the database references an unavailable key version.
+
+Automatic bulk re-encryption is not implemented. Keep an old key in the
+keyring until no rows reference its version; removing it earlier deliberately
+fails restoration closed.
+
+See [docs/privacy.md](docs/privacy.md) for precise boundary behavior.
+
+## Rizzo-PII integration and attribution
+
+The default lightweight image incorporates only Rizzo-PII's text-only
+regex/checksum detector. It does not copy the Rizzo UI, PDF parser, desktop
+application, or PyMuPDF dependency.
+
+- Upstream: `Rizzo-AI-Academy/rizzo-pii`
+- Pinned source revision: `42d4a40ecfe31acbbe3e1d78cf4d79d38cd8c3f5`
+- Model revision used by the optional full engine: `v1.5.0`
+- Incorporated source license: MIT
+- Original copyright and license: `third_party/rizzo_pii/`
+
+The local fork `Daniele-Cangi/rizzo-pii` was inspected at
+`ca22525fa98e696c48d34ba1a3c096dc5e4e1fe6`; upstream was 17 commits ahead.
+The upstream revision was therefore selected rather than blindly depending on
+the fork.
+
+For the optional full CPU/ML detector:
+
+```bash
+docker compose -f compose.yaml -f compose.rizzo.yaml up --detach --build --wait
+```
+
+That override builds Rizzo from the pinned upstream Git revision, downloads
+the pinned model during image build, and runs offline at runtime. It is an
+internal detector adapter; Alchimista still extracts document text itself.
+
+Upstream documents PyMuPDF as dual AGPL/commercial and notes consequences for
+images/binaries that contain it. The optional full Rizzo image contains that
+dependency. The default Alchimista privacy image does not. See
+`THIRD_PARTY_NOTICES.md` and upstream's pinned `THIRD_PARTY_LICENSES.md`.
+
+## Audit and governance evidence
+
+AI decision metadata now includes audit-safe facts such as:
+
+```json
+{
+  "privacy": {
+    "privacy_policy": "strict",
+    "pii_detected": 3,
+    "pii_types": ["CREDITCARDNUMBER", "EMAIL", "IBAN"],
+    "external_payload_pseudonymized": false,
+    "mapping_exported": false,
+    "privacy_engine": "rizzo-pii",
+    "privacy_engine_version": "2.0.0-regex-snapshot",
+    "privacy_engine_source_revision": "42d4a40ecfe31acbbe3e1d78cf4d79d38cd8c3f5"
+  }
+}
+```
+
+This proves which implemented transformation was recorded. It is not a legal
+compliance certificate. Existing decision reports, signed exports, immutable
+artifacts, retention policies, legal holds, and tenant scoping remain in place.
+
+## Optional enterprise and cloud integrations
+
+Use `.env.gcp.example` as the configuration map. Existing GCP deployment and
+Terraform assets remain under `scripts/` and `infra/terraform/`.
+
+- OIDC: set `AUTH_MODE=oidc`, issuer, audiences, algorithms, JWKS/discovery,
+  and tenant claims.
+- GCS: set `STORAGE_BACKEND=gcs` and the three bucket variables.
+- Pub/Sub: set `QUEUE_BACKEND=pubsub`; configure push identity separately.
+- Vertex: select `vertex_text_embedding` and/or
+  `vertex_ai_vector_search` with the existing IDs.
+- Cloud Run: `scripts/deploy_cloud_run_service.sh` now marks deployments with
+  `ALCHIMISTA_PROFILE=gcp`.
+
+Cloud workflows are manual/separate from the open-source baseline. The
+baseline `ci` workflow needs no GCP or Auth0 secrets.
+
+## CI and container publishing
+
+`.github/workflows/ci.yml` runs unit/security tests and the full Compose smoke
+under `STRICT`. `.github/workflows/publish-ghcr.yml` publishes five images only
+on a version tag or manual dispatch:
+
+```text
+ghcr.io/daniele-cangi/alchimista-ingestion
+ghcr.io/daniele-cangi/alchimista-processor
+ghcr.io/daniele-cangi/alchimista-rag
+ghcr.io/daniele-cangi/alchimista-dashboard
+ghcr.io/daniele-cangi/alchimista-privacy
+```
+
+Every publish includes a full commit-SHA tag and, for releases, the Git tag.
+`latest` is not emitted. Defining the workflow does not mean images have
+already been published.
+
+## Repository map
+
+- `compose.yaml`: supported local stack
+- `compose.rizzo.yaml`: optional full upstream Rizzo ML detector
+- `services/shared`: runtime, auth, storage, queue, privacy, DB, embeddings,
+  retrieval, and egress boundaries
+- `services/privacy_service`: narrow privacy API and encrypted vault
+- `services/ingestion_api_service`: ingest, decisions, audit, governance
+- `services/document_processor_service`: extraction, privacy policy, chunking,
+  embedding, indexing
+- `services/rag_query_service`: SQL/Vertex retrieval and citations
+- `services/dashboard_service`: local UI and API proxy
+- `sql/schema.sql`: canonical schema and privacy tables
+- `tests`: focused unit/security regressions
+- `scripts/self_hosted_smoke.py`: end-to-end proof
+- `infra/terraform`: optional GCP infrastructure
+
+The pre-change implementation map and architectural decisions are in
+[docs/architecture/phase-0-audit.md](docs/architecture/phase-0-audit.md).
+
+## Current limitations
+
+- The default Rizzo regex/checksum layer is precise for supported formatted
+  identifiers but does not provide the full 22-class ML taxonomy. Use the
+  optional pinned Rizzo engine when that tradeoff is appropriate.
+- Pseudonymization can change retrieval semantics and entity relationships.
+  `STRICT` therefore needs evaluation on each domain dataset.
+- The SQL embedding scan intentionally prioritizes easy startup over scale.
+- Local auth is a single-token model, not a user directory or identity
+  platform.
+- Vault key selection and backward decryption are versioned; bulk
+  re-encryption and retirement automation are not implemented.
+- OCR quality depends on host/document characteristics and is not covered by
+  the synthetic text smoke.
 
 ## License
-This repository is open-source under **GNU Affero General Public License v3.0 only** (`AGPL-3.0-only`).
 
-Key copyleft point: if you run a modified version as a network service, users
-interacting with that service must be able to access the corresponding source
-code of the modified version, as required by AGPL-3.0-only.
-
-See:
-- `LICENSE`
-- `NOTICE`
-- `TERMS.md`
-
-## Repository layout
-- `spec/project.yaml`: single source of truth for project direction and infrastructure contract
-- `sql/schema.sql`: canonical relational schema (`documents`, `jobs`, `chunks`, `entities`, `ai_decisions`, decision context tables)
-- `services/ingestion_api_service`: ingest API (`/v1/ingest`, `/v1/ingest/complete`, `/v1/doc/{id}`)
-- `services/document_processor_service`: parser/chunker/embedder/DB writer (`/v1/process`, `/v1/process/pubsub`)
-- `services/rag_query_service`: retrieval + answer with citations (`/v1/query`)
-- `services/dashboard_service`: management UI + proxy (`/dashboard`, `/ingest`, `/query`, `/decisions`, `/governance`)
-- `services/shared`: shared contracts, DB helpers, chunking, embeddings, logging
-- `infra/terraform`: IaC baseline aligned to current GCP resources
-- `_archive/`: preserved historical Cloud Run sample recovered from GCS
-
-## Invariants
-- Single source of truth: `spec/project.yaml`
-- Stable contracts: Pub/Sub + HTTP + SQL
-- Idempotency: no duplicate processing for same `doc_id`/hash
-- Mandatory citations in query answers
-- End-to-end traceability via `trace_id` and `job_id`
-
-## Local quickstart
-1. Copy env:
-```bash
-cp .env.example .env
-```
-2. Export env values:
-```bash
-set -a
-source .env
-set +a
-```
-3. Apply SQL schema:
-```bash
-./scripts/apply_schema.sh
-```
-4. Run services (separate terminals):
-```bash
-uvicorn services.ingestion_api_service.main:app --reload --port 8011
-uvicorn services.document_processor_service.main:app --reload --port 8012
-uvicorn services.rag_query_service.main:app --reload --port 8013
-uvicorn services.dashboard_service.app:app --reload --port 8000
-```
-
-## P1 Definition of Done
-- Upload `test.pdf` and publish ingest event
-- Processor marks job as `SUCCEEDED`
-- `chunks` populated in SQL
-- `/v1/query` returns `answers[]` with non-empty `citations[]`
-
-## Query Quickstart (Step-by-step)
-This is the fastest end-to-end path to run real queries without reading the full ops sections.
-If dashboard test-token mode is enabled, you can skip terminal token mint and click **Use Test Token** directly in `/ingest`, `/query`, and `/decisions`.
-
-1. Mint an Auth0 M2M token:
-```bash
-TOKEN="$(./scripts/get_auth0_m2m_token.sh \
-  alchimista.eu.auth0.com \
-  '<AUTH0_CLIENT_ID>' \
-  '<AUTH0_CLIENT_SECRET>' \
-  'https://api.alchimista.ai')"
-```
-
-2. Create a small local file:
-```bash
-printf "Quickstart document for Alchimista query test\n" > /tmp/quickstart.txt
-```
-
-3. Ingest the sample document (tenant must match the token claim, usually `default`):
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/ingest" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -F "tenant=default" \
-  -F "doc_id=default::quickstart-001" \
-  -F "file=@/tmp/quickstart.txt;type=text/plain" \
-  | jq .
-```
-
-4. Check processing status:
-```bash
-curl -sS "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/doc/default::quickstart-001?tenant=default" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  | jq .
-```
-Expected terminal status: `job.status = SUCCEEDED`.
-
-5. Run a RAG query (`/v1/query`):
-```bash
-curl -sS -X POST "https://rag-query-service-pe7qslbcvq-ez.a.run.app/v1/query" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query":"What does quickstart-001 contain?",
-    "tenant":"default",
-    "top_k":3
-  }' | jq .
-```
-You should always see `answers[].citations[]` with `doc_id` and `chunk_id`.
-
-6. Run an AI decision trail query (`/v1/decisions/query`):
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/query" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant":"default",
-    "limit":20,
-    "offset":0,
-    "order":"desc"
-  }' | jq .
-```
-If this returns empty `items`, first ingest decisions with `POST /v1/decisions` (see P5 section below).
-
-## Runtime hardening operations
-- Cut over Cloud Run services to dedicated service accounts:
-```bash
-./scripts/cutover_service_accounts.sh secure-electron-474908-k9 europe-west4
-```
-- Run end-to-end smoke test against deployed services:
-```bash
-INGEST_URL='https://ingestion-api-service-pe7qslbcvq-ez.a.run.app' \
-PROCESSOR_URL='https://document-processor-service-pe7qslbcvq-ez.a.run.app' \
-RAG_URL='https://rag-query-service-pe7qslbcvq-ez.a.run.app' \
-./scripts/smoke_p1.sh
-```
-- Apply P2 backpressure limits on Cloud Run + Pub/Sub:
-```bash
-./scripts/apply_p2_backpressure.sh secure-electron-474908-k9 europe-west4
-```
-- Replay messages from DLQ (requires `ADMIN_API_KEY` configured on ingestion service):
-```bash
-ADMIN_API_KEY='REPLACE_ME' MAX_MESSAGES=25 ./scripts/replay_dlq.sh
-```
-or directly from Secret Manager:
-```bash
-PROJECT_ID='secure-electron-474908-k9' \
-ADMIN_API_KEY_SECRET='alchimista-admin-api-key' \
-MAX_MESSAGES=25 ./scripts/replay_dlq.sh
-```
-- Rotate and bind `ADMIN_API_KEY` through Secret Manager:
-```bash
-./scripts/rotate_admin_api_key_secret.sh secure-electron-474908-k9 europe-west4
-```
-- Apply P2 observability dashboard and alert policies:
-```bash
-./scripts/apply_p2_observability.sh secure-electron-474908-k9 europe-west4
-```
-
-## Vertex Vector Search operations
-- Provision index + endpoint + deployment (idempotent, waits until active):
-```bash
-./scripts/setup_vertex_vector_search.sh secure-electron-474908-k9 europe-west4
-```
-- Switch processor + rag services to Vertex retrieval + Vertex text embeddings:
-```bash
-./scripts/enable_vertex_backend.sh secure-electron-474908-k9 europe-west4 \
-  3994068346873053184 5596857233007706112 alchimista_chunks_deployed_v3
-```
-
-## P3.3 OIDC/JWT auth rollout
-- Apply OIDC verification settings to runtime services:
-```bash
-./scripts/apply_p3_auth_oidc.sh \
-  secure-electron-474908-k9 europe-west4 \
-  'https://YOUR_ISSUER' 'YOUR_AUDIENCE' \
-  '' 'tenant,tenants' true
-```
-- Current transitional behavior:
-  - `/v1/healthz` and `/v1/readyz` remain open.
-- Enforce authenticated Pub/Sub push to `/v1/process/pubsub` (recommended for enterprise hardening):
-```bash
-./scripts/apply_p3_pubsub_push_oidc.sh secure-electron-474908-k9 europe-west4
-```
-- Get an Auth0 M2M access token for Alchimista API:
-```bash
-TOKEN="$(./scripts/get_auth0_m2m_token.sh \
-  alchimista.eu.auth0.com \
-  '<AUTH0_CLIENT_ID>' \
-  '<AUTH0_CLIENT_SECRET>' \
-  'https://api.alchimista.ai')"
-```
-- Run authenticated smoke query:
-```bash
-./scripts/smoke_p3_auth.sh "$TOKEN" default
-```
-- Verify auth boundary (`healthz` open, protected endpoints denied without token, allowed with token):
-```bash
-./scripts/smoke_p3_auth_enforcement.sh "$TOKEN" default
-```
-- Optional UI one-click token mode for test/demo environments (do not enable on hardened public environments):
-```bash
-DASHBOARD_ENABLE_TEST_TOKEN=true
-DASHBOARD_DEPLOY_ENV=development
-DASHBOARD_ALLOW_TEST_TOKEN_IN_PROD=false
-AUTH0_TEST_DOMAIN=alchimista.eu.auth0.com
-AUTH0_TEST_AUDIENCE=https://api.alchimista.ai
-AUTH0_TEST_CLIENT_ID=<AUTH0_CLIENT_ID>
-AUTH0_TEST_CLIENT_SECRET=<AUTH0_CLIENT_SECRET>
-```
-- Production hardening rule:
-  - if `DASHBOARD_DEPLOY_ENV=production`, endpoint `/api/v1/auth/test-token` stays hard-disabled unless `DASHBOARD_ALLOW_TEST_TOKEN_IN_PROD=true`.
-  - service startup logs an explicit warning whenever test-token mode is requested/enabled.
-
-## P3.1 Benchmark
-- Datasets:
-  - baseline: `benchmark/dataset_v1.json`
-  - quality suite: `benchmark/dataset_v2.json`
-- Run benchmark and generate report:
-```bash
-./scripts/run_p3_benchmark.py --dataset benchmark/dataset_v1.json --output-dir reports/benchmarks
-```
-- Run quality-oriented benchmark (`v2`):
-```bash
-./scripts/run_p3_benchmark.py --dataset benchmark/dataset_v2.json --output-dir reports/benchmarks
-```
-- Override tenant at runtime (useful when JWT tenant claim is `default`):
-```bash
-./scripts/run_p3_benchmark.py --dataset benchmark/dataset_v2.json --tenant default --output-dir reports/benchmarks
-```
-- Core KPI tracked in `summary`: `error_rate`, `citation_coverage`, `recall_at_k`, `mrr`, `p95_latency_ms` (plus `p50_latency_ms`/`max_latency_ms`).
-- Processing defaults to `event-driven` (no direct `/v1/process` call; waits for terminal job status via `/v1/doc/{id}`).
-- Optional explicit processing controls:
-```bash
-./scripts/run_p3_benchmark.py \
-  --processing-mode event-driven \
-  --processing-timeout-seconds 300 \
-  --poll-interval-seconds 2
-```
-- If auth is enabled, pass token:
-```bash
-BENCHMARK_BEARER_TOKEN='REPLACE_ME' ./scripts/run_p3_benchmark.py
-```
-
-## P3.4 CI/CD
-- CI workflows:
-  - `.github/workflows/ci.yml`
-  - `.github/workflows/benchmark-gate.yml`
-  - `.github/workflows/deploy-cloud-run.yml`
-- GitHub Environment used for secrets:
-  - `test` and `prod`
-  - benchmark-gate schedule resolves to `prod`; manual runs can target `test`/`prod`
-  - benchmark-gate manual inputs:
-    - `dataset_path` (default `benchmark/dataset_v1.json`)
-    - `benchmark_tenant` (default `default`)
-- benchmark-gate also enforces auth boundary via `scripts/smoke_p3_auth_enforcement.sh` before running benchmark metrics.
-- Bootstrap deploy IAM prerequisites:
-```bash
-./scripts/bootstrap_github_deploy_iam.sh secure-electron-474908-k9
-```
-- Deploy one service from terminal:
-```bash
-./scripts/deploy_cloud_run_service.sh ingestion-api-service secure-electron-474908-k9 europe-west4
-```
-- Enforce benchmark gate on latest report:
-```bash
-python scripts/check_benchmark_gate.py --spec spec/project.yaml --report reports/benchmarks/latest.json
-```
-- Gate thresholds are defined in `spec/project.yaml` (`benchmark.gates`) and include:
-  - `max_error_rate`
-  - `min_citation_coverage`
-  - `min_recall_at_k`
-  - `min_mrr`
-  - `max_p95_latency_ms`
-- Full operational details:
-  - `docs/p4-cicd.md`
-
-## P5 Governance + Connectors
-- Register an AI decision linked to existing context documents/chunks:
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "decision_id":"d-001",
-    "model":"gpt-4",
-    "model_version":"2024-01",
-    "input":"customer request payload",
-    "output":"approved",
-    "confidence":0.94,
-    "context_docs":["default::bench-alpha-v1","default::bench-beta-v1"],
-    "tenant":"default",
-    "trace_id":"'"$(uuidgen)"'"
-  }'
-```
-- Query decisions with advanced enterprise filters:
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/query" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant":"default",
-    "model":"gpt-4",
-    "model_version":"2024-01",
-    "outputs":["approved"],
-    "query":"kyc case",
-    "min_confidence":0.8,
-    "confidence_band":"high",
-    "created_from":"2026-02-01T00:00:00Z",
-    "created_to":"2026-02-28T23:59:59Z",
-    "context_docs":["default::bench-alpha-v1"],
-    "limit":20,
-    "offset":0,
-    "order":"desc"
-  }'
-```
-- Generate a regulator-friendly decision trail report:
-```bash
-curl -sS -H "Authorization: Bearer ${TOKEN}" \
-  "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/d-001/report?tenant=default"
-```
-- Export a signed audit snapshot to GCS (`REPORTS_BUCKET`):
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/export" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant":"default",
-    "model":"gpt-4",
-    "min_confidence":0.8,
-    "limit":200,
-    "include_context":true
-  }'
-```
-- Build a regulator-ready signed bundle (decision reports + optional policy snapshot):
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/bundle" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant":"default",
-    "decision_ids":["d-001"],
-    "case_id":"kyc-case-001",
-    "regulator_ref":"eu-ai-act-art-12",
-    "include_context":true,
-    "include_policy_snapshot":true
-  }'
-```
-- Build a regulator package with manifest + evidence files:
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/package" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant":"default",
-    "decision_ids":["d-001"],
-    "case_id":"kyc-case-001",
-    "regulator_ref":"eu-ai-act-art-12",
-    "include_context":true,
-    "include_policy_snapshot":true
-  }'
-```
-- Verify integrity/signature of an audit artifact already stored in GCS:
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/decisions/verify" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant":"default",
-    "gs_uri":"gs://alchimista-reports-994021588311/reports/default/audit/packages/pkg-.../manifest.json",
-    "strict_tenant_path":true
-  }'
-```
-- Admin-only cross-tenant decision query (requires `x-admin-key`):
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/decisions/query" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "x-admin-key: ${ADMIN_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenants":["default","vendor-x"],
-    "model":"gpt-4",
-    "outputs":["approved"],
-    "limit":50
-  }'
-```
-- Import document via enterprise connector (`gs://` source -> `raw/` + optional publish):
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/connectors/gcs/import" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "source_gcs_uri":"gs://external-vendor-dropzone/kyc/case-001.pdf",
-    "tenant":"default",
-    "publish":true
-  }'
-```
-- Upsert retention policy (admin endpoint, requires `x-admin-key`):
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/retention-policies" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "x-admin-key: ${ADMIN_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant":"default",
-    "artifact_type":"audit_artifacts",
-    "retain_days":3650,
-    "legal_hold_enabled":true,
-    "immutable_required":true
-  }'
-```
-- Create legal hold (admin endpoint, requires `x-admin-key`):
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/legal-holds" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "x-admin-key: ${ADMIN_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant":"default",
-    "scope_type":"document",
-    "scope_id":"default::bench-alpha-v1",
-    "reason":"regulatory_audit_open"
-  }'
-```
-- List active legal holds:
-```bash
-curl -sS "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/legal-holds?tenant=default&active_only=true" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "x-admin-key: ${ADMIN_API_KEY}"
-```
-- Artifact writes are immutable (write-once): reusing the same `object_name`/`object_prefix` now returns `409`.
-- Full P5 details: `docs/p5-governance-and-connectors.md`.
-- Optional signing (HMAC) for exported reports:
-```bash
-AUDIT_REPORT_SIGNING_KEY='REPLACE_WITH_STRONG_SECRET'
-AUDIT_REPORT_SIGNING_KEY_ID='audit-key-v1'
-```
-- Rotate signing key manually:
-```bash
-./scripts/rotate_audit_report_signing_key_secret.sh secure-electron-474908-k9 europe-west4
-```
-- Rotate signing key via GitHub Actions (manual or monthly schedule):
-```bash
-gh workflow run rotate-audit-signing-key.yml -f environment_name=test -f project_id=secure-electron-474908-k9 -f region=europe-west4
-```
-
-## P6 Retention Enforcement
-- Prerequisites (auth for admin endpoints):
-```bash
-TOKEN="$(./scripts/get_auth0_m2m_token.sh \
-  alchimista.eu.auth0.com \
-  '<AUTH0_CLIENT_ID>' \
-  '<AUTH0_CLIENT_SECRET>' \
-  'https://api.alchimista.ai')"
-
-ADMIN_API_KEY="$(gcloud secrets versions access latest \
-  --secret alchimista-admin-api-key \
-  --project secure-electron-474908-k9)"
-```
-- Seed retention policies by artifact type (recommended before first enforcement run):
-```bash
-for TYPE in decision_report policy_snapshot regulator_package_manifest; do
-  curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/retention-policies" \
-    -H "Authorization: Bearer ${TOKEN}" \
-    -H "x-admin-key: ${ADMIN_API_KEY}" \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"tenant\":\"default\",
-      \"artifact_type\":\"${TYPE}\",
-      \"retain_days\":3650,
-      \"legal_hold_enabled\":true,
-      \"immutable_required\":true
-    }"
-done
-```
-- List active retention policies:
-```bash
-curl -sS "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/retention-policies?tenant=default" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "x-admin-key: ${ADMIN_API_KEY}"
-```
-- Execute retention enforcement in dry-run mode (`artifact_type:null` scans all tenant artifact types):
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/retention/enforce" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "x-admin-key: ${ADMIN_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant":"default",
-    "artifact_type":null,
-    "dry_run":true,
-    "limit":200
-  }'
-```
-- Execute real retention deletion (expired artifacts only, legal-hold aware):
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/retention/enforce" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "x-admin-key: ${ADMIN_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant":"default",
-    "artifact_type":null,
-    "dry_run":false,
-    "limit":200
-  }'
-```
-- Optional legal hold for protection before deletion:
-```bash
-curl -sS -X POST "https://ingestion-api-service-pe7qslbcvq-ez.a.run.app/v1/admin/legal-holds" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "x-admin-key: ${ADMIN_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant":"default",
-    "scope_type":"artifact",
-    "scope_id":"gs://alchimista-reports-994021588311/reports/default/audit/packages/pkg-.../manifest.json",
-    "reason":"regulatory_hold"
-  }'
-```
-- Enforcement behavior:
-  - only artifacts with configured `retention_policies` are considered eligible
-  - active legal holds block deletion
-  - deleted artifacts are soft-marked in SQL (`deleted_at`, `deleted_by`, `deletion_reason`, `delete_job_id`)
-  - GCS object deletion is generation-aware when generation metadata exists
-- Observed production validation on 2026-02-25:
-  - `dry_run` smoke: `HTTP 200`, trace_id `6ef64f51-fb5a-4539-b58a-9964bc4791e1`
-  - `delete` smoke: `HTTP 200`, trace_id `52698ca4-3e2c-4971-b0ce-e0bfcd8ee094`
-  - post-policy-seed dry-run: `HTTP 200`, trace_id `882ce2d8-e8dc-4bf9-a596-60cb8b6ad525`, `skipped_policy_missing=0`
-- Run from CLI with helper script:
-```bash
-TOKEN="${TOKEN}" ADMIN_API_KEY="${ADMIN_API_KEY}" \
-TENANT=default ARTIFACT_TYPE='' DRY_RUN=true LIMIT=200 \
-./scripts/run_p6_retention_enforcement.sh
-```
-- Scheduled automation:
-  - `.github/workflows/retention-enforce.yml` runs:
-    - daily dry-run at `03:40 UTC` (`cron: 40 3 * * *`)
-    - maintenance window at `02:10 UTC` on Sunday (`cron: 10 2 * * 0`)
-  - delete mode in scheduled maintenance window is controlled by feature flag secret `RETENTION_DELETE_WINDOW_ENABLED`.
-  - if the feature flag is missing or different from `true`, scheduled maintenance run falls back to `dry_run=true`.
-  - market environment (`prod`) is set to `RETENTION_DELETE_WINDOW_ENABLED=true` (market mode active).
-  - workflow schedule resolves automatically to GitHub environment `prod`; manual runs can still target `test` or `prod`.
-  - enable maintenance delete window:
-```bash
-gh secret set RETENTION_DELETE_WINDOW_ENABLED --env prod --body true
-```
-  - disable maintenance delete window:
-```bash
-gh secret set RETENTION_DELETE_WINDOW_ENABLED --env prod --body false
-```
-- First validated run: `22417582060` (2026-02-25, status `success`).
-- Latest delete validation run: `22417964263` (2026-02-25, `dry_run=false`, status `success`).
-- First `prod` validation run: `22418533597` (2026-02-25, `dry_run=false`, status `success`).
-  - Manual delete run example:
-```bash
-gh workflow run retention-enforce.yml \
-  -f environment_name=test \
-  -f project_id=secure-electron-474908-k9 \
-  -f tenant=default \
-  -f artifact_type= \
-  -f dry_run=false \
-  -f limit=200 \
-  -f fail_on_errors=true
-```
-- Full P6 details: `docs/p6-retention-enforcement.md`.
+Alchimista is licensed under `AGPL-3.0-only`. See `LICENSE`, `NOTICE`,
+`TERMS.md`, and `THIRD_PARTY_NOTICES.md`.

@@ -1,0 +1,12 @@
+.git
+.github
+.venv
+.pytest_cache
+__pycache__
+*.pyc
+.env
+_archive
+infra/exported
+benchmark
+reports
+work
