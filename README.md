@@ -24,12 +24,15 @@ python scripts/init_local_env.py
 docker compose up --detach --build --wait
 ```
 
-Open the dashboard at <http://127.0.0.1:8000>. All published service ports bind
+Open Alchimista at <http://127.0.0.1:8000>. Home, Documents, Ask, Privacy,
+Audit, Governance, and System form one local application. Authentication and
+service routing are handled server-side; normal browser use never asks for a
+bearer token, tenant ID, or service URL. All published service ports bind
 to loopback by default:
 
 | Port | Service |
 | --- | --- |
-| `8000` | dashboard and local compatibility proxy |
+| `8000` | Alchimista product and local compatibility proxy |
 | `8011` | ingestion, governance, decisions, and audit |
 | `8012` | document processor |
 | `8013` | RAG query API |
@@ -37,7 +40,7 @@ to loopback by default:
 | `5432` | PostgreSQL |
 
 The generated `.env` contains the local bearer token, admin key, internal
-privacy token, audit signing key, PostgreSQL password, and a URL-safe 256-bit
+privacy/model tokens, audit signing key, PostgreSQL password, and a URL-safe 256-bit
 privacy vault keyring. It is git-ignored. Treat it as secret material and back it
 up if reversible mappings must survive host loss.
 
@@ -53,7 +56,8 @@ Success ends with:
 SELF_HOSTED_SMOKE_OK
 ```
 
-The smoke uses only synthetic identifiers. It verifies ingest, privacy
+The smoke uses only synthetic identifiers. It verifies the localhost product
+shell, persistent Documents view, interactive Ask evidence, ingest, privacy
 detection, pseudonymization and restoration, protected persistence under
 `STRICT`, SQL retrieval, citations, tenant isolation, AI decision evidence,
 audit privacy metadata, encrypted vault content, vault cascade cleanup, and
@@ -96,13 +100,12 @@ curl -fsS -X POST http://127.0.0.1:8013/v1/query \
 ## Local runtime topology
 
 ```text
-dashboard ───────────────┬──> ingestion ──direct HTTP──> processor
-                         │         │                       │
-                         └──> RAG  │                       ├──> privacy-service
-                                   │                       │
-                                   └────────┬──────────────┘
-                                            v
-                                       PostgreSQL
+browser ──> dashboard ───┬──> ingestion ──direct HTTP──> processor
+                         ├──> RAG                         │
+                         └──> privacy-service <───────────┘
+                                   │
+                                   └──> Rizzo model runtime (idle by default)
+                         services ─────> PostgreSQL
 
 ingestion + processor ──> shared filesystem object volume
 ```
@@ -154,11 +157,16 @@ Set `AUTH_MODE` to one of:
 Pub/Sub push identity is still validated separately with Google's service
 identity rules. It is not part of the general OIDC subsystem.
 
-The dashboard can use `DASHBOARD_API_TOKEN` server-side so a loopback local
+The product proxy uses `DASHBOARD_API_TOKEN` server-side so a loopback local
 deployment does not expose the token to browser JavaScript. Bind and reverse
 proxy choices remain the operator's security boundary. Dashboard multipart
 uploads are capped at 25 MiB by default; set `DASHBOARD_MAX_UPLOAD_BYTES` to a
 different positive byte limit when the deployment requires it.
+
+Workspace privacy configuration is persisted in PostgreSQL. Environment
+variables bootstrap the first row only. Changing policy or detector affects
+new processing deterministically; existing `document_privacy` rows retain the
+policy and detector actually applied until an explicit reprocess.
 
 ## Privacy policies
 
@@ -187,6 +195,10 @@ Privacy endpoints:
 ```text
 GET  /v1/privacy/health
 GET  /v1/privacy/ready
+GET  /v1/privacy/settings
+PUT  /v1/privacy/settings
+GET  /v1/privacy/model
+POST /v1/privacy/model/{install|load|unload}
 POST /v1/privacy/detect
 POST /v1/privacy/pseudonymize
 POST /v1/privacy/restore
@@ -226,34 +238,40 @@ See [docs/privacy.md](docs/privacy.md) for precise boundary behavior.
 
 ## Rizzo-PII integration and attribution
 
-The default lightweight image incorporates only Rizzo-PII's text-only
+The lightweight privacy image incorporates only Rizzo-PII's text-only
 regex/checksum detector. It does not copy the Rizzo UI, PDF parser, desktop
 application, or PyMuPDF dependency.
 
 - Upstream: `Rizzo-AI-Academy/rizzo-pii`
 - Pinned source revision: `42d4a40ecfe31acbbe3e1d78cf4d79d38cd8c3f5`
-- Model revision used by the optional full engine: `v1.5.0`
+- Model revision used by the managed full engine: `v1.5.0`
+- Resolved immutable model commit: `a1c3c83827eca22e9675e30c1111c4641caf5901`
 - Incorporated source license: MIT
 - Original copyright and license: `third_party/rizzo_pii/`
 
-The local fork `Daniele-Cangi/rizzo-pii` was inspected at
-`ca22525fa98e696c48d34ba1a3c096dc5e4e1fe6`; upstream was 17 commits ahead.
-The upstream revision was therefore selected rather than blindly depending on
-the fork.
+The pinned upstream revision was rechecked before this integration. The normal
+`compose.yaml` includes a dedicated, unexposed CPU model runtime. It starts
+without weights and without loading the 0.3B model. From the Privacy page the
+user can install, load, activate, switch back to Lightweight, and unload Full
+Rizzo without Docker access.
 
-For the optional full CPU/ML detector:
+Installation accepts no repository or revision from the browser. The service
+downloads only the commit resolved from `rizzoaiacademy/rizzo-pii-0.3B@v1.5.0`, validates required
+artifacts, writes a SHA-256 manifest, and atomically promotes the completed
+download into the `rizzo-model-data` named volume. States are truthful:
+`NOT_INSTALLED`, `DOWNLOADING`, `INSTALLED`, `LOADING`, `READY`, or `ERROR`.
+After installation, loading and inference can operate offline. A restart
+validates the manifest and returns to `INSTALLED`; weights are not downloaded
+again. Full detector selection is rejected until the runtime is `READY`, and
+privacy operations fail closed if an already-selected Full runtime becomes
+unavailable.
 
-```bash
-docker compose -f compose.yaml -f compose.rizzo.yaml up --detach --build --wait
-```
-
-That override builds Rizzo from the pinned upstream Git revision, downloads
-the pinned model during image build, and runs offline at runtime. It is an
-internal detector adapter; Alchimista still extracts document text itself.
+See [docs/full-rizzo-acceptance.md](docs/full-rizzo-acceptance.md) for the
+browser-only install/load/activate/restart acceptance path.
 
 Upstream documents PyMuPDF as dual AGPL/commercial and notes consequences for
-images/binaries that contain it. The optional full Rizzo image contains that
-dependency. The default Alchimista privacy image does not. See
+images/binaries that contain it. Alchimista's managed text inference runtime
+does not include PyMuPDF; document parsing remains in the processor. See
 `THIRD_PARTY_NOTICES.md` and upstream's pinned `THIRD_PARTY_LICENSES.md`.
 
 ## Audit and governance evidence
@@ -296,10 +314,15 @@ Terraform assets remain under `scripts/` and `infra/terraform/`.
 Cloud workflows are manual/separate from the open-source baseline. The
 baseline `ci` workflow needs no GCP or Auth0 secrets.
 
+The obsolete Vercel catch-all and recovered placeholder API were removed:
+they could render a serverless dashboard but could not reach a user's private
+Compose services, so they were not a valid deployment of Alchimista. Optional
+GCP/Cloud Run adapters remain supported independently.
+
 ## CI and container publishing
 
 `.github/workflows/ci.yml` runs unit/security tests and the full Compose smoke
-under `STRICT`. `.github/workflows/publish-ghcr.yml` publishes five images only
+under `STRICT`. `.github/workflows/publish-ghcr.yml` publishes six images only
 on a version tag or manual dispatch:
 
 ```text
@@ -308,6 +331,7 @@ ghcr.io/daniele-cangi/alchimista-processor
 ghcr.io/daniele-cangi/alchimista-rag
 ghcr.io/daniele-cangi/alchimista-dashboard
 ghcr.io/daniele-cangi/alchimista-privacy
+ghcr.io/daniele-cangi/alchimista-rizzo-model
 ```
 
 Every publish includes a full commit-SHA tag and, for releases, the Git tag.
@@ -317,10 +341,10 @@ already been published.
 ## Repository map
 
 - `compose.yaml`: supported local stack
-- `compose.rizzo.yaml`: optional full upstream Rizzo ML detector
 - `services/shared`: runtime, auth, storage, queue, privacy, DB, embeddings,
   retrieval, and egress boundaries
 - `services/privacy_service`: narrow privacy API and encrypted vault
+- `services/rizzo_model_service`: idle/install/load/unload Full Rizzo runtime
 - `services/ingestion_api_service`: ingest, decisions, audit, governance
 - `services/document_processor_service`: extraction, privacy policy, chunking,
   embedding, indexing
@@ -337,8 +361,8 @@ The pre-change implementation map and architectural decisions are in
 ## Current limitations
 
 - The default Rizzo regex/checksum layer is precise for supported formatted
-  identifiers but does not provide the full 22-class ML taxonomy. Use the
-  optional pinned Rizzo engine when that tradeoff is appropriate.
+  identifiers but does not provide the full 22-class ML taxonomy. Install and
+  activate Full Rizzo from Privacy when that tradeoff is appropriate.
 - Pseudonymization can change retrieval semantics and entity relationships.
   `STRICT` therefore needs evaluation on each domain dataset.
 - The SQL embedding scan intentionally prioritizes easy startup over scale.
