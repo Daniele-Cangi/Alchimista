@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alchimista - AI Audit Trail Engine</title>
-    <meta name="description" content="Alchimista is an AI audit trail engine for traceable AI decisions, citations, governance controls, and regulator-ready exports.">
+    <title>Alchimista - Self-hosted AI Governance and Privacy</title>
+    <meta name="description" content="Alchimista is a self-hostable platform for document intelligence, cited RAG, privacy controls, and traceable AI decision evidence.">
     <link rel="canonical" href="https://alchimista.unityloop.ai/">
 
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="Alchimista">
-    <meta property="og:title" content="Alchimista - AI Audit Trail Engine">
-    <meta property="og:description" content="Trace AI decisions, link evidence, and export regulator-ready audit artifacts.">
+    <meta property="og:title" content="Alchimista - Self-hosted AI Governance and Privacy">
+    <meta property="og:description" content="Trace AI decisions, link cited evidence, and apply auditable privacy controls.">
     <meta property="og:url" content="https://alchimista.unityloop.ai/">
     <meta property="og:image" content="https://alchimista.unityloop.ai/static/images/logo/logo-dark.png">
     <meta property="og:image:secure_url" content="https://alchimista.unityloop.ai/static/images/logo/logo-dark.png">
@@ -20,15 +20,12 @@
     <meta property="og:image:alt" content="Alchimista logo">
 
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Alchimista - AI Audit Trail Engine">
-    <meta name="twitter:description" content="Trace AI decisions, link evidence, and export regulator-ready audit artifacts.">
+    <meta name="twitter:title" content="Alchimista - Self-hosted AI Governance and Privacy">
+    <meta name="twitter:description" content="Trace AI decisions, link cited evidence, and apply auditable privacy controls.">
     <meta name="twitter:image" content="https://alchimista.unityloop.ai/static/images/logo/logo-dark.png">
     <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
     <link rel="apple-touch-icon" href="/static/images/logo/logo-dark.png">
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
         :root {
@@ -734,14 +731,14 @@
             <a href="#features">Features</a>
             <a href="#how-it-works">How It Works</a>
             <a href="#connectors">Connectors</a>
-            <a href="https://github.com/UnityLoop-official/Alchimista" target="_blank">GitHub</a>
+            <a href="https://github.com/Daniele-Cangi/Alchimista" target="_blank">GitHub</a>
         </div>
         <div class="nav-cta">
-            <a href="https://github.com/UnityLoop-official/Alchimista" target="_blank" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px;">
+            <a href="https://github.com/Daniele-Cangi/Alchimista" target="_blank" class="btn btn-outline" style="display: flex; align-items: center; gap: 6px;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .587l3.668 7.568 8.332 1.151-6.064 5.828 1.48 8.279-7.416-3.967-7.417 3.967 1.481-8.279-6.064-5.828 8.332-1.151z"/></svg>
                 Star on GitHub
             </a>
-            <a href="#" onclick="openAuthModal(); return false;" class="btn btn-primary">Integrate the API</a>
+            <a href="/dashboard" class="btn btn-primary">Open Dashboard</a>
         </div>
     </nav>
 
@@ -925,7 +922,7 @@
             <!-- Hero Buttons -->
             <div class="hero-text animate delay-2" style="margin-bottom: 20px;">
                 <div class="hero-buttons" style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-                    <button onclick="openAuthModal()" class="btn btn-primary btn-large" style="background: #111827; color: #fff; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; cursor: pointer;">Integrate the API</button>
+                    <a href="/dashboard" class="btn btn-primary btn-large" style="background: #111827; color: #fff; padding: 16px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; cursor: pointer;">Open Dashboard</a>
                     <a href="#features" class="btn btn-outline btn-large" style="border: 2px solid #111827; color: #111827; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">Read the Docs</a>
                 </div>
             </div>
@@ -936,7 +933,7 @@
                     <span style="color: #111827; font-weight: 700;">AI</span> Audit Trail <span style="color: #111827; font-weight: 700;">Engine</span>
                 </p>
                 <p style="font-size: 20px; color: #4b5563; max-width: 600px; margin-left: auto; margin-right: auto; line-height: 1.6;">
-                    Every AI Decision, Traced and Auditable. Alchimista captures AI outputs, links them to source documents, and generates verifiable audit trails — EU AI Act ready.
+                    Self-host document intelligence, cited RAG, privacy controls, and traceable AI decision evidence without requiring a cloud account.
                 </p>
             </div>
 
@@ -1093,7 +1090,7 @@ tenant=<span class="str">"your-vendor"</span></code></pre>
                         </div>
                         <div class="scroll-card code-card sm">
                             <pre><code><span class="fn">export</span>(<span class="str">"eu-ai-act"</span>)
-<span class="cmt"># compliant</span></code></pre>
+<span class="cmt"># evidence</span></code></pre>
                         </div>
                         <div class="scroll-card chart-card wide">
                             <div class="mini-wave">
@@ -1120,7 +1117,7 @@ tenant=<span class="str">"your-vendor"</span></code></pre>
                         </div>
                         <div class="scroll-card code-card sm">
                             <pre><code><span class="fn">export</span>(<span class="str">"eu-ai-act"</span>)
-<span class="cmt"># compliant</span></code></pre>
+<span class="cmt"># evidence</span></code></pre>
                         </div>
                         <div class="scroll-card chart-card wide">
                             <div class="mini-wave">
@@ -1152,13 +1149,13 @@ tenant=<span class="str">"your-vendor"</span></code></pre>
                         </div>
                         <div class="scroll-card code-card sm">
                             <pre><code><span class="fn">verify</span>()
-<span class="cmt"># EU-ready</span></code></pre>
+<span class="cmt"># verified</span></code></pre>
                         </div>
                         <div class="scroll-card chart-card wide">
                             <div class="mini-chart">
                                 <svg viewBox="0 0 100 40"><polyline points="5,35 25,20 45,28 65,8 85,15 95,10" fill="none" stroke="#22c55e" stroke-width="2"/></svg>
                             </div>
-                            <span class="chart-label">Compliance 100%</span>
+                            <span class="chart-label">Evidence Recorded</span>
                         </div>
                         <!-- Duplicate -->
                         <div class="scroll-card code-card">
@@ -1179,13 +1176,13 @@ tenant=<span class="str">"your-vendor"</span></code></pre>
                         </div>
                         <div class="scroll-card code-card sm">
                             <pre><code><span class="fn">verify</span>()
-<span class="cmt"># EU-ready</span></code></pre>
+<span class="cmt"># verified</span></code></pre>
                         </div>
                         <div class="scroll-card chart-card wide">
                             <div class="mini-chart">
                                 <svg viewBox="0 0 100 40"><polyline points="5,35 25,20 45,28 65,8 85,15 95,10" fill="none" stroke="#22c55e" stroke-width="2"/></svg>
                             </div>
-                            <span class="chart-label">Compliance 100%</span>
+                            <span class="chart-label">Evidence Recorded</span>
                         </div>
                     </div>
                 </div>
@@ -1624,9 +1621,9 @@ tenant=<span class="str">"your-vendor"</span></code></pre>
 
         <div class="section-header" style="position: relative; z-index: 1;">
             <div class="section-label">Features</div>
-            <h2 class="section-title">Trace. Cite. Comply.</h2>
+            <h2 class="section-title">Trace. Cite. Protect.</h2>
             <p class="section-desc">
-                Every AI decision auditable, every answer citable, every report regulator-ready
+                Traceable decisions, cited answers, explicit privacy policy evidence
             </p>
         </div>
         <div class="features-grid">
@@ -1670,8 +1667,8 @@ tenant=<span class="str">"your-vendor"</span></code></pre>
                         <path d="M2 12l10 5 10-5"/>
                     </svg>
                 </div>
-                <h3>Regulatory Export</h3>
-                <p>EU AI Act ready reports, one click away. Export structured audit packages for regulators, enterprise clients, and internal compliance teams.</p>
+                <h3>Governance Export</h3>
+                <p>Export structured, integrity-verifiable audit packages for independent legal, governance, and operational review.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon">
@@ -1681,7 +1678,7 @@ tenant=<span class="str">"your-vendor"</span></code></pre>
                     </svg>
                 </div>
                 <h3>Real-time Monitoring</h3>
-                <p>Live dashboards for backlog, error rate, and latency. Catch anomalies before they become compliance incidents.</p>
+                <p>Inspect service health, job state, and retrieval quality so operational issues are visible and reviewable.</p>
             </div>
             <div class="feature-card">
                 <div class="feature-icon">
@@ -1692,7 +1689,7 @@ tenant=<span class="str">"your-vendor"</span></code></pre>
                     </svg>
                 </div>
                 <h3>API-first</h3>
-                <p>Integrate in days, not months. Drop-in SDK for Python. REST API for any stack. Designed for CTOs who need compliance without friction.</p>
+                <p>Use documented REST APIs from Python or any HTTP-capable stack, with local and GCP runtime profiles sharing the same contracts.</p>
             </div>
         </div>
     </section>
@@ -1770,9 +1767,9 @@ tenant=<span class="str">"your-vendor"</span></code></pre>
 
     <!-- CTA Section -->
     <section class="cta">
-        <h2>Compliance is a feature, not a burden</h2>
-        <p>Ship EU AI Act compliance to your enterprise clients without slowing down your roadmap</p>
-        <button onclick="openAuthModal()" class="btn btn-primary btn-large" style="cursor: pointer;">Integrate the API — Free Trial</button>
+        <h2>Run the governance boundary on infrastructure you control</h2>
+        <p>Start locally, inspect the evidence path, and opt into cloud adapters only when they fit your deployment.</p>
+        <a href="/dashboard" class="btn btn-primary btn-large" style="cursor: pointer;">Open Dashboard</a>
     </section>
 
     <!-- Footer -->
@@ -1783,7 +1780,7 @@ tenant=<span class="str">"your-vendor"</span></code></pre>
                 <p class="footer-text">AI Audit Trail Engine</p>
             </div>
             <div class="footer-links">
-                <a href="https://github.com/UnityLoop-official/Alchimista" target="_blank">GitHub</a>
+                <a href="https://github.com/Daniele-Cangi/Alchimista" target="_blank">GitHub</a>
                 <a href="/dashboard">Console</a>
                 <a href="/guide">Documentation</a>
                 <a href="https://unityloop.ai" target="_blank" rel="noopener noreferrer">unityloop.ai</a>
@@ -1857,7 +1854,7 @@ tenant=<span class="str">"your-vendor"</span></code></pre>
             </div>
 
             <p class="auth-modal-note">
-                This build opens directly in guest mode. Protected API access still depends on the tokens you provide inside the dashboard.
+                The local Compose dashboard proxies with its server-side token. Direct API calls still require the configured bearer token.
             </p>
         </div>
     </div>

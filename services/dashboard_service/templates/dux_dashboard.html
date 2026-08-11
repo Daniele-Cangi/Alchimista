@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alchimista - Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dux-minimal.css">
 </head>
 <body>
@@ -189,8 +186,8 @@
                             </svg>
                         </div>
                         <div>
-                            <div style="font-weight:600;font-size:14px;">GCS Import</div>
-                            <div style="font-size:12px;color:#6b7280;">Bulk import from Google Cloud Storage</div>
+                            <div style="font-weight:600;font-size:14px;">Optional GCS Import</div>
+                            <div style="font-size:12px;color:#6b7280;">Bulk import for the GCP profile</div>
                         </div>
                         <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;"><polyline points="9 18 15 12 9 6"/></svg>
                     </a>
@@ -208,7 +205,7 @@
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;">
                     <div class="pipe-box" style="background:#ede9fe;border:1px solid #c4b5fd;">
                         <div class="pipe-label" style="color:#5b21b6;">Source</div>
-                        <div class="pipe-name">GCS / URI</div>
+                        <div class="pipe-name">File / GCS</div>
                     </div>
                     <div class="pipe-arrow">→</div>
                     <div class="pipe-box" style="background:#dbeafe;border:1px solid #93c5fd;">
@@ -217,18 +214,18 @@
                     </div>
                     <div class="pipe-arrow">→</div>
                     <div class="pipe-box" style="background:#fef3c7;border:1px solid #fcd34d;">
-                        <div class="pipe-label" style="color:#92400e;">Pub/Sub</div>
-                        <div class="pipe-name">Job Queue</div>
+                        <div class="pipe-label" style="color:#92400e;">Queue adapter</div>
+                        <div class="pipe-name">Direct / Pub/Sub</div>
                     </div>
                     <div class="pipe-arrow">→</div>
                     <div class="pipe-box" style="background:#d1fae5;border:1px solid #6ee7b7;">
                         <div class="pipe-label" style="color:#065f46;">processor</div>
-                        <div class="pipe-name">chunk + embed</div>
+                        <div class="pipe-name">protect + chunk</div>
                     </div>
                     <div class="pipe-arrow">→</div>
                     <div class="pipe-box" style="background:#f3f4f6;border:1px solid #d1d5db;">
                         <div class="pipe-label" style="color:#374151;">Storage</div>
-                        <div class="pipe-name">PG + Vector</div>
+                        <div class="pipe-name">Postgres + Vector</div>
                     </div>
                     <div class="pipe-arrow">→</div>
                     <div class="pipe-box" style="background:#dbeafe;border:1px solid #93c5fd;">

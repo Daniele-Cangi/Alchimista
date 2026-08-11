@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import requests
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
@@ -495,6 +495,43 @@ async def api_ingest(body: IngestRequest, authorization: str | None = Header(def
         raise _http_err(exc)
     except HTTPException:
         raise
+    except Exception as exc:
+        raise _gw_err(exc)
+
+
+@app.post("/api/v1/ingest/file")
+async def api_ingest_file(
+    file: UploadFile = File(...),
+    tenant: str = Form(...),
+    authorization: str | None = Header(default=None),
+):
+    """Forward a local file as multipart data to the ingestion service."""
+    tenant = tenant.strip()
+    if not tenant:
+        raise HTTPException(status_code=400, detail="tenant is required")
+
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="file is empty")
+
+    try:
+        response = requests.post(
+            f"{INGEST_URL}/v1/ingest",
+            data={"tenant": tenant},
+            files={
+                "file": (
+                    file.filename or "document.bin",
+                    payload,
+                    file.content_type or "application/octet-stream",
+                )
+            },
+            headers=_headers(authorization),
+            timeout=120,
+        )
+        response.raise_for_status()
+        return _decode_json(response)
+    except requests.HTTPError as exc:
+        raise _http_err(exc)
     except Exception as exc:
         raise _gw_err(exc)
 
