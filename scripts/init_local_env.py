@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import base64
+import secrets
+from pathlib import Path
+
+
+def build_environment() -> str:
+    values = {
+        "POSTGRES_PASSWORD": secrets.token_urlsafe(32),
+        "ALCHIMISTA_API_TOKEN": secrets.token_urlsafe(48),
+        "ADMIN_API_KEY": secrets.token_urlsafe(48),
+        "PRIVACY_SERVICE_TOKEN": secrets.token_urlsafe(48),
+        "PRIVACY_VAULT_KEY": base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii"),
+        "PRIVACY_VAULT_KEY_VERSION": "v1",
+        "AUDIT_REPORT_SIGNING_KEY": secrets.token_urlsafe(48),
+        "AUDIT_REPORT_SIGNING_KEY_ID": "local-v1",
+        "LOCAL_AUTH_TENANTS": "*",
+        "PRIVACY_POLICY": "protect_egress",
+        "PRIVACY_MAPPING_ENABLED": "true",
+        "PRIVACY_DETECTOR": "rizzo_regex",
+    }
+    return "\n".join(f"{key}={value}" for key, value in values.items()) + "\n"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate local Alchimista secrets")
+    parser.add_argument("--force", action="store_true", help="replace an existing .env")
+    args = parser.parse_args()
+
+    root = Path(__file__).resolve().parents[1]
+    destination = root / ".env"
+    if destination.exists() and not args.force:
+        parser.error(f"{destination} already exists; use --force to replace it")
+    destination.write_text(build_environment(), encoding="utf-8", newline="\n")
+    try:
+        destination.chmod(0o600)
+    except OSError:
+        pass
+    print(f"Generated {destination}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -25,6 +25,7 @@ override.tf.json
 .env
 .env.*
 !.env.example
+!.env.gcp.example
 
 # Build artifacts
 coverage/

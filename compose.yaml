@@ -1,0 +1,200 @@
+name: alchimista
+
+x-runtime-environment: &runtime-environment
+  ALCHIMISTA_PROFILE: local
+  ALCHIMISTA_ENV: development
+  DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?run python scripts/init_local_env.py}@postgres:5432/alchimista
+  STORAGE_BACKEND: filesystem
+  LOCAL_STORAGE_PATH: /data/objects
+  RAW_BUCKET: raw
+  PROCESSED_BUCKET: processed
+  REPORTS_BUCKET: reports
+  QUEUE_BACKEND: direct_http
+  PROCESSOR_URL: http://document-processor-service:8080
+  VECTOR_BACKEND: sql_embedding_scan
+  EMBEDDING_BACKEND: deterministic_hash
+  EMBEDDING_DIMENSIONS: "128"
+  AUTH_MODE: local
+  LOCAL_AUTH_TOKEN: ${ALCHIMISTA_API_TOKEN:?run python scripts/init_local_env.py}
+  LOCAL_AUTH_TENANTS: ${LOCAL_AUTH_TENANTS:-*}
+  ADMIN_API_KEY: ${ADMIN_API_KEY:?run python scripts/init_local_env.py}
+  PRIVACY_POLICY: ${PRIVACY_POLICY:-protect_egress}
+  PRIVACY_SERVICE_URL: http://privacy-service:8080
+  PRIVACY_SERVICE_TOKEN: ${PRIVACY_SERVICE_TOKEN:?run python scripts/init_local_env.py}
+  PRIVACY_VAULT_KEY: ${PRIVACY_VAULT_KEY:?run python scripts/init_local_env.py}
+  PRIVACY_VAULT_KEY_VERSION: ${PRIVACY_VAULT_KEY_VERSION:-v1}
+  PRIVACY_MAPPING_ENABLED: ${PRIVACY_MAPPING_ENABLED:-true}
+  PRIVACY_DETECTOR: ${PRIVACY_DETECTOR:-rizzo_regex}
+  AUDIT_REPORT_SIGNING_KEY: ${AUDIT_REPORT_SIGNING_KEY:?run python scripts/init_local_env.py}
+  AUDIT_REPORT_SIGNING_KEY_ID: ${AUDIT_REPORT_SIGNING_KEY_ID:-local-v1}
+  ENFORCE_STORAGE_HARDENING: "false"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: alchimista
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run python scripts/init_local_env.py}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d alchimista"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  schema-init:
+    image: postgres:16-alpine
+    restart: "no"
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?run python scripts/init_local_env.py}
+    command:
+      - psql
+      - --host=postgres
+      - --username=postgres
+      - --dbname=alchimista
+      - --set=ON_ERROR_STOP=1
+      - --file=/schema/schema.sql
+    volumes:
+      - ./sql/schema.sql:/schema/schema.sql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  privacy-service:
+    build:
+      context: .
+      dockerfile: services/privacy_service/Dockerfile
+    image: alchimista-privacy:local
+    restart: unless-stopped
+    environment: *runtime-environment
+    ports:
+      - "127.0.0.1:8014:8080"
+    depends_on:
+      schema-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/privacy/ready', timeout=4)
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 20
+
+  document-processor-service:
+    build:
+      context: .
+      dockerfile: services/document_processor_service/Dockerfile
+    image: alchimista-processor:local
+    restart: unless-stopped
+    environment: *runtime-environment
+    ports:
+      - "127.0.0.1:8012:8080"
+    volumes:
+      - object-data:/data/objects
+    depends_on:
+      schema-init:
+        condition: service_completed_successfully
+      privacy-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/readyz', timeout=4)
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  ingestion-api-service:
+    build:
+      context: .
+      dockerfile: services/ingestion_api_service/Dockerfile
+    image: alchimista-ingestion:local
+    restart: unless-stopped
+    environment: *runtime-environment
+    ports:
+      - "127.0.0.1:8011:8080"
+    volumes:
+      - object-data:/data/objects
+    depends_on:
+      schema-init:
+        condition: service_completed_successfully
+      privacy-service:
+        condition: service_healthy
+      document-processor-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/readyz', timeout=4)
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  rag-query-service:
+    build:
+      context: .
+      dockerfile: services/rag_query_service/Dockerfile
+    image: alchimista-rag:local
+    restart: unless-stopped
+    environment: *runtime-environment
+    ports:
+      - "127.0.0.1:8013:8080"
+    depends_on:
+      schema-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/v1/readyz', timeout=4)
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  dashboard-service:
+    build:
+      context: .
+      dockerfile: services/dashboard_service/Dockerfile
+    image: alchimista-dashboard:local
+    restart: unless-stopped
+    environment:
+      INGEST_URL: http://ingestion-api-service:8080
+      PROCESSOR_URL: http://document-processor-service:8080
+      RAG_URL: http://rag-query-service:8080
+      DASHBOARD_API_TOKEN: ${ALCHIMISTA_API_TOKEN:?run python scripts/init_local_env.py}
+      ADMIN_KEY: ${ADMIN_API_KEY:?run python scripts/init_local_env.py}
+      DASHBOARD_DEPLOY_ENV: development
+      DASHBOARD_ENABLE_TEST_TOKEN: "false"
+    ports:
+      - "127.0.0.1:8000:8080"
+    depends_on:
+      ingestion-api-service:
+        condition: service_healthy
+      rag-query-service:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/', timeout=4)
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres-data:
+  object-data:

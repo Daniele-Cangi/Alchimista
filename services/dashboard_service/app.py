@@ -23,6 +23,7 @@ INGEST_URL = os.getenv("INGEST_URL", "http://localhost:8011")
 PROCESSOR_URL = os.getenv("PROCESSOR_URL", "http://localhost:8012")
 RAG_URL = os.getenv("RAG_URL", "http://localhost:8013")
 ADMIN_KEY = os.getenv("ADMIN_KEY", "")
+DASHBOARD_API_TOKEN = os.getenv("DASHBOARD_API_TOKEN", "")
 
 # Optional demo convenience mode. Keep disabled in hardened environments.
 DASHBOARD_ENABLE_TEST_TOKEN = os.getenv("DASHBOARD_ENABLE_TEST_TOKEN", "false").strip().lower() in {
@@ -89,6 +90,8 @@ def _headers(auth: str | None = None, admin_key: str | None = None) -> dict[str,
     headers: dict[str, str] = {}
     if auth:
         headers["Authorization"] = auth
+    elif DASHBOARD_API_TOKEN:
+        headers["Authorization"] = f"Bearer {DASHBOARD_API_TOKEN}"
     if admin_key:
         headers["x-admin-key"] = admin_key
     return headers
