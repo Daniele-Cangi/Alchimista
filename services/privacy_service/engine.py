@@ -1,0 +1,219 @@
+from __future__ import annotations
+
+import bisect
+import json
+import re
+from dataclasses import dataclass
+from typing import Any, Protocol
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+from services.privacy_service.vault import PiiVaultRepository, VaultCipher
+from services.shared.privacy import PrivacyEngineMetadata, PrivacyFinding
+from third_party.rizzo_pii.detectors import SOFT_REGEX_LABELS, detect_regex
+
+
+RIZZO_SOURCE_REVISION = "42d4a40ecfe31acbbe3e1d78cf4d79d38cd8c3f5"
+RIZZO_ENGINE_VERSION = "2.0.0-regex-snapshot"
+
+
+class Detector(Protocol):
+    metadata: PrivacyEngineMetadata
+    def detect(self, text: str) -> list[dict[str, Any]]: ...
+
+
+class RizzoRegexDetector:
+    metadata = PrivacyEngineMetadata(
+        name="rizzo-pii",
+        version=RIZZO_ENGINE_VERSION,
+        source_revision=RIZZO_SOURCE_REVISION,
+        mode="regex_checksum",
+    )
+
+    def detect(self, text: str) -> list[dict[str, Any]]:
+        return _merge_candidates(detect_regex(text))
+
+
+class RizzoHttpDetector:
+    """Optional adapter for the full upstream Rizzo CPU/ML service."""
+
+    def __init__(self, base_url: str, timeout_seconds: int = 120):
+        self._url = base_url.rstrip("/") + "/analyze"
+        self._timeout_seconds = timeout_seconds
+        self.metadata = PrivacyEngineMetadata(
+            name="rizzo-pii",
+            version="upstream-http",
+            source_revision=RIZZO_SOURCE_REVISION,
+            mode="ml_plus_regex",
+        )
+
+    def detect(self, text: str) -> list[dict[str, Any]]:
+        request = Request(
+            self._url,
+            data=json.dumps({"text": text, "include_mapping": True}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(request, timeout=self._timeout_seconds) as response:
+                body = json.loads(response.read().decode("utf-8"))
+        except (HTTPError, URLError, TimeoutError) as exc:
+            raise RuntimeError("Rizzo ML detector is unavailable") from exc
+        segments = body.get("segments") if isinstance(body, dict) else None
+        if not isinstance(segments, list):
+            raise RuntimeError("Rizzo ML detector returned a malformed response")
+        candidates: list[dict[str, Any]] = []
+        offset = 0
+        for segment in segments:
+            if not isinstance(segment, dict):
+                raise RuntimeError("Rizzo ML detector returned a malformed segment")
+            value = str(segment.get("t") or "")
+            label = segment.get("label")
+            if label and value:
+                candidates.append(
+                    {
+                        "label": str(label),
+                        "start": offset,
+                        "end": offset + len(value),
+                        "score": 1.0 if segment.get("validated") else 0.9,
+                        "validated": bool(segment.get("validated")),
+                        "source": str(segment.get("src") or "modello"),
+                    }
+                )
+            offset += len(value)
+        if offset != len(text):
+            raise RuntimeError("Rizzo ML detector response offsets do not match input")
+        return _merge_candidates(candidates)
+
+
+@dataclass(frozen=True)
+class ProtectionResult:
+    protected_text: str
+    findings: list[PrivacyFinding]
+    raw_mappings: list[tuple[str, str, str, str]]
+
+
+class PrivacyEngine:
+    def __init__(self, *, detector: Detector, cipher: VaultCipher, vault: PiiVaultRepository | None):
+        self.detector = detector
+        self.cipher = cipher
+        self.vault = vault
+
+    def protect(
+        self,
+        *,
+        text: str,
+        tenant: str,
+        doc_id: str | None,
+        replace: bool,
+        reversible: bool,
+        persist_mapping: bool,
+    ) -> ProtectionResult:
+        if reversible and persist_mapping and (not doc_id or self.vault is None):
+            raise ValueError("Reversible pseudonymization requires doc_id and an available vault")
+        existing: dict[tuple[str, str], str] = {}
+        if reversible and persist_mapping and self.vault and doc_id:
+            existing = self.vault.load_value_placeholders(tenant=tenant, doc_id=doc_id)
+
+        entities = self.detector.detect(text)
+        reserved = set(re.findall(r"\[[A-Z][A-Z0-9_]*_\d+\]", text))
+        counters: dict[str, int] = {}
+        seen: dict[tuple[str, str], str] = {}
+        findings: list[PrivacyFinding] = []
+        raw_mappings: list[tuple[str, str, str, str]] = []
+
+        for entity in entities:
+            start, end = int(entity["start"]), int(entity["end"])
+            raw_value = text[start:end]
+            entity_type = str(entity["label"]).upper()
+            key = (entity_type, _normalize(raw_value))
+            placeholder = seen.get(key)
+            if placeholder is None:
+                candidate = existing.get(key)
+                if candidate and candidate not in reserved:
+                    placeholder = candidate
+                else:
+                    placeholder = _next_placeholder(entity_type, counters, reserved)
+                seen[key] = placeholder
+                reserved.add(placeholder)
+            value_hash = self.cipher.value_hash(raw_value)
+            finding = PrivacyFinding(
+                type=entity_type,
+                detector=str(entity.get("source") or self.detector.metadata.mode),
+                confidence=float(entity.get("score") or 0.0),
+                start=start,
+                end=end,
+                placeholder=placeholder,
+                value_hash=value_hash,
+                validated=bool(entity.get("validated")),
+                metadata={"engine_mode": self.detector.metadata.mode},
+            )
+            findings.append(finding)
+            if key not in {(item[0], _normalize(item[2])) for item in raw_mappings}:
+                raw_mappings.append((entity_type, placeholder, raw_value, value_hash))
+
+        protected_text = text
+        if replace:
+            parts: list[str] = []
+            pos = 0
+            for finding in findings:
+                parts.append(text[pos:finding.start])
+                parts.append(finding.placeholder)
+                pos = finding.end
+            parts.append(text[pos:])
+            protected_text = "".join(parts)
+
+        if reversible and persist_mapping and self.vault and doc_id:
+            for entity_type, placeholder, raw_value, value_hash in raw_mappings:
+                self.vault.store(
+                    tenant=tenant,
+                    doc_id=doc_id,
+                    entity_type=entity_type,
+                    placeholder=placeholder,
+                    value=raw_value,
+                    value_hash=value_hash,
+                )
+        return ProtectionResult(protected_text=protected_text, findings=findings, raw_mappings=raw_mappings)
+
+
+def build_detector(mode: str, *, rizzo_url: str = "", timeout_seconds: int = 120) -> Detector:
+    normalized = mode.strip().lower()
+    if normalized == "rizzo_regex":
+        return RizzoRegexDetector()
+    if normalized == "rizzo_http" and rizzo_url:
+        return RizzoHttpDetector(rizzo_url, timeout_seconds=timeout_seconds)
+    raise RuntimeError("PRIVACY_DETECTOR must be rizzo_regex, or rizzo_http with RIZZO_BASE_URL")
+
+
+def _merge_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    ordered = sorted(
+        candidates,
+        key=lambda item: (
+            1 if item.get("validated") else 0,
+            1 if item.get("source") == "regex" and item.get("label") not in SOFT_REGEX_LABELS else 0,
+            float(item.get("score") or 0.0),
+            int(item["end"]) - int(item["start"]),
+        ),
+        reverse=True,
+    )
+    kept: list[dict[str, Any]] = []
+    for item in ordered:
+        index = bisect.bisect_right(kept, int(item["start"]), key=lambda value: int(value["start"]))
+        overlaps_left = index and int(kept[index - 1]["end"]) > int(item["start"])
+        overlaps_right = index < len(kept) and int(kept[index]["start"]) < int(item["end"])
+        if overlaps_left or overlaps_right:
+            continue
+        kept.insert(index, dict(item))
+    return kept
+
+
+def _next_placeholder(entity_type: str, counters: dict[str, int], reserved: set[str]) -> str:
+    while True:
+        counters[entity_type] = counters.get(entity_type, 0) + 1
+        placeholder = f"[{entity_type}_{counters[entity_type]}]"
+        if placeholder not in reserved:
+            return placeholder
+
+
+def _normalize(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip()).casefold()

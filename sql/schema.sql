@@ -63,6 +63,69 @@ CREATE TABLE IF NOT EXISTS entities (
 CREATE INDEX IF NOT EXISTS idx_entities_tenant_doc
   ON entities (tenant, doc_id);
 
+-- Privacy-enabled profiles write non-reversible findings here instead of raw
+-- entity values. The legacy entities table remains for PRIVACY_POLICY=off.
+CREATE TABLE IF NOT EXISTS pii_findings (
+  id BIGSERIAL PRIMARY KEY,
+  tenant TEXT NOT NULL,
+  doc_id TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+  chunk_id TEXT,
+  entity_type TEXT NOT NULL,
+  detector TEXT NOT NULL,
+  confidence DOUBLE PRECISION NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+  start_offset INTEGER NOT NULL CHECK (start_offset >= 0),
+  end_offset INTEGER NOT NULL CHECK (end_offset > start_offset),
+  placeholder TEXT NOT NULL,
+  value_hash TEXT NOT NULL,
+  validation_metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (tenant, doc_id, start_offset, end_offset, entity_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pii_findings_tenant_doc
+  ON pii_findings (tenant, doc_id, entity_type);
+
+CREATE TABLE IF NOT EXISTS pii_vault (
+  id BIGSERIAL PRIMARY KEY,
+  tenant TEXT NOT NULL,
+  doc_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  placeholder TEXT NOT NULL,
+  encrypted_value BYTEA NOT NULL,
+  nonce BYTEA NOT NULL,
+  key_version TEXT NOT NULL,
+  value_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (tenant, doc_id, placeholder)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pii_vault_tenant_doc
+  ON pii_vault (tenant, doc_id, key_version);
+
+CREATE INDEX IF NOT EXISTS idx_pii_vault_value_hash
+  ON pii_vault (tenant, doc_id, entity_type, value_hash);
+
+CREATE TABLE IF NOT EXISTS document_privacy (
+  tenant TEXT NOT NULL,
+  doc_id TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+  privacy_policy TEXT NOT NULL CHECK (privacy_policy IN ('off', 'detect', 'protect_egress', 'strict')),
+  pii_detected INTEGER NOT NULL DEFAULT 0 CHECK (pii_detected >= 0),
+  pii_types TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  external_payload_pseudonymized BOOLEAN NOT NULL DEFAULT FALSE,
+  mapping_exported BOOLEAN NOT NULL DEFAULT FALSE,
+  privacy_engine TEXT,
+  privacy_engine_version TEXT,
+  privacy_engine_source_revision TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (tenant, doc_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_privacy_tenant_policy
+  ON document_privacy (tenant, privacy_policy, updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS ai_decisions (
   id BIGSERIAL PRIMARY KEY,
   decision_id TEXT NOT NULL,
