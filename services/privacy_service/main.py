@@ -46,6 +46,8 @@ def ready() -> dict:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
                 cur.fetchone()
+        if not detector.ready():
+            raise RuntimeError("Privacy detector is not ready")
         return {"status": "ready", "engine": detector.metadata.model_dump(mode="json")}
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Privacy vault database is not ready") from exc

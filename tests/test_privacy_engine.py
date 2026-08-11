@@ -88,3 +88,23 @@ def test_vault_key_must_be_256_bits() -> None:
     short = base64.urlsafe_b64encode(b"too-short").decode("ascii")
     with pytest.raises(ValueError, match="32 bytes"):
         VaultCipher.from_base64(short, "v1")
+
+
+def test_irreversible_mode_never_touches_mapping_vault() -> None:
+    class RejectingVault:
+        def load_value_placeholders(self, **kwargs):
+            raise AssertionError("irreversible mode must not load mappings")
+
+        def store(self, **kwargs):
+            raise AssertionError("irreversible mode must not store mappings")
+
+    engine = PrivacyEngine(detector=RizzoRegexDetector(), cipher=_cipher(), vault=RejectingVault())
+    result = engine.protect(
+        text="alice@example.com",
+        tenant="default",
+        doc_id="doc-1",
+        replace=True,
+        reversible=False,
+        persist_mapping=False,
+    )
+    assert result.protected_text == "[EMAIL_1]"

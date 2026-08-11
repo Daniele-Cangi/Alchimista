@@ -20,6 +20,7 @@ RIZZO_ENGINE_VERSION = "2.0.0-regex-snapshot"
 class Detector(Protocol):
     metadata: PrivacyEngineMetadata
     def detect(self, text: str) -> list[dict[str, Any]]: ...
+    def ready(self) -> bool: ...
 
 
 class RizzoRegexDetector:
@@ -33,12 +34,17 @@ class RizzoRegexDetector:
     def detect(self, text: str) -> list[dict[str, Any]]:
         return _merge_candidates(detect_regex(text))
 
+    def ready(self) -> bool:
+        return True
+
 
 class RizzoHttpDetector:
     """Optional adapter for the full upstream Rizzo CPU/ML service."""
 
     def __init__(self, base_url: str, timeout_seconds: int = 120):
-        self._url = base_url.rstrip("/") + "/analyze"
+        base = base_url.rstrip("/")
+        self._url = base + "/analyze"
+        self._health_url = base + "/health"
         self._timeout_seconds = timeout_seconds
         self.metadata = PrivacyEngineMetadata(
             name="rizzo-pii",
@@ -46,6 +52,13 @@ class RizzoHttpDetector:
             source_revision=RIZZO_SOURCE_REVISION,
             mode="ml_plus_regex",
         )
+
+    def ready(self) -> bool:
+        try:
+            with urlopen(self._health_url, timeout=min(10, self._timeout_seconds)) as response:
+                return response.status == 200
+        except Exception:
+            return False
 
     def detect(self, text: str) -> list[dict[str, Any]]:
         request = Request(
