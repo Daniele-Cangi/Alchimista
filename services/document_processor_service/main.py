@@ -40,6 +40,7 @@ from services.shared.privacy import (
     PrivacyPseudonymizeRequest,
     PrivacyServiceError,
 )
+from services.shared.runtime_settings import RuntimeSettingsStore
 from services.shared.storage import build_storage_client
 from services.shared.vertex_vector_search import build_vertex_client
 
@@ -51,7 +52,6 @@ publisher = build_publisher(config)
 vertex_client = build_vertex_client(config)
 inflight_gate = InflightGate(config.processor_max_inflight)
 embed_text = build_embedder(config)
-privacy_policy = PrivacyPolicy(config.privacy_policy)
 privacy_client = (
     PrivacyClient(
         base_url=config.privacy_service_url,
@@ -60,6 +60,12 @@ privacy_client = (
     )
     if config.privacy_service_url and config.privacy_service_token
     else None
+)
+runtime_settings_store = RuntimeSettingsStore(
+    config.database_url,
+    default_policy=config.privacy_policy,
+    default_detector=config.privacy_detector,
+    default_mapping_enabled=config.privacy_mapping_enabled,
 )
 
 
@@ -398,14 +404,10 @@ def _apply_document_privacy(
 
 
 def _privacy_runtime(tenant: str) -> tuple[PrivacyPolicy, bool]:
-    if privacy_client is None:
-        return privacy_policy, config.privacy_mapping_enabled
     try:
-        selected = privacy_client.settings(tenant)
-        return selected.privacy_policy, selected.privacy_mapping_enabled
-    except PrivacyServiceError as exc:
-        if privacy_policy == PrivacyPolicy.OFF and not config.privacy_fail_closed:
-            return privacy_policy, config.privacy_mapping_enabled
+        selected = runtime_settings_store.get(tenant)
+        return PrivacyPolicy(selected.privacy_policy), selected.privacy_mapping_enabled
+    except Exception as exc:
         raise RuntimeError("Unable to load workspace privacy settings") from exc
 
 
