@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 import sys
 
 import pytest
@@ -9,11 +10,12 @@ from services.shared.privacy import PrivacyPolicy
 from services.shared.runtime_settings import PrivacyRuntimeSettings
 
 
-def _load_processor(monkeypatch):
+def _load_processor(monkeypatch, storage_path: Path):
     monkeypatch.setenv("ALCHIMISTA_PROFILE", "local")
     monkeypatch.setenv("AUTH_MODE", "local")
     monkeypatch.setenv("ALCHIMISTA_API_TOKEN", "a" * 32)
     monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
+    monkeypatch.setenv("LOCAL_STORAGE_PATH", str(storage_path))
     monkeypatch.setenv("PRIVACY_POLICY", "off")
     monkeypatch.delenv("PRIVACY_SERVICE_TOKEN", raising=False)
     sys.modules.pop("services.document_processor_service.main", None)
@@ -37,8 +39,9 @@ class _UnavailableSettingsStore:
 
 def test_processor_uses_persisted_workspace_policy_without_privacy_client(
     monkeypatch,
+    tmp_path,
 ) -> None:
-    processor = _load_processor(monkeypatch)
+    processor = _load_processor(monkeypatch, tmp_path / "objects")
     store = _SettingsStore(
         PrivacyRuntimeSettings(
             workspace="matter-a",
@@ -59,9 +62,10 @@ def test_processor_uses_persisted_workspace_policy_without_privacy_client(
 
 def test_processor_never_falls_back_to_global_off_when_settings_are_unavailable(
     monkeypatch,
+    tmp_path,
 ) -> None:
     monkeypatch.setenv("PRIVACY_FAIL_CLOSED", "false")
-    processor = _load_processor(monkeypatch)
+    processor = _load_processor(monkeypatch, tmp_path / "objects")
     monkeypatch.setattr(processor, "runtime_settings_store", _UnavailableSettingsStore())
 
     assert processor.config.privacy_policy == PrivacyPolicy.OFF.value
