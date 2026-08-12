@@ -272,8 +272,13 @@ again. Full detector selection is rejected until the runtime is `READY`, and
 privacy operations fail closed if an already-selected Full runtime becomes
 unavailable.
 
-The direct Full-Rizzo Python dependencies and build tooling are pinned to the
-versions exercised by the acceptance run. The privacy-to-model transport sends
+The Full-Rizzo input dependencies live in
+`services/rizzo_model_service/requirements.in`; the generated
+`requirements.lock` fixes every transitive Linux/Python 3.11 CPU distribution
+and its SHA-256 hashes. The container installs that lock with
+`--require-hashes` from PyPI and the official PyTorch CPU index. Regenerate it
+with `uv 0.12.3` by running
+`python scripts/lock_rizzo_model_dependencies.py`. The privacy-to-model transport sends
 overlapping windows of at most one million characters, preserves global
 finding offsets, and merges overlap duplicates. Consequently a document below
 the dashboard upload limit is not rejected merely because extracted text is

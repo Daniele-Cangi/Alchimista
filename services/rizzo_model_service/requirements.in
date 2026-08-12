@@ -1,0 +1,9 @@
+# Direct dependencies for the Full-Rizzo Linux/Python 3.11 runtime.
+# Regenerate requirements.lock with scripts/lock_rizzo_model_dependencies.py.
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+huggingface_hub==1.27.0
+tokenizers==0.22.2
+safetensors==0.8.0
+torch==2.13.0+cpu
+transformers==5.14.1

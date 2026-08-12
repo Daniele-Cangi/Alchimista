@@ -10,11 +10,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 ca-cer
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY services/rizzo_model_service/requirements.txt /app/services/rizzo_model_service/requirements.txt
-# These versions are the environment proven by the pinned Full-Rizzo acceptance run.
+COPY services/rizzo_model_service/requirements.lock /app/services/rizzo_model_service/requirements.lock
+# Install only the fully resolved and hashed Linux/Python 3.11 CPU environment.
 RUN pip install "pip==26.2.1" \
- && pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.13.0" \
- && pip install "transformers==5.14.1" -r /app/services/rizzo_model_service/requirements.txt
+ && pip install \
+      --require-hashes \
+      --index-url https://pypi.org/simple \
+      --extra-index-url https://download.pytorch.org/whl/cpu \
+      -r /app/services/rizzo_model_service/requirements.lock
 
 COPY services /app/services
 COPY third_party /app/third_party
