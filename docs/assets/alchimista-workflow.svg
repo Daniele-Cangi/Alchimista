@@ -1,0 +1,252 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
+  <title id="title">Come lavora Alchimista</title>
+  <desc id="desc">Diagramma in stile notebook ML: i documenti entrano nel runtime locale, attraversano il controllo privacy Rizzo, vengono pseudonimizzati e indicizzati, interrogati con retrieval e restituiti con citazioni e metadati di audit.</desc>
+  <defs>
+    <pattern id="dot-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.25" fill="#8f4826" opacity=".10"/>
+    </pattern>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffdf8"/>
+      <stop offset="1" stop-color="#f2eadf"/>
+    </linearGradient>
+    <linearGradient id="dark-cell" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#263832"/>
+      <stop offset="1" stop-color="#17221f"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#30251a" flood-opacity=".10"/>
+    </filter>
+    <marker id="arrow-copper" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b76736"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#28745d"/>
+    </marker>
+    <style>
+      .ui { font-family: Inter, "Segoe UI", Arial, sans-serif; }
+      .display { font-family: Georgia, "Times New Roman", serif; }
+      .mono { font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace; }
+      .hand { font-family: "Segoe Print", "Bradley Hand", cursive; font-style: italic; }
+      .eyebrow { font-size: 11px; font-weight: 800; letter-spacing: 2.1px; fill: #8f4826; }
+      .eyebrow-light { fill: #ddb878; }
+      .cell-title { font-size: 25px; font-weight: 700; fill: #211d19; }
+      .cell-title-light { font-size: 25px; font-weight: 700; fill: #fffdf8; }
+      .body { font-size: 13px; fill: #746d63; }
+      .body-light { font-size: 13px; fill: #c8d0cb; }
+      .micro { font-size: 10px; fill: #746d63; }
+      .micro-light { font-size: 10px; fill: #b9c4be; }
+      .label { font-size: 10px; font-weight: 800; letter-spacing: 1.4px; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="820" rx="28" fill="url(#paper)"/>
+  <rect width="1400" height="820" rx="28" fill="url(#dot-grid)"/>
+  <rect x="1" y="1" width="1398" height="818" rx="27" fill="none" stroke="#cec4b7" stroke-width="2"/>
+
+  <!-- Notebook header -->
+  <g class="ui">
+    <circle cx="58" cy="54" r="22" fill="#17221f"/>
+    <path d="M48 54h20M58 44v20" stroke="#cda76a" stroke-width="2.5" stroke-linecap="round"/>
+    <text x="94" y="48" class="eyebrow">ALCHIMISTA / ML NOTEBOOK</text>
+    <text x="94" y="72" class="display" font-size="28" font-weight="700" fill="#211d19">Dal documento alla decisione verificabile</text>
+    <g transform="translate(1170 28)">
+      <rect width="174" height="50" rx="25" fill="#17221f"/>
+      <circle cx="27" cy="25" r="6" fill="#75d2ac"/>
+      <text x="45" y="30" font-size="12" font-weight="700" fill="#fffdf8">LOCAL RUNTIME</text>
+    </g>
+  </g>
+  <path d="M48 102H1352" stroke="#cec4b7" stroke-width="1.5"/>
+
+  <!-- Trusted boundary -->
+  <rect x="40" y="128" width="1320" height="574" rx="24" fill="#fffdf8" fill-opacity=".46" stroke="#b76736" stroke-width="1.5" stroke-dasharray="8 8"/>
+  <g class="ui">
+    <rect x="64" y="113" width="218" height="30" rx="15" fill="#f8e9dc" stroke="#dfb596"/>
+    <text x="82" y="133" class="label" fill="#8f4826">TRUSTED LOCAL BOUNDARY</text>
+  </g>
+
+  <!-- Flow arrows -->
+  <g fill="none" stroke="#b76736" stroke-width="2" marker-end="url(#arrow-copper)">
+    <path d="M300 356H323"/>
+    <path d="M560 356H583"/>
+    <path d="M820 356H843"/>
+    <path d="M1080 356H1103"/>
+  </g>
+  <g class="hand" font-size="13" fill="#8f4826">
+    <text x="302" y="337" transform="rotate(-7 302 337)">ingest</text>
+    <text x="561" y="337" transform="rotate(5 561 337)">protect</text>
+    <text x="817" y="337" transform="rotate(-6 817 337)">retrieve</text>
+    <text x="1076" y="337" transform="rotate(5 1076 337)">ground</text>
+  </g>
+
+  <!-- 01 Input -->
+  <g filter="url(#soft-shadow)">
+    <rect x="70" y="180" width="230" height="356" rx="18" fill="#fffdf8" stroke="#d9cfc2"/>
+  </g>
+  <g class="ui">
+    <rect x="88" y="198" width="38" height="24" rx="12" fill="#f8e9dc"/>
+    <text x="101" y="214" class="label" fill="#8f4826">01</text>
+    <text x="136" y="214" class="eyebrow">INPUT</text>
+    <text x="88" y="257" class="display cell-title">Documenti</text>
+    <text x="88" y="281" class="body">PDF, testo e immagini</text>
+
+    <g transform="translate(92 310)">
+      <rect x="28" y="0" width="118" height="142" rx="9" fill="#ede4d7" stroke="#cec4b7" transform="rotate(6 87 71)"/>
+      <rect x="10" y="8" width="124" height="150" rx="9" fill="#fffdf8" stroke="#b76736"/>
+      <path d="M102 8v30h32" fill="#f8e9dc" stroke="#b76736"/>
+      <rect x="27" y="43" width="52" height="13" rx="6.5" fill="#17221f"/>
+      <rect x="27" y="68" width="88" height="7" rx="3.5" fill="#d8d0c5"/>
+      <rect x="27" y="84" width="78" height="7" rx="3.5" fill="#e4ddd3"/>
+      <rect x="27" y="100" width="91" height="7" rx="3.5" fill="#e4ddd3"/>
+      <rect x="27" y="124" width="48" height="17" rx="8.5" fill="#f8e9dc"/>
+      <text x="36" y="136" class="micro" font-weight="800" fill="#8f4826">PII inside</text>
+    </g>
+    <text x="88" y="510" class="mono micro">tenant / workspace</text>
+  </g>
+
+  <!-- 02 Privacy -->
+  <g filter="url(#soft-shadow)">
+    <rect x="330" y="180" width="230" height="356" rx="18" fill="url(#dark-cell)" stroke="#385047"/>
+  </g>
+  <g class="ui">
+    <rect x="348" y="198" width="38" height="24" rx="12" fill="#b76736"/>
+    <text x="361" y="214" class="label" fill="#fffdf8">02</text>
+    <text x="396" y="214" class="eyebrow eyebrow-light">PRIVACY GATE</text>
+    <text x="348" y="257" class="display cell-title-light">Rizzo + policy</text>
+    <text x="348" y="281" class="body-light">Rileva prima di persistere</text>
+
+    <g transform="translate(350 306)">
+      <rect width="190" height="56" rx="12" fill="#fffdf8" fill-opacity=".07" stroke="#fffdf8" stroke-opacity=".15"/>
+      <circle cx="28" cy="28" r="14" fill="#b76736"/>
+      <path d="M21 28h14M28 21v14" stroke="#fffdf8" stroke-width="2" stroke-linecap="round"/>
+      <text x="52" y="24" class="micro-light" font-weight="700">RIZZO LIGHTWEIGHT</text>
+      <text x="52" y="41" class="micro-light">regex + checksum</text>
+    </g>
+    <g transform="translate(350 374)">
+      <rect width="190" height="56" rx="12" fill="#fffdf8" fill-opacity=".07" stroke="#fffdf8" stroke-opacity=".15"/>
+      <circle cx="28" cy="28" r="14" fill="#cda76a"/>
+      <path d="M22 31c4-12 8-12 12 0M22 25h12" fill="none" stroke="#17221f" stroke-width="2" stroke-linecap="round"/>
+      <text x="52" y="24" class="micro-light" font-weight="700">RIZZO FULL</text>
+      <text x="52" y="41" class="micro-light">ML locale + regex</text>
+    </g>
+    <rect x="350" y="451" width="190" height="48" rx="11" fill="#f8e9dc"/>
+    <text x="367" y="471" class="label" fill="#8f4826">STRICT</text>
+    <text x="367" y="488" class="micro" fill="#8f4826">pseudonimizza prima dei chunk</text>
+    <text x="348" y="519" class="mono micro-light">fail closed ✓</text>
+  </g>
+
+  <!-- 03 Knowledge build -->
+  <g filter="url(#soft-shadow)">
+    <rect x="590" y="180" width="230" height="356" rx="18" fill="#fffdf8" stroke="#d9cfc2"/>
+  </g>
+  <g class="ui">
+    <rect x="608" y="198" width="38" height="24" rx="12" fill="#f8e9dc"/>
+    <text x="621" y="214" class="label" fill="#8f4826">03</text>
+    <text x="656" y="214" class="eyebrow">KNOWLEDGE</text>
+    <text x="608" y="257" class="display cell-title">Chunk + indice</text>
+    <text x="608" y="281" class="body">Memoria persistente locale</text>
+
+    <g transform="translate(610 310)">
+      <rect width="190" height="34" rx="8" fill="#f5eee4" stroke="#d9cfc2"/>
+      <text x="14" y="22" class="mono micro">[CHUNK_01] Mercury...</text>
+      <rect y="46" width="190" height="34" rx="8" fill="#f5eee4" stroke="#d9cfc2"/>
+      <text x="14" y="68" class="mono micro">[CHUNK_02] budget...</text>
+      <rect y="92" width="190" height="34" rx="8" fill="#f5eee4" stroke="#d9cfc2"/>
+      <text x="14" y="114" class="mono micro">[CHUNK_03] retention...</text>
+      <path d="M95 137v20" stroke="#b76736" stroke-width="2" marker-end="url(#arrow-copper)"/>
+      <g transform="translate(36 164)">
+        <ellipse cx="59" cy="8" rx="59" ry="8" fill="#263832"/>
+        <rect y="8" width="118" height="43" fill="#263832"/>
+        <ellipse cx="59" cy="51" rx="59" ry="8" fill="#17221f"/>
+        <path d="M0 8c0 5 26 9 59 9s59-4 59-9M0 29c0 5 26 9 59 9s59-4 59-9" fill="none" stroke="#75d2ac" stroke-opacity=".45"/>
+        <text x="26" y="35" class="label" fill="#fffdf8">POSTGRES</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- 04 Ask -->
+  <g filter="url(#soft-shadow)">
+    <rect x="850" y="180" width="230" height="356" rx="18" fill="#fffdf8" stroke="#d9cfc2"/>
+  </g>
+  <g class="ui">
+    <rect x="868" y="198" width="38" height="24" rx="12" fill="#f8e9dc"/>
+    <text x="881" y="214" class="label" fill="#8f4826">04</text>
+    <text x="916" y="214" class="eyebrow">RETRIEVAL</text>
+    <text x="868" y="257" class="display cell-title">Chiedi</text>
+    <text x="868" y="281" class="body">Ricerca tra più documenti</text>
+
+    <g transform="translate(870 310)">
+      <rect width="190" height="84" rx="13" fill="#fbf7f0" stroke="#cec4b7"/>
+      <circle cx="21" cy="22" r="7" fill="#b76736"/>
+      <text x="37" y="26" class="mono micro" fill="#8f4826">query</text>
+      <text x="16" y="52" class="body" font-weight="700">Qual è il budget</text>
+      <text x="16" y="70" class="body" font-weight="700">del progetto?</text>
+      <path d="M95 98v22" stroke="#b76736" stroke-width="2" marker-end="url(#arrow-copper)"/>
+      <rect y="132" width="190" height="62" rx="13" fill="#17221f"/>
+      <text x="18" y="157" class="label" fill="#ddb878">TOP-K EVIDENCE</text>
+      <text x="18" y="178" class="mono micro-light">similarity + doc scope</text>
+    </g>
+    <text x="868" y="519" class="mono micro">tenant isolation ✓</text>
+  </g>
+
+  <!-- 05 Evidence -->
+  <g filter="url(#soft-shadow)">
+    <rect x="1110" y="180" width="230" height="356" rx="18" fill="#fffdf8" stroke="#d9cfc2"/>
+  </g>
+  <g class="ui">
+    <rect x="1128" y="198" width="38" height="24" rx="12" fill="#f8e9dc"/>
+    <text x="1141" y="214" class="label" fill="#8f4826">05</text>
+    <text x="1176" y="214" class="eyebrow">OUTPUT</text>
+    <text x="1128" y="257" class="display cell-title">Risposta</text>
+    <text x="1128" y="281" class="body">Ancorata alle fonti</text>
+
+    <g transform="translate(1130 310)">
+      <rect width="190" height="148" rx="13" fill="#fbf7f0" stroke="#cec4b7"/>
+      <rect x="15" y="16" width="92" height="8" rx="4" fill="#17221f"/>
+      <rect x="15" y="38" width="158" height="6" rx="3" fill="#d8d0c5"/>
+      <rect x="15" y="54" width="145" height="6" rx="3" fill="#d8d0c5"/>
+      <rect x="15" y="70" width="164" height="6" rx="3" fill="#d8d0c5"/>
+      <g transform="translate(15 94)">
+        <rect width="48" height="30" rx="15" fill="#f8e9dc" stroke="#dfb596"/>
+        <text x="15" y="20" class="label" fill="#8f4826">[1]</text>
+        <rect x="58" width="48" height="30" rx="15" fill="#f8e9dc" stroke="#dfb596"/>
+        <text x="73" y="20" class="label" fill="#8f4826">[2]</text>
+      </g>
+      <text x="15" y="140" class="micro" fill="#28745d">citazioni apribili ✓</text>
+    </g>
+    <text x="1128" y="490" class="hand" font-size="13" fill="#8f4826" transform="rotate(-4 1128 490)">nessuna risposta senza prove</text>
+  </g>
+
+  <!-- Audit connections -->
+  <g fill="none" stroke="#28745d" stroke-width="1.7" stroke-dasharray="5 5" marker-end="url(#arrow-green)">
+    <path d="M445 536v62"/>
+    <path d="M705 536v62"/>
+    <path d="M965 536v62"/>
+    <path d="M1225 536v62"/>
+  </g>
+
+  <!-- Audit ledger -->
+  <g filter="url(#soft-shadow)">
+    <rect x="70" y="608" width="1270" height="120" rx="18" fill="#17221f" stroke="#385047"/>
+  </g>
+  <g class="ui">
+    <circle cx="111" cy="652" r="21" fill="#b76736"/>
+    <path d="M101 652l7 7 14-16" fill="none" stroke="#fffdf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="147" y="642" class="eyebrow eyebrow-light">AUDIT EVIDENCE / APPEND-ONLY</text>
+    <text x="147" y="674" class="display" font-size="25" font-weight="700" fill="#fffdf8">La storia della decisione resta verificabile.</text>
+    <text x="147" y="699" class="body-light">Documento, policy, detector, versione, revisione, citazioni e integrità della risposta.</text>
+
+    <g class="mono" font-size="10" transform="translate(805 629)">
+      <rect width="505" height="78" rx="12" fill="#fffdf8" fill-opacity=".06" stroke="#fffdf8" stroke-opacity=".14"/>
+      <text x="18" y="22" fill="#75d2ac">privacy_policy:</text><text x="140" y="22" fill="#fffdf8">strict</text>
+      <text x="18" y="42" fill="#75d2ac">detector:</text><text x="140" y="42" fill="#fffdf8">rizzo-pii / model-v1.5.0</text>
+      <text x="18" y="62" fill="#75d2ac">source_revision:</text><text x="140" y="62" fill="#fffdf8">42d4a40e…  citations: [1,2]</text>
+    </g>
+  </g>
+
+  <!-- Notebook footer notes -->
+  <g class="hand" font-size="14" fill="#8f4826">
+    <text x="74" y="775" transform="rotate(-2 74 775)">originale locale → rappresentazione protetta → conoscenza interrogabile</text>
+    <text x="1070" y="775" transform="rotate(2 1070 775)">cloud: opzionale, non richiesto</text>
+  </g>
+  <path d="M65 790c205-18 388-14 578-3" fill="none" stroke="#b76736" stroke-width="2" stroke-linecap="round" opacity=".5"/>
+</svg>
