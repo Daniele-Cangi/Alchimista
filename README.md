@@ -159,7 +159,13 @@ identity rules. It is not part of the general OIDC subsystem.
 
 The product proxy uses `DASHBOARD_API_TOKEN` server-side so a loopback local
 deployment does not expose the token to browser JavaScript. Bind and reverse
-proxy choices remain the operator's security boundary. Dashboard multipart
+proxy choices remain the operator's security boundary. Every dashboard API
+mutation also requires `X-Alchimista-Control: same-origin`; browser requests
+with a cross-site fetch signal or an `Origin` outside
+`DASHBOARD_ALLOWED_ORIGINS` are rejected before the dashboard adds internal
+credentials. The built-in UI sends this header automatically. Non-browser
+automation must add it explicitly. A reverse proxy on another origin must set
+the exact allowed origin rather than disabling this check. Dashboard multipart
 uploads are capped at 25 MiB by default; set `DASHBOARD_MAX_UPLOAD_BYTES` to a
 different positive byte limit when the deployment requires it.
 
@@ -265,6 +271,16 @@ validates the manifest and returns to `INSTALLED`; weights are not downloaded
 again. Full detector selection is rejected until the runtime is `READY`, and
 privacy operations fail closed if an already-selected Full runtime becomes
 unavailable.
+
+The direct Full-Rizzo Python dependencies and build tooling are pinned to the
+versions exercised by the acceptance run. The privacy-to-model transport sends
+overlapping windows of at most one million characters, preserves global
+finding offsets, and merges overlap duplicates. Consequently a document below
+the dashboard upload limit is not rejected merely because extracted text is
+longer than the model service's single-request validation limit. Any failed
+window fails the privacy operation; it does not trigger a silent Lightweight
+fallback. On bootstrap the model runtime removes an orphaned `.partial`
+download left by a hard stop before reporting installation state.
 
 See [docs/full-rizzo-acceptance.md](docs/full-rizzo-acceptance.md) for the
 browser-only install/load/activate/restart acceptance path.

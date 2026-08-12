@@ -188,7 +188,7 @@
             if (prefix)  body.prefix   = prefix;
             if (docType) body.doc_type = docType;
 
-            const headers = { 'Content-Type': 'application/json' };
+            const headers = { 'Content-Type': 'application/json', 'X-Alchimista-Control': 'same-origin' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
             const btn = document.getElementById('gcs-submit-btn');

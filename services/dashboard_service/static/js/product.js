@@ -32,7 +32,13 @@ function toast(message, error=false) {
   clearTimeout(el._timer); el._timer = setTimeout(() => el.className = "toast", 3600);
 }
 async function json(url, options={}) {
-  const response = await fetch(url, options);
+  const request = {...options};
+  const method = String(request.method || "GET").toUpperCase();
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    request.headers = new Headers(request.headers || {});
+    request.headers.set("X-Alchimista-Control", "same-origin");
+  }
+  const response = await fetch(url, request);
   let body = {}; try { body = await response.json(); } catch (_) {}
   if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : `Richiesta non riuscita (${response.status})`);
   return body;

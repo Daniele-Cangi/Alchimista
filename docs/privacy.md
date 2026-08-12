@@ -128,8 +128,15 @@ true, and it cannot be unloaded while any workspace still selects it.
 
 Full model weights and their Alchimista SHA-256 manifest live on the
 `rizzo-model-data` volume. The runtime downloads only the server-pinned model
-and revision. Incomplete or modified artifacts produce `ERROR`; there is no
+and revision. Orphaned `.partial` download staging is removed on bootstrap;
+incomplete or modified promoted artifacts produce `ERROR`. There is no
 automatic Lightweight fallback that could falsely claim Full detection.
+
+Full-detector calls are split at the privacy/model boundary into overlapping
+windows of at most 1,000,000 characters, below the model service's 2,000,000
+character request ceiling. Findings are translated back to document-global
+offsets and overlap duplicates are merged. Every window must succeed, so
+`STRICT` remains fail-closed for large extracted texts.
 
 ## Audit evidence
 

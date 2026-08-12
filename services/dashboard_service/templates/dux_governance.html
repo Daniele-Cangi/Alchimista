@@ -258,7 +258,7 @@
         function getAdminKey() { return document.getElementById('gov-admin-key').value.trim(); }
 
         function buildAdminHeaders() {
-            const h = { 'Content-Type': 'application/json' };
+            const h = { 'Content-Type': 'application/json', 'X-Alchimista-Control': 'same-origin' };
             const k = getAdminKey();
             if (k) h['x-admin-key'] = k;
             return h;

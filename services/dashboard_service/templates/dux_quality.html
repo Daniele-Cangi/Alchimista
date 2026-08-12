@@ -214,7 +214,7 @@
             document.getElementById('cov-idle').style.display = 'none';
             document.getElementById('cov-results').style.display = 'none';
 
-            const headers = { 'Content-Type': 'application/json' };
+            const headers = { 'Content-Type': 'application/json', 'X-Alchimista-Control': 'same-origin' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
             try {
@@ -262,7 +262,7 @@
                 </tr>
             `).join('');
 
-            const headers = { 'Content-Type': 'application/json' };
+            const headers = { 'Content-Type': 'application/json', 'X-Alchimista-Control': 'same-origin' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
             for (let i = 0; i < BENCHMARK_QUERIES.length; i++) {

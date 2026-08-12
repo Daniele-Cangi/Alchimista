@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any
 
 import requests
-from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 
@@ -30,6 +30,17 @@ PRODUCT_AUTH_MODE = os.getenv("AUTH_MODE", "local").strip().lower()
 PRODUCT_STORAGE = os.getenv("STORAGE_BACKEND", "filesystem").strip().lower()
 ADMIN_KEY = os.getenv("ADMIN_KEY", "")
 DASHBOARD_API_TOKEN = os.getenv("DASHBOARD_API_TOKEN", "")
+DASHBOARD_CONTROL_HEADER = "X-Alchimista-Control"
+DASHBOARD_CONTROL_VALUE = "same-origin"
+DASHBOARD_ALLOWED_ORIGINS = frozenset(
+    origin.strip().rstrip("/").lower()
+    for origin in os.getenv(
+        "DASHBOARD_ALLOWED_ORIGINS",
+        "http://127.0.0.1:8000,http://localhost:8000,http://[::1]:8000",
+    ).split(",")
+    if origin.strip()
+)
+_UNSAFE_HTTP_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -93,6 +104,24 @@ app = FastAPI(
 DASHBOARD_DIR = Path(__file__).parent
 TEMPLATES_DIR = DASHBOARD_DIR / "templates"
 app.mount("/static", StaticFiles(directory=DASHBOARD_DIR / "static"), name="static")
+
+
+@app.middleware("http")
+async def enforce_local_control_boundary(request: Request, call_next):
+    """Block browser cross-site mutations before privileged proxy credentials are added."""
+    if request.url.path.startswith("/api/") and request.method.upper() in _UNSAFE_HTTP_METHODS:
+        if request.headers.get(DASHBOARD_CONTROL_HEADER) != DASHBOARD_CONTROL_VALUE:
+            return JSONResponse(status_code=403, content={"detail": "Same-origin control header required"})
+
+        fetch_site = request.headers.get("sec-fetch-site", "").strip().lower()
+        if fetch_site and fetch_site not in {"same-origin", "none"}:
+            return JSONResponse(status_code=403, content={"detail": "Cross-site control request rejected"})
+
+        origin = request.headers.get("origin", "").strip().rstrip("/").lower()
+        if origin and origin not in DASHBOARD_ALLOWED_ORIGINS:
+            return JSONResponse(status_code=403, content={"detail": "Request origin is not allowed"})
+
+    return await call_next(request)
 
 
 @app.on_event("startup")

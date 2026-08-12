@@ -206,7 +206,9 @@
         async function loadIngestTestToken() {
             const errBox = document.getElementById('ingest-error');
             try {
-                const resp = await fetch('/api/v1/auth/test-token', { method: 'POST' });
+                const resp = await fetch('/api/v1/auth/test-token', {
+                    method: 'POST', headers: { 'X-Alchimista-Control': 'same-origin' }
+                });
                 const data = await resp.json();
                 if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
                 const token = String(data.access_token || '').trim();
@@ -235,7 +237,7 @@
             }
             errBox.style.display = 'none';
 
-            const headers = {};
+            const headers = { 'X-Alchimista-Control': 'same-origin' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
             if (token) setStoredToken(token);
 

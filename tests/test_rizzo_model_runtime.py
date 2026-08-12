@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from services.rizzo_model_service.runtime import MANIFEST_NAME, MODEL_COMMIT, ModelRuntime, ModelState
+from services.rizzo_model_service.runtime import (
+    MANIFEST_NAME,
+    MODEL_COMMIT,
+    MODEL_DIRECTORY_NAME,
+    ModelRuntime,
+    ModelState,
+)
 
 
 def _wait(runtime: ModelRuntime, expected: ModelState) -> dict:
@@ -103,3 +109,14 @@ def test_model_runtime_requires_complete_artifacts(tmp_path) -> None:
     status = _wait(runtime, ModelState.ERROR)
     assert status["phase"] == "install_failed"
     assert status["installed"] is False
+
+
+def test_model_runtime_cleans_orphaned_download_staging_on_bootstrap(tmp_path) -> None:
+    staging = tmp_path / f".{MODEL_DIRECTORY_NAME}.partial"
+    staging.mkdir()
+    (staging / "incomplete.safetensors").write_bytes(b"partial")
+
+    runtime = ModelRuntime(tmp_path, snapshot_download=_download)
+
+    assert runtime.status()["state"] == "NOT_INSTALLED"
+    assert not staging.exists()

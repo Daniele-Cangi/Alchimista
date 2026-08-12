@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 ca-cer
 
 WORKDIR /app
 COPY services/rizzo_model_service/requirements.txt /app/services/rizzo_model_service/requirements.txt
-RUN pip install --upgrade pip \
+# These versions are the environment proven by the pinned Full-Rizzo acceptance run.
+RUN pip install "pip==26.2.1" \
  && pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.13.0" \
  && pip install "transformers==5.14.1" -r /app/services/rizzo_model_service/requirements.txt
 

@@ -342,7 +342,9 @@
         async function loadTestTokenForDecisionForms() {
             const errBox = document.getElementById('reg-error');
             try {
-                const resp = await fetch('/api/v1/auth/test-token', { method: 'POST' });
+                const resp = await fetch('/api/v1/auth/test-token', {
+                    method: 'POST', headers: { 'X-Alchimista-Control': 'same-origin' }
+                });
                 const data = await resp.json();
                 if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
                 const token = String(data.access_token || '').trim();
@@ -413,7 +415,7 @@
                 return;
             }
 
-            const headers = { 'Content-Type': 'application/json' };
+            const headers = { 'Content-Type': 'application/json', 'X-Alchimista-Control': 'same-origin' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
             if (token) setStoredToken(token);
 
@@ -454,7 +456,7 @@
             if (from) body.from_date = from;
             if (to) body.to_date = to;
 
-            const headers = { 'Content-Type': 'application/json' };
+            const headers = { 'Content-Type': 'application/json', 'X-Alchimista-Control': 'same-origin' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
             if (token) setStoredToken(token);
 
@@ -525,7 +527,7 @@
                 errBox.textContent = 'Invalid JSON payload.'; errBox.style.display = 'block'; return;
             }
 
-            const headers = { 'Content-Type': 'application/json' };
+            const headers = { 'Content-Type': 'application/json', 'X-Alchimista-Control': 'same-origin' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
             if (token) setStoredToken(token);
 
@@ -554,7 +556,7 @@
                 errBox.textContent = 'Invalid JSON payload.'; errBox.style.display = 'block'; return;
             }
 
-            const headers = { 'Content-Type': 'application/json' };
+            const headers = { 'Content-Type': 'application/json', 'X-Alchimista-Control': 'same-origin' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
             if (token) setStoredToken(token);
 

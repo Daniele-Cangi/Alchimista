@@ -118,11 +118,19 @@ class ModelRuntime:
         return {"segments": _segments(text, candidates), "model_revision": MODEL_REVISION}
 
     def _inspect_disk(self) -> None:
+        if self.staging.exists() or self.staging.is_symlink():
+            try:
+                self._remove_staging()
+            except OSError as exc:
+                self._state = ModelState.ERROR
+                self._phase = "staging_cleanup_failed"
+                self._error = f"Could not remove incomplete model staging: {_safe_error(exc)}"
+                return
         if self._validate_installation():
             self._state = ModelState.INSTALLED
             self._phase = "installed"
             return
-        if self.target.exists() or self.staging.exists():
+        if self.target.exists():
             self._state = ModelState.ERROR
             self._phase = "validation_failed"
             self._error = "Incomplete or corrupt model installation; retry install to repair it"
@@ -199,7 +207,11 @@ class ModelRuntime:
             return False
 
     def _remove_staging(self) -> None:
-        if self.staging.exists() and self.staging.parent == self.root:
+        if self.staging.parent != self.root:
+            raise RuntimeError("Unsafe model staging path")
+        if self.staging.is_symlink() or self.staging.is_file():
+            self.staging.unlink()
+        elif self.staging.exists():
             shutil.rmtree(self.staging)
 
 

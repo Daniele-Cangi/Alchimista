@@ -295,7 +295,11 @@ def _get_text(url: str) -> str:
 
 
 def _post_json(url: str, payload: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
-    merged = {"Content-Type": "application/json", **(headers or {})}
+    merged = {
+        "Content-Type": "application/json",
+        "X-Alchimista-Control": "same-origin",
+        **(headers or {}),
+    }
     request = urllib.request.Request(
         url,
         data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
@@ -309,7 +313,7 @@ def _put_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
     request = urllib.request.Request(
         url,
         data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "X-Alchimista-Control": "same-origin"},
         method="PUT",
     )
     return _request_json(request)
@@ -319,7 +323,7 @@ def _expect_http_status(method: str, url: str, payload: dict[str, Any], expected
     request = urllib.request.Request(
         url,
         data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "X-Alchimista-Control": "same-origin"},
         method=method,
     )
     try:
@@ -363,7 +367,11 @@ def _post_multipart(
     request = urllib.request.Request(
         url,
         data=b"".join(chunks),
-        headers={"Content-Type": f"multipart/form-data; boundary={boundary}", **headers},
+        headers={
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "X-Alchimista-Control": "same-origin",
+            **headers,
+        },
         method="POST",
     )
     return _request_json(request)

@@ -30,6 +30,7 @@ def test_localhost_root_is_product_shell_without_auth_fields() -> None:
     script = (Path(dashboard.__file__).parent / "static" / "js" / "product.js").read_text(encoding="utf-8")
     assert "Bearer Token" not in script
     assert "AUTH0" not in script
+    assert 'request.headers.set("X-Alchimista-Control", "same-origin")' in script
 
 
 def test_document_proxy_propagates_workspace_and_uses_server_token(monkeypatch) -> None:

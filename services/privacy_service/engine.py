@@ -3,6 +3,7 @@ from __future__ import annotations
 import bisect
 import json
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any, Protocol
 from urllib.error import HTTPError, URLError
@@ -15,6 +16,8 @@ from third_party.rizzo_pii.detectors import SOFT_REGEX_LABELS, detect_regex
 
 RIZZO_SOURCE_REVISION = "42d4a40ecfe31acbbe3e1d78cf4d79d38cd8c3f5"
 RIZZO_ENGINE_VERSION = "2.0.0-regex-snapshot"
+RIZZO_HTTP_MAX_REQUEST_CHARS = 1_000_000
+RIZZO_HTTP_OVERLAP_CHARS = 4_096
 
 
 class Detector(Protocol):
@@ -41,12 +44,26 @@ class RizzoRegexDetector:
 class RizzoHttpDetector:
     """Optional adapter for the full upstream Rizzo CPU/ML service."""
 
-    def __init__(self, base_url: str, timeout_seconds: int = 120, token: str = ""):
+    def __init__(
+        self,
+        base_url: str,
+        timeout_seconds: int = 120,
+        token: str = "",
+        *,
+        max_request_chars: int = RIZZO_HTTP_MAX_REQUEST_CHARS,
+        overlap_chars: int = RIZZO_HTTP_OVERLAP_CHARS,
+    ):
+        if max_request_chars <= 0:
+            raise ValueError("max_request_chars must be positive")
+        if overlap_chars < 0 or overlap_chars >= max_request_chars:
+            raise ValueError("overlap_chars must be non-negative and smaller than max_request_chars")
         base = base_url.rstrip("/")
         self._url = base + "/analyze"
         self._health_url = base + "/health"
         self._timeout_seconds = timeout_seconds
         self._token = token
+        self._max_request_chars = max_request_chars
+        self._overlap_chars = overlap_chars
         self.metadata = PrivacyEngineMetadata(
             name="rizzo-pii",
             version="model-v1.5.0",
@@ -67,6 +84,23 @@ class RizzoHttpDetector:
             return False
 
     def detect(self, text: str) -> list[dict[str, Any]]:
+        if not text:
+            return []
+        candidates: list[dict[str, Any]] = []
+        for window, base_offset in _text_windows(
+            text,
+            max_chars=self._max_request_chars,
+            overlap_chars=self._overlap_chars,
+        ):
+            candidates.extend(self._detect_window(window, base_offset, len(text)))
+        return _merge_candidates(candidates)
+
+    def _detect_window(
+        self,
+        text: str,
+        base_offset: int,
+        total_chars: int,
+    ) -> list[dict[str, Any]]:
         request = Request(
             self._url,
             data=json.dumps({"text": text, "include_mapping": True}).encode("utf-8"),
@@ -78,9 +112,13 @@ class RizzoHttpDetector:
         )
         try:
             with urlopen(request, timeout=self._timeout_seconds) as response:
-                body = json.loads(response.read().decode("utf-8"))
+                raw_body = response.read().decode("utf-8")
         except (HTTPError, URLError, TimeoutError) as exc:
             raise RuntimeError("Rizzo ML detector is unavailable") from exc
+        try:
+            body = json.loads(raw_body)
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise RuntimeError("Rizzo ML detector returned a malformed response") from exc
         segments = body.get("segments") if isinstance(body, dict) else None
         if not isinstance(segments, list):
             raise RuntimeError("Rizzo ML detector returned a malformed response")
@@ -92,20 +130,29 @@ class RizzoHttpDetector:
             value = str(segment.get("t") or "")
             label = segment.get("label")
             if label and value:
-                candidates.append(
-                    {
-                        "label": str(label),
-                        "start": offset,
-                        "end": offset + len(value),
-                        "score": float(segment.get("score") or (1.0 if segment.get("validated") else 0.9)),
-                        "validated": bool(segment.get("validated")),
-                        "source": str(segment.get("src") or "modello"),
-                    }
+                touches_internal_left = base_offset > 0 and offset == 0
+                touches_internal_right = (
+                    base_offset + len(text) < total_chars
+                    and offset + len(value) == len(text)
                 )
+                if not touches_internal_left and not touches_internal_right:
+                    candidates.append(
+                        {
+                            "label": str(label),
+                            "start": base_offset + offset,
+                            "end": base_offset + offset + len(value),
+                            "score": float(
+                                segment.get("score")
+                                or (1.0 if segment.get("validated") else 0.9)
+                            ),
+                            "validated": bool(segment.get("validated")),
+                            "source": str(segment.get("src") or "modello"),
+                        }
+                    )
             offset += len(value)
         if offset != len(text):
             raise RuntimeError("Rizzo ML detector response offsets do not match input")
-        return _merge_candidates(candidates)
+        return candidates
 
 
 @dataclass(frozen=True)
@@ -234,6 +281,22 @@ def _merge_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         kept.insert(index, dict(item))
     return kept
+
+
+def _text_windows(
+    text: str,
+    *,
+    max_chars: int,
+    overlap_chars: int,
+) -> Iterator[tuple[str, int]]:
+    step = max_chars - overlap_chars
+    start = 0
+    while start < len(text):
+        end = min(start + max_chars, len(text))
+        yield text[start:end], start
+        if end == len(text):
+            break
+        start += step
 
 
 def _next_placeholder(entity_type: str, counters: dict[str, int], reserved: set[str]) -> str:

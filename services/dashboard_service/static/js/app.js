@@ -13,7 +13,7 @@ const api = {
     async post(endpoint, data) {
         const response = await fetch(endpoint, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-Alchimista-Control': 'same-origin' },
             body: JSON.stringify(data)
         });
         if (!response.ok) throw new Error(`API error: ${response.status}`);

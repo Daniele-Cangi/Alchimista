@@ -38,7 +38,10 @@ def test_dashboard_forwards_local_file_as_multipart(monkeypatch) -> None:
         "/api/v1/ingest/file",
         data={"tenant": "tenant-a"},
         files={"file": ("notes.txt", b"private text", "text/plain")},
-        headers={"Authorization": "Bearer local-test-token"},
+        headers={
+            "Authorization": "Bearer local-test-token",
+            "X-Alchimista-Control": "same-origin",
+        },
     )
 
     assert response.status_code == 200
@@ -64,6 +67,7 @@ def test_dashboard_rejects_oversized_upload_without_forwarding(monkeypatch) -> N
         "/api/v1/ingest/file",
         data={"tenant": "tenant-a"},
         files={"file": ("notes.txt", b"123456789", "text/plain")},
+        headers={"X-Alchimista-Control": "same-origin"},
     )
 
     assert response.status_code == 413
