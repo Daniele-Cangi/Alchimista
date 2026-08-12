@@ -17,3 +17,14 @@ def test_runtime_settings_are_separate_from_historical_document_evidence() -> No
     assert "CREATE TABLE IF NOT EXISTS runtime_settings_history (" in schema
     assert "CREATE TABLE IF NOT EXISTS document_privacy (" in schema
     assert "privacy_detector TEXT NOT NULL CHECK" in schema
+
+
+def test_document_deletion_tombstone_keeps_no_source_material() -> None:
+    schema = (Path(__file__).parents[1] / "sql" / "schema.sql").read_text(encoding="utf-8")
+    tombstone = schema.split("CREATE TABLE IF NOT EXISTS document_deletions (", 1)[1].split(");", 1)[0]
+
+    assert "deleted_by TEXT NOT NULL" in tombstone
+    assert "content_hash" not in tombstone
+    assert "source_uri_hash" not in tombstone
+    assert "source_uri TEXT" not in tombstone
+    assert "filename" not in tombstone

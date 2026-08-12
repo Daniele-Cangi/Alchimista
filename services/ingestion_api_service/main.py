@@ -38,6 +38,8 @@ from services.shared.contracts import (
     AIDecisionVerifyResponse,
     ConnectorIngestResponse,
     DocumentChunkEvidence,
+    DocumentDeleteRequest,
+    DocumentDeleteResponse,
     DocumentDetail,
     DocumentListResponse,
     DocumentStatusResponse,
@@ -329,6 +331,166 @@ def get_document_detail(request: Request, doc_id: str, tenant: str = config.defa
         source_kind=str(row.get("source_uri") or "local").split(":", 1)[0],
         evidence=[DocumentChunkEvidence(**item) for item in row.get("evidence") or []],
         decisions_referencing=int(row.get("decisions_referencing") or 0),
+    )
+
+
+@app.delete("/v1/documents/{doc_id}", response_model=DocumentDeleteResponse)
+def delete_document(
+    payload: DocumentDeleteRequest,
+    request: Request,
+    doc_id: str,
+    tenant: str = config.default_tenant,
+) -> DocumentDeleteResponse:
+    """Remove a document only when its governance dependencies permit it."""
+    principal = require_auth(request, config=config, tenant=tenant)
+    actor = principal.subject if principal else "anonymous"
+    trace_id = str(uuid4())
+
+    with get_connection(config.database_url) as conn:
+        with conn.cursor() as cur:
+            _ensure_ai_decision_schema(cur)
+            # Persist bootstrap DDL before any validation branch can roll the
+            # request transaction back while leaving the process cache warm.
+            conn.commit()
+            cur.execute(
+                """
+                SELECT d.doc_id, d.source_uri, j.status
+                FROM documents d
+                LEFT JOIN jobs j ON j.doc_id = d.doc_id AND j.type = 'PROCESS'
+                WHERE d.tenant = %s AND d.doc_id = %s
+                FOR UPDATE OF d
+                """,
+                (tenant, doc_id),
+            )
+            document = cur.fetchone()
+            if document is None:
+                cur.execute(
+                    """
+                    SELECT tombstone_id, storage_deleted, deleted_at
+                    FROM document_deletions
+                    WHERE tenant = %s AND doc_id = %s
+                    """,
+                    (tenant, doc_id),
+                )
+                tombstone = cur.fetchone()
+                if tombstone is None:
+                    raise HTTPException(status_code=404, detail="Document not found")
+                return DocumentDeleteResponse(
+                    tenant=tenant,
+                    doc_id=doc_id,
+                    already_deleted=True,
+                    storage_deleted=bool(tombstone["storage_deleted"]),
+                    tombstone_id=str(tombstone["tombstone_id"]),
+                    deleted_at=tombstone["deleted_at"],
+                )
+
+            expected_confirmation = _document_name(str(document["source_uri"]), doc_id)
+            if not hmac.compare_digest(payload.confirmation, expected_confirmation):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f'Scrivi esattamente "{expected_confirmation}" per confermare la rimozione',
+                )
+
+            status = str(document.get("status") or "").upper()
+            if status in {JobStatus.QUEUED.value, JobStatus.RUNNING.value}:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Il documento non può essere rimosso mentre l’elaborazione è {status}",
+                )
+
+            cur.execute(
+                """
+                SELECT COUNT(DISTINCT decision_ref_id)::INTEGER AS total
+                FROM (
+                  SELECT decision_ref_id
+                  FROM ai_decision_context_docs
+                  WHERE tenant = %s AND doc_id = %s
+                  UNION
+                  SELECT cc.decision_ref_id
+                  FROM ai_decision_context_chunks cc
+                  JOIN chunks ch ON ch.chunk_id = cc.chunk_id AND ch.tenant = cc.tenant
+                  WHERE ch.tenant = %s AND ch.doc_id = %s
+                ) referenced_decisions
+                """,
+                (tenant, doc_id, tenant, doc_id),
+            )
+            decisions_referencing = int((cur.fetchone() or {}).get("total") or 0)
+            if decisions_referencing:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"Il documento è conservato perché {decisions_referencing} decisioni audit lo referenziano"
+                    ),
+                )
+
+            holds = _list_legal_holds(cur, tenant=tenant, active_only=True)
+            hold_ids = _matching_legal_hold_ids_for_document(
+                tenant=tenant,
+                doc_id=doc_id,
+                holds=holds,
+            )
+            if hold_ids:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Il documento è protetto da legal hold attivi: {', '.join(hold_ids)}",
+                )
+
+            reason = payload.reason.strip()
+            if len(reason) < 3:
+                raise HTTPException(status_code=400, detail="Il motivo deve contenere almeno 3 caratteri")
+
+            source_uri = str(document["source_uri"])
+            try:
+                storage_deleted = storage_client.delete_gs_uri(source_uri)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Non è stato possibile rimuovere il file sorgente dallo storage",
+                ) from exc
+
+            tombstone_id = f"del-{uuid4()}"
+            cur.execute(
+                """
+                INSERT INTO document_deletions (
+                  tombstone_id, tenant, doc_id, storage_deleted,
+                  deletion_reason, deleted_by, trace_id
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING deleted_at
+                """,
+                (
+                    tombstone_id,
+                    tenant,
+                    doc_id,
+                    storage_deleted,
+                    reason,
+                    actor,
+                    trace_id,
+                ),
+            )
+            deleted_at = cur.fetchone()["deleted_at"]
+            cur.execute(
+                "DELETE FROM documents WHERE tenant = %s AND doc_id = %s",
+                (tenant, doc_id),
+            )
+            conn.commit()
+
+    log_event(
+        "info",
+        "document_deleted",
+        trace_id=trace_id,
+        doc_id=doc_id,
+        job_id=f"document-delete:{tombstone_id}",
+        tenant=tenant,
+        subject=actor,
+        storage_deleted=storage_deleted,
+    )
+    return DocumentDeleteResponse(
+        tenant=tenant,
+        doc_id=doc_id,
+        storage_deleted=storage_deleted,
+        tombstone_id=tombstone_id,
+        deleted_at=deleted_at,
     )
 
 
@@ -1899,6 +2061,23 @@ def _ensure_ai_decision_schema(cur: Any) -> None:
             return
         cur.execute(
             """
+            CREATE TABLE IF NOT EXISTS document_deletions (
+              tombstone_id TEXT PRIMARY KEY,
+              tenant TEXT NOT NULL,
+              doc_id TEXT NOT NULL,
+              storage_deleted BOOLEAN NOT NULL,
+              deletion_reason TEXT NOT NULL,
+              deleted_by TEXT NOT NULL,
+              trace_id TEXT NOT NULL,
+              deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              UNIQUE (tenant, doc_id)
+            )
+            """
+        )
+        cur.execute("ALTER TABLE document_deletions DROP COLUMN IF EXISTS source_uri_hash")
+        cur.execute("ALTER TABLE document_deletions DROP COLUMN IF EXISTS content_hash")
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS ai_decisions (
               id BIGSERIAL PRIMARY KEY,
               decision_id TEXT NOT NULL,
@@ -2004,6 +2183,9 @@ def _ensure_ai_decision_schema(cur: Any) -> None:
         cur.execute("ALTER TABLE audit_artifacts ADD COLUMN IF NOT EXISTS deleted_by TEXT")
         cur.execute("ALTER TABLE audit_artifacts ADD COLUMN IF NOT EXISTS deletion_reason TEXT")
         cur.execute("ALTER TABLE audit_artifacts ADD COLUMN IF NOT EXISTS delete_job_id TEXT")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_document_deletions_tenant_deleted_at ON document_deletions (tenant, deleted_at DESC)"
+        )
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_ai_decisions_tenant_model_created_at ON ai_decisions (tenant, model, created_at DESC)"
         )
@@ -2951,6 +3133,26 @@ def _matching_legal_hold_ids_for_artifact(
             matches = scope_id == case_id
 
         if matches:
+            hold_ids.append(str(hold["hold_id"]))
+    return hold_ids
+
+
+def _matching_legal_hold_ids_for_document(
+    *,
+    tenant: str,
+    doc_id: str,
+    holds: list[dict[str, Any]],
+) -> list[str]:
+    """Return active tenant/document holds that protect a source document."""
+    hold_ids: list[str] = []
+    for hold in holds:
+        if str(hold.get("tenant") or "") != tenant or hold.get("released_at") is not None:
+            continue
+        scope_type = str(hold.get("scope_type") or "").strip().lower()
+        scope_id = str(hold.get("scope_id") or "").strip()
+        if (scope_type == "tenant" and scope_id in {tenant, "*"}) or (
+            scope_type == "document" and scope_id == doc_id
+        ):
             hold_ids.append(str(hold["hold_id"]))
     return hold_ids
 

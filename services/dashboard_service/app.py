@@ -184,6 +184,24 @@ async def _proxy_post(
     return _decode_json(resp)
 
 
+async def _proxy_delete(
+    url: str,
+    body: dict[str, Any],
+    params: dict[str, Any] | None = None,
+    auth: str | None = None,
+) -> dict[str, Any]:
+    clean_params = {k: v for k, v in (params or {}).items() if v is not None}
+    resp = requests.delete(
+        url,
+        json=body,
+        params=clean_params,
+        headers=_headers(auth),
+        timeout=60,
+    )
+    resp.raise_for_status()
+    return _decode_json(resp)
+
+
 async def _proxy_put(
     url: str,
     body: dict[str, Any],
@@ -351,7 +369,11 @@ def _html_page(filename: str) -> FileResponse:
     page = TEMPLATES_DIR / filename
     if not page.exists():
         raise HTTPException(status_code=404, detail=f"Page not found: {filename}")
-    return FileResponse(page, media_type="text/html; charset=utf-8")
+    return FileResponse(
+        page,
+        media_type="text/html; charset=utf-8",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @app.get("/")
@@ -472,6 +494,11 @@ class IngestCompleteRequest(BaseModel):
         if not (self.doc_id or self.job_id):
             raise ValueError("doc_id or job_id is required")
         return self
+
+
+class DocumentDeleteRequest(BaseModel):
+    confirmation: str = Field(min_length=1, max_length=512)
+    reason: str = Field(default="user_requested", min_length=3, max_length=256)
 
 
 class GCSImportRequest(BaseModel):
@@ -746,6 +773,26 @@ async def api_document_detail(
     try:
         return await _proxy_get(
             f"{INGEST_URL}/v1/documents/{doc_id}",
+            params={"tenant": workspace},
+            auth=authorization,
+        )
+    except requests.HTTPError as exc:
+        raise _http_err(exc)
+    except Exception as exc:
+        raise _gw_err(exc)
+
+
+@app.delete("/api/v1/documents/{doc_id}")
+async def api_delete_document(
+    doc_id: str,
+    body: DocumentDeleteRequest,
+    workspace: str = DEFAULT_WORKSPACE,
+    authorization: str | None = Header(default=None),
+):
+    try:
+        return await _proxy_delete(
+            f"{INGEST_URL}/v1/documents/{doc_id}",
+            body.model_dump(),
             params={"tenant": workspace},
             auth=authorization,
         )

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="services/dashboard_service/static/images/logo/logo-dark.png" width="88" alt="Simbolo di Alchimista">
+</p>
+
 # Alchimista
 
 Alchimista is a self-hostable AI governance, document intelligence, RAG,

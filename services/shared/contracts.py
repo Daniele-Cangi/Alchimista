@@ -560,6 +560,21 @@ class DocumentDetail(DocumentSummary):
     decisions_referencing: int = 0
 
 
+class DocumentDeleteRequest(BaseModel):
+    confirmation: str = Field(min_length=1, max_length=512)
+    reason: str = Field(default="user_requested", min_length=3, max_length=256)
+
+
+class DocumentDeleteResponse(BaseModel):
+    tenant: str
+    doc_id: str
+    deleted: bool = True
+    already_deleted: bool = False
+    storage_deleted: bool
+    tombstone_id: str
+    deleted_at: datetime
+
+
 class PubSubPushMessage(BaseModel):
     data: str
     messageId: str | None = None
