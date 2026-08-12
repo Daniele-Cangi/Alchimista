@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="services/dashboard_service/static/images/logo/logo-dark.png" width="88" alt="Simbolo di Alchimista">
+  <img src="docs/assets/alchimista-mark-copper.png" width="88" alt="Simbolo di Alchimista in rame">
 </p>
 
 # Alchimista
