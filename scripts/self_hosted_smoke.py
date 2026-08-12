@@ -46,6 +46,34 @@ def main() -> int:
     _wait_json("http://127.0.0.1:8011/v1/readyz")
     _wait_json("http://127.0.0.1:8013/v1/readyz")
     _wait_json("http://127.0.0.1:8014/v1/privacy/ready")
+    dashboard_health = _wait_json("http://127.0.0.1:8000/api/v1/health")
+    if (dashboard_health.get("services") or {}).get("privacy", {}).get("status") != "healthy":
+        raise AssertionError("localhost product health does not include a healthy privacy service")
+    home_html = _get_text("http://127.0.0.1:8000/")
+    if "Alchimista" not in home_html or "Documenti" not in home_html or "Privacy" not in home_html:
+        raise AssertionError("localhost root is not the Alchimista product shell")
+    _expect_http_status(
+        "PUT",
+        "http://127.0.0.1:8000/api/v1/privacy/settings",
+        {
+            "workspace": "default",
+            "privacy_policy": "strict",
+            "privacy_detector": "rizzo_http",
+            "privacy_mapping_enabled": True,
+        },
+        409,
+    )
+    selected_privacy = _put_json(
+        "http://127.0.0.1:8000/api/v1/privacy/settings",
+        {
+            "workspace": "default",
+            "privacy_policy": "strict",
+            "privacy_detector": "rizzo_regex",
+            "privacy_mapping_enabled": True,
+        },
+    )
+    if selected_privacy.get("privacy_policy") != "strict":
+        raise AssertionError("runtime privacy policy did not persist through the product control API")
 
     ingest = _post_multipart(
         "http://127.0.0.1:8011/v1/ingest",
@@ -61,6 +89,16 @@ def main() -> int:
     if ((status.get("job") or {}).get("status")) != "SUCCEEDED":
         raise AssertionError("document processing did not succeed")
 
+    documents = _get_json("http://127.0.0.1:8000/api/v1/documents?workspace=default")
+    listed = {item.get("doc_id"): item for item in documents.get("documents") or []}
+    if doc_id not in listed:
+        raise AssertionError("processed document did not appear in the localhost Documents view")
+    if listed[doc_id].get("privacy_policy") != "strict":
+        raise AssertionError("Documents view did not expose the applied privacy policy")
+    detail = _get_json(f"http://127.0.0.1:8000/api/v1/documents/{doc_id}?workspace=default")
+    if not detail.get("evidence") or int(detail.get("pii_detected") or 0) < 1:
+        raise AssertionError("document detail is missing indexed evidence or privacy summary")
+
     query = _post_json(
         "http://127.0.0.1:8013/v1/query",
         {"tenant": "default", "query": "What is the retention policy?", "top_k": 3, "doc_ids": [doc_id]},
@@ -70,6 +108,15 @@ def main() -> int:
     citations = (answers[0].get("citations") if answers else None) or []
     if not citations:
         raise AssertionError("RAG response did not contain citations")
+    product_query = _post_json(
+        "http://127.0.0.1:8000/api/v1/query",
+        {"tenant": "default", "query": "What is the retention policy?", "k": 3, "doc_ids": [doc_id]},
+    )
+    product_citations = product_query.get("citations") or []
+    if not product_query.get("answer") or not product_citations:
+        raise AssertionError("localhost Ask path did not return an answer with evidence")
+    if not product_citations[0].get("document_name") or product_citations[0].get("preview") is None:
+        raise AssertionError("localhost Ask citation is not interactive evidence")
     chunk_ids = [item["chunk_id"] for item in citations]
     cross_tenant = _post_json(
         "http://127.0.0.1:8013/v1/query",
@@ -241,8 +288,18 @@ def _get_json(url: str, headers: dict[str, str] | None = None) -> dict[str, Any]
     return _request_json(request)
 
 
+def _get_text(url: str) -> str:
+    request = urllib.request.Request(url, method="GET")
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return response.read().decode("utf-8")
+
+
 def _post_json(url: str, payload: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
-    merged = {"Content-Type": "application/json", **(headers or {})}
+    merged = {
+        "Content-Type": "application/json",
+        "X-Alchimista-Control": "same-origin",
+        **(headers or {}),
+    }
     request = urllib.request.Request(
         url,
         data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
@@ -250,6 +307,32 @@ def _post_json(url: str, payload: dict[str, Any], headers: dict[str, str] | None
         method="POST",
     )
     return _request_json(request)
+
+
+def _put_json(url: str, payload: dict[str, Any]) -> dict[str, Any]:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+        headers={"Content-Type": "application/json", "X-Alchimista-Control": "same-origin"},
+        method="PUT",
+    )
+    return _request_json(request)
+
+
+def _expect_http_status(method: str, url: str, payload: dict[str, Any], expected: int) -> None:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+        headers={"Content-Type": "application/json", "X-Alchimista-Control": "same-origin"},
+        method=method,
+    )
+    try:
+        urllib.request.urlopen(request, timeout=30)
+    except urllib.error.HTTPError as exc:
+        if exc.code == expected:
+            return
+        raise AssertionError(f"expected HTTP {expected}, got {exc.code}") from exc
+    raise AssertionError(f"expected HTTP {expected}, request succeeded")
 
 
 def _post_multipart(
@@ -284,7 +367,11 @@ def _post_multipart(
     request = urllib.request.Request(
         url,
         data=b"".join(chunks),
-        headers={"Content-Type": f"multipart/form-data; boundary={boundary}", **headers},
+        headers={
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "X-Alchimista-Control": "same-origin",
+            **headers,
+        },
         method="POST",
     )
     return _request_json(request)

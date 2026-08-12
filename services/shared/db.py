@@ -315,9 +315,10 @@ def fetch_chunks_by_ids(
     if doc_ids:
         cur.execute(
             """
-            SELECT doc_id, chunk_id, chunk_text, embedding
-            FROM chunks
-            WHERE tenant = %s AND chunk_id = ANY(%s) AND doc_id = ANY(%s)
+            SELECT ch.doc_id, ch.chunk_id, ch.chunk_index, ch.chunk_text, ch.embedding, d.source_uri
+            FROM chunks ch
+            JOIN documents d ON d.doc_id = ch.doc_id AND d.tenant = ch.tenant
+            WHERE ch.tenant = %s AND ch.chunk_id = ANY(%s) AND ch.doc_id = ANY(%s)
             """,
             (tenant, chunk_ids, doc_ids),
         )
@@ -325,10 +326,107 @@ def fetch_chunks_by_ids(
 
     cur.execute(
         """
-        SELECT doc_id, chunk_id, chunk_text, embedding
-        FROM chunks
-        WHERE tenant = %s AND chunk_id = ANY(%s)
+        SELECT ch.doc_id, ch.chunk_id, ch.chunk_index, ch.chunk_text, ch.embedding, d.source_uri
+        FROM chunks ch
+        JOIN documents d ON d.doc_id = ch.doc_id AND d.tenant = ch.tenant
+        WHERE ch.tenant = %s AND ch.chunk_id = ANY(%s)
         """,
         (tenant, chunk_ids),
     )
     return cur.fetchall()
+
+
+def list_documents(
+    cur: psycopg.Cursor,
+    *,
+    tenant: str,
+    limit: int = 100,
+    offset: int = 0,
+) -> tuple[list[dict[str, Any]], int]:
+    cur.execute("SELECT COUNT(*) AS total FROM documents WHERE tenant = %s", (tenant,))
+    total_row = cur.fetchone() or {"total": 0}
+    cur.execute(
+        """
+        SELECT
+          d.doc_id, d.tenant, d.source_uri, d.mime_type, d.size_bytes,
+          d.content_hash, d.created_at, d.updated_at,
+          j.status,
+          COALESCE(ch.chunk_count, 0) AS chunks,
+          COALESCE(dp.pii_detected, 0) AS pii_detected,
+          COALESCE(dp.pii_types, ARRAY[]::TEXT[]) AS pii_types,
+          COALESCE(dp.privacy_policy, 'off') AS privacy_policy,
+          COALESCE(dp.metadata->>'privacy_detector', dp.privacy_engine) AS privacy_detector,
+          dp.privacy_engine_version,
+          dp.privacy_engine_source_revision
+        FROM documents d
+        LEFT JOIN jobs j ON j.doc_id = d.doc_id AND j.type = 'PROCESS'
+        LEFT JOIN document_privacy dp ON dp.doc_id = d.doc_id AND dp.tenant = d.tenant
+        LEFT JOIN (
+          SELECT doc_id, COUNT(*)::INTEGER AS chunk_count
+          FROM chunks WHERE tenant = %s GROUP BY doc_id
+        ) ch ON ch.doc_id = d.doc_id
+        WHERE d.tenant = %s
+        ORDER BY d.created_at DESC
+        LIMIT %s OFFSET %s
+        """,
+        (tenant, tenant, limit, offset),
+    )
+    return cur.fetchall(), int(total_row["total"])
+
+
+def fetch_document_detail(cur: psycopg.Cursor, *, tenant: str, doc_id: str) -> dict[str, Any] | None:
+    cur.execute(
+        """
+        SELECT
+          d.doc_id, d.tenant, d.source_uri, d.mime_type, d.size_bytes,
+          d.content_hash, d.created_at, d.updated_at,
+          j.status,
+          COALESCE(dp.pii_detected, 0) AS pii_detected,
+          COALESCE(dp.pii_types, ARRAY[]::TEXT[]) AS pii_types,
+          COALESCE(dp.privacy_policy, 'off') AS privacy_policy,
+          COALESCE(dp.metadata->>'privacy_detector', dp.privacy_engine) AS privacy_detector,
+          dp.privacy_engine_version,
+          dp.privacy_engine_source_revision,
+          COALESCE((SELECT COUNT(*) FROM chunks ch WHERE ch.tenant = d.tenant AND ch.doc_id = d.doc_id), 0)::INTEGER AS chunks,
+          COALESCE((SELECT COUNT(*) FROM ai_decision_context_docs dc WHERE dc.tenant = d.tenant AND dc.doc_id = d.doc_id), 0)::INTEGER AS decisions_referencing
+        FROM documents d
+        LEFT JOIN jobs j ON j.doc_id = d.doc_id AND j.type = 'PROCESS'
+        LEFT JOIN document_privacy dp ON dp.doc_id = d.doc_id AND dp.tenant = d.tenant
+        WHERE d.tenant = %s AND d.doc_id = %s
+        """,
+        (tenant, doc_id),
+    )
+    row = cur.fetchone()
+    if row is None:
+        return None
+    cur.execute(
+        """
+        SELECT chunk_id, chunk_index, LEFT(chunk_text, 1200) AS preview, token_count
+        FROM chunks
+        WHERE tenant = %s AND doc_id = %s
+        ORDER BY chunk_index ASC
+        """,
+        (tenant, doc_id),
+    )
+    row["evidence"] = cur.fetchall()
+    return row
+
+
+def fetch_chunk_evidence(
+    cur: psycopg.Cursor,
+    *,
+    tenant: str,
+    doc_id: str,
+    chunk_id: str,
+) -> dict[str, Any] | None:
+    cur.execute(
+        """
+        SELECT ch.chunk_id, ch.doc_id, ch.chunk_index, ch.chunk_text AS preview,
+               ch.token_count, d.source_uri
+        FROM chunks ch
+        JOIN documents d ON d.doc_id = ch.doc_id AND d.tenant = ch.tenant
+        WHERE ch.tenant = %s AND ch.doc_id = %s AND ch.chunk_id = %s
+        """,
+        (tenant, doc_id, chunk_id),
+    )
+    return cur.fetchone()

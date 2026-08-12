@@ -70,6 +70,10 @@ The self-hosted Compose profile injects this key material only into
 `privacy-service`. Processor, ingestion, RAG, dashboard, and database
 containers receive no vault decryption keys.
 
+The independent `RIZZO_MODEL_TOKEN` is scoped to `privacy-service` and the
+unpublished `rizzo-model-service`. The dashboard reaches model controls only
+through the privacy service and receives neither model token nor vault keys.
+
 To rotate from `v1` to `v2`, deploy both keys and select `v2` as active:
 
 ```text
@@ -111,6 +115,28 @@ Enabled privacy policies fail processing when:
 
 Errors and audit metadata do not include the original value. Structured logs
 redact known sensitive keys and formatted identifiers as a defense in depth.
+
+## Runtime policy and detector selection
+
+`runtime_settings` is the authoritative workspace-scoped read model for the
+active policy, detector, and reversible-mapping flag. Environment variables
+are bootstrap defaults for a workspace without a row. Each change also writes
+`runtime_settings_history`; it never updates historical `document_privacy`
+evidence. Processor and decision ingestion resolve the setting for each new
+operation. Full Rizzo cannot be selected until its internal readiness probe is
+true, and it cannot be unloaded while any workspace still selects it.
+
+Full model weights and their Alchimista SHA-256 manifest live on the
+`rizzo-model-data` volume. The runtime downloads only the server-pinned model
+and revision. Orphaned `.partial` download staging is removed on bootstrap;
+incomplete or modified promoted artifacts produce `ERROR`. There is no
+automatic Lightweight fallback that could falsely claim Full detection.
+
+Full-detector calls are split at the privacy/model boundary into overlapping
+windows of at most 1,000,000 characters, below the model service's 2,000,000
+character request ceiling. Findings are translated back to document-global
+offsets and overlap duplicates are merged. Every window must succeed, so
+`STRICT` remains fail-closed for large extracted texts.
 
 ## Audit evidence
 

@@ -4,6 +4,7 @@ import json
 from enum import Enum
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, Field, field_validator
@@ -14,6 +15,11 @@ class PrivacyPolicy(str, Enum):
     DETECT = "detect"
     PROTECT_EGRESS = "protect_egress"
     STRICT = "strict"
+
+
+class PrivacyDetector(str, Enum):
+    RIZZO_REGEX = "rizzo_regex"
+    RIZZO_HTTP = "rizzo_http"
 
 
 class PrivacyEngineMetadata(BaseModel):
@@ -79,6 +85,22 @@ class PrivacyRestoreResponse(BaseModel):
     engine: PrivacyEngineMetadata
 
 
+class PrivacySettings(BaseModel):
+    workspace: str = Field(min_length=1, max_length=128)
+    privacy_policy: PrivacyPolicy
+    privacy_detector: PrivacyDetector
+    privacy_mapping_enabled: bool
+    vault_key_version: str | None = None
+    model: dict[str, Any] | None = None
+
+
+class PrivacySettingsUpdate(BaseModel):
+    workspace: str = Field(default="default", min_length=1, max_length=128)
+    privacy_policy: PrivacyPolicy
+    privacy_detector: PrivacyDetector
+    privacy_mapping_enabled: bool = True
+
+
 class PrivacyServiceError(RuntimeError):
     pass
 
@@ -110,6 +132,21 @@ class PrivacyClient:
         except Exception as exc:
             raise PrivacyServiceError("Privacy service returned a malformed restore response") from exc
 
+    def settings(self, workspace: str) -> PrivacySettings:
+        body = self._get(f"/v1/privacy/settings?workspace={quote(workspace, safe='')}")
+        try:
+            return PrivacySettings.model_validate(body)
+        except Exception as exc:
+            raise PrivacyServiceError("Privacy service returned malformed runtime settings") from exc
+
+    def _get(self, path: str) -> dict[str, Any]:
+        request = Request(
+            self._base_url + path,
+            headers={"x-privacy-token": self._token},
+            method="GET",
+        )
+        return self._request(request)
+
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         headers = {"Content-Type": "application/json", "x-privacy-token": self._token}
         request = Request(
@@ -118,6 +155,9 @@ class PrivacyClient:
             headers=headers,
             method="POST",
         )
+        return self._request(request)
+
+    def _request(self, request: Request) -> dict[str, Any]:
         try:
             with urlopen(request, timeout=self._timeout_seconds) as response:
                 raw = response.read()

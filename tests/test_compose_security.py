@@ -53,6 +53,22 @@ def test_vault_keys_are_available_only_to_privacy_service() -> None:
         assert "environment: *common-runtime-environment" in block
         assert all(variable not in block for variable in VAULT_KEY_ENV)
 
+
+def test_model_control_secret_is_limited_to_privacy_and_model_services() -> None:
+    compose = COMPOSE_PATH.read_text(encoding="utf-8")
+    assert "/var/run/docker.sock" not in compose
+    assert "ports:" not in _service_block(compose, "rizzo-model-service")
+    assert "RIZZO_MODEL_TOKEN" in _service_block(compose, "rizzo-model-service")
+    privacy_environment = _between(
+        compose,
+        "x-privacy-runtime-environment: &privacy-runtime-environment\n",
+        "services:\n",
+    )
+    assert "RIZZO_MODEL_TOKEN" in privacy_environment
+    assert "environment: *privacy-runtime-environment" in _service_block(compose, "privacy-service")
+    for service in ("document-processor-service", "ingestion-api-service", "rag-query-service", "dashboard-service"):
+        assert "RIZZO_MODEL_TOKEN" not in _service_block(compose, service)
+
     for service in ("postgres", "schema-init", "dashboard-service"):
         block = _service_block(compose, service)
         assert all(variable not in block for variable in VAULT_KEY_ENV)

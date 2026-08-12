@@ -23,7 +23,6 @@ x-common-runtime-environment: &common-runtime-environment
   PRIVACY_SERVICE_TOKEN: ${PRIVACY_SERVICE_TOKEN:?run python scripts/init_local_env.py}
   PRIVACY_MAPPING_ENABLED: ${PRIVACY_MAPPING_ENABLED:-true}
   PRIVACY_DETECTOR: ${PRIVACY_DETECTOR:-rizzo_regex}
-  RIZZO_BASE_URL: ${RIZZO_BASE_URL:-}
   AUDIT_REPORT_SIGNING_KEY: ${AUDIT_REPORT_SIGNING_KEY:?run python scripts/init_local_env.py}
   AUDIT_REPORT_SIGNING_KEY_ID: ${AUDIT_REPORT_SIGNING_KEY_ID:-local-v1}
   ENFORCE_STORAGE_HARDENING: "false"
@@ -34,6 +33,8 @@ x-privacy-runtime-environment: &privacy-runtime-environment
   PRIVACY_VAULT_KEYS_JSON: ${PRIVACY_VAULT_KEYS_JSON:-}
   PRIVACY_VAULT_KEY: ${PRIVACY_VAULT_KEY:-}
   PRIVACY_VAULT_KEY_VERSION: ${PRIVACY_VAULT_KEY_VERSION:-v1}
+  RIZZO_BASE_URL: http://rizzo-model-service:8080
+  RIZZO_MODEL_TOKEN: ${RIZZO_MODEL_TOKEN:?run python scripts/init_local_env.py}
 
 services:
   postgres:
@@ -71,6 +72,31 @@ services:
       postgres:
         condition: service_healthy
 
+  rizzo-model-service:
+    build:
+      context: .
+      dockerfile: services/rizzo_model_service/Dockerfile
+    image: alchimista-rizzo-model:local
+    restart: unless-stopped
+    environment:
+      RIZZO_MODEL_ROOT: /models
+      RIZZO_MODEL_TOKEN: ${RIZZO_MODEL_TOKEN:?run python scripts/init_local_env.py}
+      OMP_NUM_THREADS: "4"
+    volumes:
+      - rizzo-model-data:/models
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import os,urllib.request; r=urllib.request.Request('http://127.0.0.1:8080/v1/model/status',headers={'x-model-token':os.environ['RIZZO_MODEL_TOKEN']}); urllib.request.urlopen(r,timeout=4)
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+
   privacy-service:
     build:
       context: .
@@ -83,6 +109,8 @@ services:
     depends_on:
       schema-init:
         condition: service_completed_successfully
+      rizzo-model-service:
+        condition: service_healthy
     healthcheck:
       test:
         - CMD
@@ -180,9 +208,16 @@ services:
       INGEST_URL: http://ingestion-api-service:8080
       PROCESSOR_URL: http://document-processor-service:8080
       RAG_URL: http://rag-query-service:8080
+      PRIVACY_URL: http://privacy-service:8080
+      PRIVACY_SERVICE_TOKEN: ${PRIVACY_SERVICE_TOKEN:?run python scripts/init_local_env.py}
+      DEFAULT_WORKSPACE: default
+      ALCHIMISTA_PROFILE: local
+      AUTH_MODE: local
+      STORAGE_BACKEND: filesystem
       DASHBOARD_API_TOKEN: ${ALCHIMISTA_API_TOKEN:?run python scripts/init_local_env.py}
       ADMIN_KEY: ${ADMIN_API_KEY:?run python scripts/init_local_env.py}
       DASHBOARD_MAX_UPLOAD_BYTES: ${DASHBOARD_MAX_UPLOAD_BYTES:-26214400}
+      DASHBOARD_ALLOWED_ORIGINS: "${DASHBOARD_ALLOWED_ORIGINS:-http://127.0.0.1:8000,http://localhost:8000,http://[::1]:8000}"
       DASHBOARD_DEPLOY_ENV: development
       DASHBOARD_ENABLE_TEST_TOKEN: "false"
     ports:
@@ -205,3 +240,4 @@ services:
 volumes:
   postgres-data:
   object-data:
+  rizzo-model-data:

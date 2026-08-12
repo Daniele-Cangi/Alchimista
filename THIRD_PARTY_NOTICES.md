@@ -13,18 +13,18 @@ Alchimista incorporates `src/app/detectors.py` from Rizzo-PII revision
 - Preserved source and notice: `third_party/rizzo_pii/`
 - Upstream: <https://github.com/Rizzo-AI-Academy/rizzo-pii>
 
-The default Alchimista images do not incorporate Rizzo's UI, PDF layer,
-PyMuPDF dependency, or model weights.
+Alchimista images do not incorporate Rizzo's UI, PDF layer, PyMuPDF
+dependency, or model weights.
 
-## Optional full Rizzo image
+## Managed full Rizzo model
 
-`compose.rizzo.yaml` can build the full upstream Rizzo service from the pinned
-revision and model revision `v1.5.0`. That separately built image contains its
-own dependency and model license boundary. The pinned upstream
-`THIRD_PARTY_LICENSES.md` states that PyMuPDF is dual AGPL/commercial and
-describes implications for distributed images/binaries containing it. Preserve
-upstream notices when distributing that image.
+The internal model runtime can download model revision `v1.5.0`, resolved to
+commit `a1c3c83827eca22e9675e30c1111c4641caf5901`, into a local named volume.
+The runtime image supplies CPU PyTorch/Transformers but does not contain the
+model weights at build time and does not copy Rizzo's Flask UI or PyMuPDF
+layer. Model files retain their own license and attribution boundary.
 
 Upstream also records model/training-data attribution and a missing license
 declaration for one training dataset. Consult the pinned upstream notice before
-redistributing the full image or model artifacts.
+redistributing model artifacts. Preserve upstream notices with any such
+distribution.

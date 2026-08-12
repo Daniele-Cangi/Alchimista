@@ -26,3 +26,23 @@ def test_privacy_client_reports_unavailable_without_leaking_payload(monkeypatch)
         client.detect(PrivacyDetectRequest(text="alice@example.com"))
 
     assert "alice@example.com" not in str(exc_info.value)
+
+
+def test_privacy_client_reads_workspace_runtime_settings(monkeypatch) -> None:
+    client = PrivacyClient(base_url="http://privacy", token="token")
+    captured = {}
+
+    def fake_get(path):
+        captured["path"] = path
+        return {
+            "workspace": "matter a",
+            "privacy_policy": "strict",
+            "privacy_detector": "rizzo_regex",
+            "privacy_mapping_enabled": True,
+        }
+
+    monkeypatch.setattr(client, "_get", fake_get)
+    settings = client.settings("matter a")
+
+    assert captured["path"].endswith("workspace=matter%20a")
+    assert settings.privacy_policy.value == "strict"
