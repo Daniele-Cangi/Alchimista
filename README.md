@@ -17,6 +17,12 @@ Alchimista implements technical controls. It does not certify GDPR, AI Act,
 or other legal compliance, and its PII detectors are not guaranteed to find
 every sensitive value.
 
+## How Alchimista works
+
+<p align="center">
+  <img src="docs/assets/alchimista-workflow.svg" width="100%" alt="Alchimista turns local documents into privacy-protected, cited, and auditable answers">
+</p>
+
 ## Self-hosted quickstart
 
 Prerequisites: Docker Engine with Compose v2 and Python 3.11 or newer.
