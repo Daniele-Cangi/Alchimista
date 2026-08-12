@@ -1,10 +1,10 @@
 const state = { workspace: "default", uploadLimit: 25 * 1024 * 1024, timer: null };
 const app = document.querySelector("#app");
 const titles = {
-  home: ["Home", "Workspace locale"], documents: ["Documenti", "Libreria privata"],
-  ask: ["Chiedi", "Ricerca con evidenze"], privacy: ["Privacy", "Controllo del modello"],
-  audit: ["Audit", "Tracciabilità AI"], governance: ["Governance", "Retention e legal hold"],
-  system: ["Sistema", "Stato dei servizi"]
+  home: ["Workspace", "Alchimista locale"], documents: ["Documenti", "Archivio privato"],
+  ask: ["Chiedi ai documenti", "Ricerca RAG con fonti"], privacy: ["Privacy", "Protezione PII e modello Rizzo"],
+  audit: ["Audit trail", "Decisioni AI verificabili"], governance: ["Governance", "Retention e legal hold"],
+  system: ["Sistema", "Runtime e servizi locali"]
 };
 
 const esc = value => String(value ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[c]);
@@ -44,7 +44,7 @@ async function json(url, options={}) {
   return body;
 }
 function setHead(name) {
-  const info = name === "document" ? ["Dettaglio documento", "Libreria privata"] : titles[name];
+  const info = name === "document" ? ["Dettaglio documento", "Archivio privato"] : titles[name];
   document.querySelector("#page-title").textContent = info[0];
   document.querySelector("#page-eyebrow").textContent = info[1];
   document.querySelectorAll("#nav a").forEach(a => a.classList.toggle("active", a.dataset.route === (name === "document" ? "documents" : name)));
@@ -54,14 +54,27 @@ function errorPanel(error) {
   document.querySelector("#retry")?.addEventListener("click", render);
 }
 function empty(title, text, action="") { return `<div class="empty"><b>${esc(title)}</b>${esc(text)}${action}</div>`; }
-function docRows(documents, limit=100) {
+function docRows(documents, limit=100, withActions=false) {
   return documents.slice(0,limit).map(d => `<tr data-doc="${esc(d.doc_id)}">
     <td><div class="doc-name"><span class="file-icon">${esc((d.mime_type || "DOC").split("/").pop().slice(0,3).toUpperCase())}</span><span>${esc(d.name)}<small class="subtle">${esc(shortId(d.doc_id))}</small></span></div></td>
     <td>${statusBadge(d.status)}</td><td>${d.chunks || 0}</td><td>${d.pii_detected || 0}</td>
-    <td><span class="badge">${esc(d.privacy_policy || "off")}</span></td><td class="subtle">${formatDate(d.updated_at)}</td></tr>`).join("");
+    <td><span class="badge">${esc(d.privacy_policy || "off")}</span></td><td class="subtle">${formatDate(d.updated_at)}</td>${withActions?`<td class="row-actions"><button class="table-action" type="button" data-delete-doc="${esc(d.doc_id)}" aria-label="Rimuovi ${esc(d.name)}">Rimuovi</button></td>`:""}</tr>`).join("");
 }
-function bindDocRows() { document.querySelectorAll("[data-doc]").forEach(row => row.addEventListener("click", () => navigate(`/documents/${encodeURIComponent(row.dataset.doc)}`))); }
-function navigate(path) { history.pushState({}, "", path); window.scrollTo(0,0); render(); document.querySelector(".sidebar").classList.remove("open"); }
+function bindDocRows() {
+  document.querySelectorAll("[data-doc]").forEach(row => row.addEventListener("click", event => {
+    if (event.target.closest("[data-delete-doc]")) return;
+    navigate(`/documents/${encodeURIComponent(row.dataset.doc)}`);
+  }));
+  document.querySelectorAll("[data-delete-doc]").forEach(button => button.addEventListener("click", async event => {
+    event.stopPropagation(); button.disabled=true;
+    try {
+      const documentRecord=await json(`/api/v1/documents/${encodeURIComponent(button.dataset.deleteDoc)}?workspace=${encodeURIComponent(state.workspace)}`);
+      openDocumentDeleteDialog(documentRecord);
+    } catch(error) { toast(error.message,true); }
+    finally { button.disabled=false; }
+  }));
+}
+function navigate(path) { history.pushState({}, "", path); window.scrollTo(0,0); render(); document.querySelector(".site-header").classList.remove("open"); }
 
 async function home() {
   const [health, docs, privacy] = await Promise.all([
@@ -70,10 +83,10 @@ async function home() {
   ]);
   const services = Object.values(health.services || {}), healthy = services.filter(s => s.status === "healthy").length;
   const model = privacy.model || {}, pii = (docs.documents || []).reduce((sum,d) => sum + (d.pii_detected || 0), 0);
-  app.innerHTML = `<section class="hero"><div class="hero-card"><span class="badge">Workspace ${esc(state.workspace)}</span>
-    <h2>Conoscenza privata, pronta per essere interrogata.</h2><p>Carica documenti, applica la policy privacy locale e ottieni risposte verificabili con evidenze puntuali.</p>
-    <div class="hero-actions"><a class="button secondary" href="/documents">Aggiungi documenti</a><a class="button ghost" href="/ask">Fai una domanda</a></div></div>
-    <div class="card quick-card"><div><p class="eyebrow">Privacy attiva</p><h2>${esc(privacy.privacy_policy)}</h2><p>${privacy.privacy_detector === "rizzo_http" ? "Modello Rizzo completo" : "Rizzo leggero regex + checksum"}</p></div><a href="/privacy" class="button secondary">Gestisci privacy →</a></div></section>
+  app.innerHTML = `<section class="brand-hero"><div class="brand-visual"><img src="/static/images/alchimista-mountain.svg" alt="La montagna di Alchimista con la bandiera sulla cima"></div>
+    <div class="brand-copy"><p class="eyebrow">Governance · Privacy · Evidenze</p><h2>Conoscenza privata.<br>Decisioni verificabili.</h2><p>Interroga i tuoi documenti, proteggi i dati personali e conserva la prova di ogni risposta: tutto nel tuo ambiente locale.</p>
+    <div class="hero-actions"><a class="button" href="/documents">Carica documenti</a><a class="button secondary" href="/ask">Chiedi ai documenti</a></div><div class="hero-proof"><span>Workspace <strong>${esc(state.workspace)}</strong></span><span>Cloud <strong>opzionale</strong></span><span>Audit <strong>integrato</strong></span></div></div></section>
+    <section class="home-overview"><div><p class="eyebrow">Stato del workspace</p><h2>Il tuo archivio, sotto controllo.</h2><p>Una vista operativa su documenti, privacy e servizi che alimentano le risposte verificabili.</p></div><div class="card quick-card"><div><p class="eyebrow">Privacy attiva</p><h2>${esc(privacy.privacy_policy)}</h2><p>${privacy.privacy_detector === "rizzo_http" ? "Rizzo completo · ML + regex" : "Rizzo leggero · regex + checksum"}</p></div><a href="/privacy" class="text-link">Gestisci privacy <span>→</span></a></div></section>
     <section class="stats"><div class="card stat"><small>Documenti</small><strong>${docs.total || 0}</strong><em>persistenti nel workspace</em></div>
     <div class="card stat"><small>Evidenze PII</small><strong>${pii}</strong><em>senza valori grezzi</em></div>
     <div class="card stat"><small>Servizi</small><strong>${healthy}/${services.length}</strong><em>${health.overall === "healthy" ? "tutti operativi" : "verifica richiesta"}</em></div>
@@ -89,7 +102,7 @@ async function documents() {
     <label class="dropzone" id="dropzone"><input type="file" id="file"><strong>Trascina qui il file</strong><p>Il documento resta sul tuo stack locale.</p><span class="button secondary">Scegli file</span></label><div id="upload-state"></div></section>
     <section class="card"><h2>Libreria persistente</h2><p>I documenti rimangono disponibili dopo i riavvii. La policy mostrata è quella applicata al momento dell’elaborazione.</p><div class="note">Cambiare policy non riscrive la storia: vale per le nuove elaborazioni e per i reprocess espliciti.</div></section></div>
     <section class="card" style="margin-top:20px"><div class="section-head"><div><h2>Tutti i documenti</h2><p>${docs.total || 0} elementi nel workspace</p></div></div>
-    ${(docs.documents || []).length ? `<div class="table-wrap"><table class="data-table"><thead><tr><th>Documento</th><th>Stato</th><th>Chunk</th><th>PII</th><th>Policy</th><th>Aggiornato</th></tr></thead><tbody>${docRows(docs.documents)}</tbody></table></div>` : empty("Libreria vuota", "Carica un file dal riquadro qui sopra.")}</section>`;
+    ${(docs.documents || []).length ? `<div class="table-wrap"><table class="data-table documents-table"><thead><tr><th>Documento</th><th>Stato</th><th>Chunk</th><th>PII</th><th>Policy</th><th>Aggiornato</th><th>Azioni</th></tr></thead><tbody>${docRows(docs.documents,100,true)}</tbody></table></div>` : empty("Libreria vuota", "Carica un file dal riquadro qui sopra.")}</section>`;
   bindDocRows();
   const input = document.querySelector("#file"), zone = document.querySelector("#dropzone");
   input.addEventListener("change", () => input.files[0] && upload(input.files[0]));
@@ -115,15 +128,40 @@ async function documentDetail(id) {
   app.innerHTML = `<div class="section-head"><div><a href="/documents" class="subtle">← Documenti</a><h2 style="margin-top:10px">${esc(d.name)}</h2><p>${esc(shortId(d.doc_id))} · ${formatBytes(d.size_bytes)}</p></div>${statusBadge(d.status)}</div>
     <section class="stats"><div class="card stat"><small>Chunk</small><strong>${d.chunks}</strong><em>evidenze ricercabili</em></div><div class="card stat"><small>PII rilevate</small><strong>${d.pii_detected}</strong><em>${esc((d.pii_types||[]).join(", ") || "nessuna")}</em></div><div class="card stat"><small>Policy applicata</small><strong style="font-size:20px">${esc(d.privacy_policy)}</strong><em>${esc(d.privacy_detector || "nessun detector")}${d.privacy_engine_version?` · ${esc(d.privacy_engine_version)}`:""}${d.privacy_engine_source_revision?` · rev ${esc(d.privacy_engine_source_revision.slice(0,8))}`:""}</em></div><div class="card stat"><small>Decisioni</small><strong>${d.decisions_referencing}</strong><em>riferimenti audit</em></div></section>
     <section class="card"><div class="section-head"><div><h2>Evidenze indicizzate</h2><p>Anteprime del testo persistito e interrogabile</p></div><div class="hero-actions"><a class="button secondary" href="/privacy">Rivedi privacy</a><a class="button" href="/ask?doc=${encodeURIComponent(d.doc_id)}">Chiedi su questo documento</a></div></div>
-    ${(d.evidence||[]).length ? `<div class="citations">${d.evidence.map(e=>`<button class="citation" data-evidence="${esc(e.chunk_id)}"><strong>Passaggio ${e.chunk_index+1}</strong><small>${e.token_count} token · ${esc(shortId(e.chunk_id))}</small><p>${esc(e.preview.slice(0,260))}</p></button>`).join("")}</div>` : empty("Nessuna evidenza", "L’elaborazione potrebbe essere ancora in corso.")}</section>`;
+    ${(d.evidence||[]).length ? `<div class="citations">${d.evidence.map(e=>`<button class="citation" data-evidence="${esc(e.chunk_id)}"><strong>Passaggio ${e.chunk_index+1}</strong><small>${e.token_count} token · ${esc(shortId(e.chunk_id))}</small><p>${esc(e.preview.slice(0,260))}</p></button>`).join("")}</div>` : empty("Nessuna evidenza", "L’elaborazione potrebbe essere ancora in corso.")}</section>
+    <section class="card danger-zone"><div><p class="eyebrow">Ciclo di vita</p><h2>Rimuovi dall’archivio</h2><p>${d.decisions_referencing ? `Questo documento è conservato perché alimenta ${d.decisions_referencing} decision${d.decisions_referencing===1?'e':'i'} nell’audit trail.` : 'Elimina il file sorgente e tutti i dati derivati, inclusi chunk, evidenze PII e mapping cifrati.'}</p></div><button class="button danger" id="delete-document" ${d.decisions_referencing?'disabled':''}>${d.decisions_referencing?'Conservato per audit':'Rimuovi documento'}</button></section>`;
   document.querySelectorAll("[data-evidence]").forEach(b => b.addEventListener("click",()=>showEvidence(id,b.dataset.evidence)));
+  document.querySelector("#delete-document")?.addEventListener("click",()=>openDocumentDeleteDialog(d));
+}
+
+function openDocumentDeleteDialog(documentRecord) {
+  const modal = document.querySelector("#document-delete-modal");
+  if (documentRecord.decisions_referencing) {
+    document.querySelector("#document-delete-content").innerHTML = `<p class="eyebrow">Documento conservato</p><h2>${esc(documentRecord.name)}</h2><p>Questo documento alimenta ${documentRecord.decisions_referencing} decision${documentRecord.decisions_referencing===1?'e':'i'} nell’audit trail e non può essere rimosso senza compromettere le evidenze.</p><div class="note">La conservazione è intenzionale: elimina o riconcilia prima le decisioni collegate secondo la policy di governance.</div><div class="modal-actions" style="margin-top:20px"><button type="button" class="button secondary" id="close-preserved-document">Chiudi</button></div>`;
+    document.querySelector("#close-preserved-document").addEventListener("click",()=>modal.close());
+    modal.showModal();
+    return;
+  }
+  document.querySelector("#document-delete-content").innerHTML = `<p class="eyebrow">Rimozione governata</p><h2>Rimuovere ${esc(documentRecord.name)}?</h2><p>Il file sorgente e tutti i dati derivati saranno eliminati. Resterà soltanto una ricevuta tecnica priva di nome e contenuto.</p><div class="note">Legal hold, elaborazioni attive o decisioni audit collegate bloccano sempre questa operazione.</div><form id="document-delete-form" class="form-grid" style="margin-top:20px"><div class="field full"><label for="delete-confirmation">Scrivi esattamente <strong>${esc(documentRecord.name)}</strong></label><input id="delete-confirmation" name="confirmation" autocomplete="off" required></div><div class="field full"><label for="delete-reason">Motivo</label><input id="delete-reason" name="reason" value="Rimozione richiesta dall’utente" minlength="3" maxlength="256" required></div><div class="field full modal-actions"><button type="button" class="button secondary" id="cancel-document-delete">Annulla</button><button type="submit" class="button danger" id="confirm-document-delete" disabled>Elimina definitivamente</button></div></form>`;
+  const confirmation = document.querySelector("#delete-confirmation"), submit = document.querySelector("#confirm-document-delete");
+  confirmation.addEventListener("input",()=>{submit.disabled=confirmation.value!==documentRecord.name});
+  document.querySelector("#cancel-document-delete").addEventListener("click",()=>modal.close());
+  document.querySelector("#document-delete-form").addEventListener("submit",async event=>{
+    event.preventDefault(); if(confirmation.value!==documentRecord.name)return;
+    submit.disabled=true;submit.innerHTML='<span class="spinner"></span> Eliminazione…';
+    try {
+      await json(`/api/v1/documents/${encodeURIComponent(documentRecord.doc_id)}?workspace=${encodeURIComponent(state.workspace)}`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:confirmation.value,reason:document.querySelector('#delete-reason').value.trim()})});
+      modal.close();toast('Documento rimosso dall’archivio.');navigate('/documents');
+    } catch(error) { submit.disabled=false;submit.textContent='Elimina definitivamente';toast(error.message,true); }
+  });
+  modal.showModal();confirmation.focus();
 }
 
 async function ask() {
   const docs = await json(`/api/v1/documents?workspace=${encodeURIComponent(state.workspace)}&limit=200`);
   const selectedFromQuery = new URLSearchParams(location.search).get("doc");
-  app.innerHTML = `<div class="ask-layout"><div class="stack"><section class="card ask-box"><p class="eyebrow">Domanda</p><textarea id="question" placeholder="Che cosa dicono i documenti sulla policy di conservazione?"></textarea><div class="section-head" style="margin:12px 0 0"><span class="subtle">La risposta includerà sempre evidenze apribili.</span><button class="button" id="ask-submit">Cerca evidenze ✦</button></div></section><section class="card" id="answer-card" hidden></section></div>
-    <aside class="card"><h3>Ambito documenti</h3><p>Se non selezioni nulla, cerco in tutta la libreria.</p><div class="doc-picker">${(docs.documents||[]).map(d=>`<label class="check-row"><input type="checkbox" value="${esc(d.doc_id)}" ${selectedFromQuery===d.doc_id?"checked":""}><span><strong>${esc(d.name)}</strong><small class="subtle">${d.chunks} passaggi</small></span></label>`).join("") || empty("Nessun documento", "Carica documenti prima di chiedere.")}</div><details style="margin-top:16px"><summary class="subtle">Opzioni avanzate</summary><div class="field" style="margin-top:10px"><label for="top-k">Numero evidenze</label><input id="top-k" type="number" min="1" max="20" value="5"></div></details></aside></div>`;
+  app.innerHTML = `<div class="ask-layout"><div class="stack"><section class="card ask-box"><p class="eyebrow">Domanda al tuo archivio</p><h2>Che cosa vuoi verificare?</h2><textarea id="question" placeholder="Per esempio: quali competenze sono citate nei documenti selezionati?"></textarea><div class="section-head" style="margin:12px 0 0"><span class="subtle">La risposta resta ancorata a fonti apribili e viene registrata nell’audit trail.</span><button class="button" id="ask-submit">Cerca nelle fonti ✦</button></div></section><section class="card" id="answer-card" hidden></section></div>
+    <aside class="card"><p class="eyebrow">Perimetro della ricerca</p><h3>Documenti da consultare</h3><p>Se non selezioni nulla, Alchimista cerca in tutto l’archivio.</p><div class="doc-picker">${(docs.documents||[]).map(d=>`<label class="check-row"><input type="checkbox" value="${esc(d.doc_id)}" ${selectedFromQuery===d.doc_id?"checked":""}><span><strong>${esc(d.name)}</strong><small class="subtle">${d.chunks} passaggi indicizzati</small></span></label>`).join("") || empty("Nessun documento", "Carica documenti prima di porre una domanda.")}</div><details style="margin-top:16px"><summary class="subtle">Opzioni di recupero</summary><div class="field" style="margin-top:10px"><label for="top-k">Numero massimo di evidenze</label><input id="top-k" type="number" min="1" max="20" value="5"></div></details></aside></div>`;
   document.querySelector("#ask-submit").addEventListener("click", runAsk);
 }
 async function runAsk() {
@@ -138,7 +176,7 @@ async function runAsk() {
       catch (auditError) { toast(`Risposta pronta; registrazione audit non riuscita: ${auditError.message}`,true); }
     }
   } catch(error){card.innerHTML=`<h2>Ricerca non riuscita</h2><p>${esc(error.message)}</p>`;}
-  finally{button.disabled=false;button.textContent="Cerca evidenze ✦";}
+  finally{button.disabled=false;button.textContent="Cerca nelle fonti ✦";}
 }
 async function showEvidence(docId,chunkId){try{const e=await json(`/api/v1/documents/${encodeURIComponent(docId)}/evidence/${encodeURIComponent(chunkId)}?workspace=${encodeURIComponent(state.workspace)}`);document.querySelector("#evidence-content").innerHTML=`<p class="eyebrow">Evidenza verificabile</p><h2>${esc(e.document_name)}</h2><p class="subtle">Passaggio ${e.chunk_index+1} · ${e.token_count} token</p><div class="evidence-text">${esc(e.preview)}</div><p><a class="button secondary" href="/documents/${encodeURIComponent(docId)}">Apri documento</a></p>`;document.querySelector("#evidence-modal").showModal();}catch(error){toast(error.message,true)}}
 
@@ -163,9 +201,9 @@ async function showDecision(id){try{const r=await json(`/api/v1/decisions/report
 
 async function governance(){const [policies,holds]=await Promise.all([json(`/api/v1/admin/retention-policies?tenant=${encodeURIComponent(state.workspace)}`),json(`/api/v1/admin/legal-holds?tenant=${encodeURIComponent(state.workspace)}&active_only=true`)]);app.innerHTML=`<div class="grid-2"><section class="card"><div class="section-head"><div><h2>Retention</h2><p>Conservazione degli artefatti audit</p></div></div><form id="retention" class="form-grid"><div class="field"><label>Tipo artefatto</label><input name="artifact" value="audit_artifacts"></div><div class="field"><label>Giorni</label><input name="days" type="number" min="1" max="3650" value="365"></div><div class="field full"><button class="button">Salva policy</button></div></form><div style="margin-top:18px">${(policies.policies||[]).map(p=>`<div class="check-row"><span>◷</span><span><strong>${esc(p.artifact_type)}</strong><small class="subtle">${p.retain_days} giorni · immutabile ${p.immutable_required?'sì':'no'}</small></span></div>`).join('')||'<p class="subtle">Nessuna policy configurata.</p>'}</div></section><section class="card"><div class="section-head"><div><h2>Legal hold attivi</h2><p>Blocchi di eliminazione espliciti</p></div></div>${(holds.holds||[]).map(h=>`<div class="check-row"><span>⚖</span><span><strong>${esc(h.scope_type)} · ${esc(h.scope_id)}</strong><small class="subtle">${esc(h.reason)} · ${formatDate(h.created_at)}</small></span></div>`).join('')||empty('Nessun legal hold','Non ci sono blocchi di conservazione attivi.')}</section></div><div class="note" style="margin-top:20px">L’enforcement distruttivo resta un’azione amministrativa esplicita e non viene avviato automaticamente da questa schermata.</div>`;document.querySelector('#retention').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target);try{await json('/api/v1/admin/retention-policies',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenant:state.workspace,retention_days:Number(f.get('days')),artifact_type:f.get('artifact')})});toast('Policy salvata.');governance()}catch(err){toast(err.message,true)}})}
 
-async function system(){const [health,settings,privacy]=await Promise.all([json('/api/v1/health'),json('/api/settings'),json(`/api/v1/privacy/settings?workspace=${encodeURIComponent(state.workspace)}`)]);const services=health.services||{};app.innerHTML=`<section class="stats"><div class="card stat"><small>Runtime</small><strong>${esc(settings.runtime)}</strong><em>cloud opzionale</em></div><div class="card stat"><small>Auth</small><strong>${esc(settings.auth_mode)}</strong><em>gestita server-side</em></div><div class="card stat"><small>Vault</small><strong>${esc(privacy.vault_key_version||'—')}</strong><em>versione chiave attiva</em></div><div class="card stat"><small>Modello</small><strong>${privacy.model?.loaded?'Ready':'Idle'}</strong><em>${esc(privacy.model?.state||'unavailable')}</em></div></section><section class="card"><div class="section-head"><div><h2>Servizi locali</h2><p>Nessun endpoint o segreto è esposto nell’interfaccia.</p></div><button class="button secondary" id="system-refresh">Aggiorna</button></div><div class="grid-2">${Object.entries(services).map(([name,s])=>`<div class="card"><div class="section-head"><strong>${esc(name)}</strong>${statusBadge(s.status==='healthy'?'READY':s.status)}</div><p>${s.latency_ms!==undefined?`${s.latency_ms} ms`:'Nessuna risposta'}${s.detector?` · ${esc(s.detector)}`:''}</p></div>`).join('')}</div></section><section class="card" style="margin-top:20px"><h2>Configurazione prodotto</h2><div class="grid-3"><p><strong>Workspace</strong><br><span class="subtle">${esc(settings.workspace)}</span></p><p><strong>Privacy</strong><br><span class="subtle">${esc(privacy.privacy_policy)} · ${esc(privacy.privacy_detector)}</span></p><p><strong>Storage</strong><br><span class="subtle">${esc(settings.storage)} · upload ${formatBytes(settings.upload_limit_bytes)}</span></p></div></section><section class="card" style="margin-top:20px"><h2>Strumenti avanzati</h2><p>Le viste tecniche precedenti restano disponibili per diagnosi e amministrazione, separate dal prodotto principale.</p><div class="hero-actions"><a class="button secondary" href="/advanced/monitoring">Monitoring avanzato</a><a class="button secondary" href="/advanced/guide">Guida operativa</a></div></section>`;document.querySelector('#system-refresh').addEventListener('click',system);setGlobal(health.overall==='healthy')}
+async function system(){const [health,settings,privacy]=await Promise.all([json('/api/v1/health'),json('/api/settings'),json(`/api/v1/privacy/settings?workspace=${encodeURIComponent(state.workspace)}`)]);const services=health.services||{};app.innerHTML=`<section class="stats"><div class="card stat"><small>Runtime</small><strong>${esc(settings.runtime)}</strong><em>cloud opzionale</em></div><div class="card stat"><small>Auth</small><strong>${esc(settings.auth_mode)}</strong><em>gestita server-side</em></div><div class="card stat"><small>Vault</small><strong>${esc(privacy.vault_key_version||'—')}</strong><em>versione chiave attiva</em></div><div class="card stat"><small>Modello</small><strong>${privacy.model?.loaded?'Ready':'Idle'}</strong><em>${esc(privacy.model?.state||'unavailable')}</em></div></section><section class="card"><div class="section-head"><div><h2>Servizi locali</h2><p>Stato operativo del runtime. Nessun endpoint o segreto è esposto nell’interfaccia.</p></div><button class="button secondary" id="system-refresh">Aggiorna</button></div><div class="grid-2">${Object.entries(services).map(([name,s])=>`<div class="card"><div class="section-head"><strong>${esc(name)}</strong>${statusBadge(s.status==='healthy'?'READY':s.status)}</div><p>${s.latency_ms!==undefined?`${s.latency_ms} ms`:'Nessuna risposta'}${s.detector?` · ${esc(s.detector)}`:''}</p></div>`).join('')}</div></section><section class="card" style="margin-top:20px"><h2>Configurazione locale</h2><div class="grid-3"><p><strong>Workspace</strong><br><span class="subtle">${esc(settings.workspace)}</span></p><p><strong>Privacy</strong><br><span class="subtle">${esc(privacy.privacy_policy)} · ${esc(privacy.privacy_detector)}</span></p><p><strong>Storage</strong><br><span class="subtle">${esc(settings.storage)} · upload ${formatBytes(settings.upload_limit_bytes)}</span></p></div></section>`;document.querySelector('#system-refresh').addEventListener('click',system);setGlobal(health.overall==='healthy')}
 
 function setGlobal(ok){document.querySelector('#global-status').classList.toggle('ok',ok)}
 async function render(){clearTimeout(state.timer);window.scrollTo(0,0);const r=route();setHead(r.name);app.innerHTML='<div class="loading-card"><span class="spinner"></span>Caricamento…</div>';try{if(r.name==='home')await home();else if(r.name==='documents')await documents();else if(r.name==='document')await documentDetail(r.id);else if(r.name==='ask')await ask();else if(r.name==='privacy')await privacy();else if(r.name==='audit')await audit();else if(r.name==='governance')await governance();else if(r.name==='system')await system();app.focus({preventScroll:true});}catch(error){errorPanel(error)}}
-async function init(){if('scrollRestoration' in history)history.scrollRestoration='manual';try{const settings=await json('/api/settings');state.workspace=settings.workspace||'default';state.uploadLimit=settings.upload_limit_bytes||state.uploadLimit;document.querySelector('#workspace-label').textContent=state.workspace}catch(_){}document.body.addEventListener('click',e=>{const a=e.target.closest('a[href^="/"]');if(a&&!a.target&&!a.href.includes('/advanced/')){e.preventDefault();navigate(a.getAttribute('href'))}});document.querySelector('#refresh').addEventListener('click',render);document.querySelector('#menu-button').addEventListener('click',()=>document.querySelector('.sidebar').classList.toggle('open'));document.querySelector('#evidence-modal .modal-close').addEventListener('click',()=>document.querySelector('#evidence-modal').close());window.addEventListener('popstate',render);render()}
+async function init(){if('scrollRestoration' in history)history.scrollRestoration='manual';try{const settings=await json('/api/settings');state.workspace=settings.workspace||'default';state.uploadLimit=settings.upload_limit_bytes||state.uploadLimit;document.querySelector('#workspace-label').textContent=state.workspace}catch(_){}try{const health=await json('/api/v1/health');setGlobal(health.overall==='healthy')}catch(_){}document.body.addEventListener('click',e=>{const a=e.target.closest('a[href^="/"]');if(a&&!a.target&&!a.href.includes('/advanced/')){e.preventDefault();navigate(a.getAttribute('href'))}});document.querySelector('#refresh').addEventListener('click',render);document.querySelector('#menu-button').addEventListener('click',()=>document.querySelector('.site-header').classList.toggle('open'));document.querySelectorAll('dialog .modal-close').forEach(button=>button.addEventListener('click',()=>button.closest('dialog').close()));window.addEventListener('popstate',render);render()}
 init();

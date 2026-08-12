@@ -388,7 +388,20 @@ def fetch_document_detail(cur: psycopg.Cursor, *, tenant: str, doc_id: str) -> d
           dp.privacy_engine_version,
           dp.privacy_engine_source_revision,
           COALESCE((SELECT COUNT(*) FROM chunks ch WHERE ch.tenant = d.tenant AND ch.doc_id = d.doc_id), 0)::INTEGER AS chunks,
-          COALESCE((SELECT COUNT(*) FROM ai_decision_context_docs dc WHERE dc.tenant = d.tenant AND dc.doc_id = d.doc_id), 0)::INTEGER AS decisions_referencing
+          COALESCE((
+            SELECT COUNT(DISTINCT refs.decision_ref_id)
+            FROM (
+              SELECT dc.decision_ref_id
+              FROM ai_decision_context_docs dc
+              WHERE dc.tenant = d.tenant AND dc.doc_id = d.doc_id
+              UNION
+              SELECT cc.decision_ref_id
+              FROM ai_decision_context_chunks cc
+              JOIN chunks context_chunk
+                ON context_chunk.chunk_id = cc.chunk_id AND context_chunk.tenant = cc.tenant
+              WHERE context_chunk.tenant = d.tenant AND context_chunk.doc_id = d.doc_id
+            ) refs
+          ), 0)::INTEGER AS decisions_referencing
         FROM documents d
         LEFT JOIN jobs j ON j.doc_id = d.doc_id AND j.type = 'PROCESS'
         LEFT JOIN document_privacy dp ON dp.doc_id = d.doc_id AND dp.tenant = d.tenant

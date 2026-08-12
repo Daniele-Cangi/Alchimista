@@ -10,6 +10,8 @@ from services.shared.contracts import (
     AIDecisionVerifyRequest,
     ConnectorIngestResponse,
     ConfidenceBand,
+    DocumentDeleteRequest,
+    DocumentDeleteResponse,
     GCSConnectorImportRequest,
     IngestMessage,
     LegalHoldCreateRequest,
@@ -47,6 +49,31 @@ def test_ingest_message_accepts_local_object_uri() -> None:
         }
     )
     assert model.uri.startswith("local://")
+
+
+def test_document_delete_contract_requires_explicit_confirmation() -> None:
+    request = DocumentDeleteRequest(
+        confirmation="report.pdf",
+        reason="Rimozione richiesta dall'utente",
+    )
+    assert request.confirmation == "report.pdf"
+    with pytest.raises(ValueError):
+        DocumentDeleteRequest(confirmation="", reason="ok")
+
+
+def test_document_delete_response_exposes_only_tombstone_metadata() -> None:
+    response = DocumentDeleteResponse.model_validate(
+        {
+            "tenant": "default",
+            "doc_id": "doc-1",
+            "storage_deleted": True,
+            "tombstone_id": "del-1",
+            "deleted_at": "2026-08-12T10:00:00Z",
+        }
+    )
+    assert response.deleted is True
+    assert response.already_deleted is False
+    assert "source_uri" not in response.model_dump()
 
 
 def test_query_answer_requires_citations() -> None:

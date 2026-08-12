@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 380" role="img" aria-labelledby="title description">
+  <title id="title">La montagna di Alchimista</title>
+  <desc id="description">Una montagna geometrica con la bandiera di Alchimista sulla cima.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f8fafc"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#0f172a" flood-opacity=".1"/>
+    </filter>
+  </defs>
+  <rect width="520" height="380" rx="28" fill="url(#sky)"/>
+  <g fill="none" stroke="#9ca3af" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M64 92c8-22 39-27 53-7 21-10 43 4 43 26 14 2 23 13 23 26H55c-13 0-23-10-23-23 0-12 9-22 21-23 3 0 7 0 11 1Z" stroke-width="3"/>
+    <path d="m78 154-7 19m31-19-7 19m31-19-7 19" stroke-width="3"/>
+  </g>
+  <g filter="url(#shadow)">
+    <path d="M36 330 142 196l99 134Z" fill="#e5e7eb"/>
+    <path d="m320 330 90-118 74 118Z" fill="#d1d5db"/>
+    <path d="m105 330 155-246 155 246Z" fill="#1f2937"/>
+    <path d="m260 84-34 54 34-13 34 13Z" fill="#fff"/>
+  </g>
+  <path d="M260 85V30" stroke="#111827" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="260" cy="28" r="5" fill="#111827"/>
+  <path d="M260 31c25-6 51-5 82 1-20 8-20 18 0 27-31-6-57-7-82-1Z" fill="#fff" stroke="#111827" stroke-width="3"/>
+  <g transform="translate(285 37)" fill="none" stroke="#111827" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 2c5-5 14-2 14 5 0 8-7 12-14 13V2Zm28 0c-5-5-14-2-14 5 0 8 7 12 14 13V2Z"/>
+    <path d="M3 9h7m-7 5h6m18-5h-7m7 5h-6"/>
+  </g>
+  <path d="M28 331h464" stroke="#111827" stroke-width="3" stroke-linecap="round"/>
+  <g fill="#2563eb">
+    <circle cx="424" cy="72" r="7" opacity=".16"/>
+    <circle cx="450" cy="90" r="4" opacity=".3"/>
+    <circle cx="405" cy="103" r="3" opacity=".45"/>
+  </g>
+</svg>

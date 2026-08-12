@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="light">
   <title>Alchimista</title>
   <link rel="icon" href="/static/images/favicon.svg">
-  <link rel="stylesheet" href="/static/css/product.css">
+  <link rel="stylesheet" href="/static/css/product.css?v=alchimista-ink-5">
 </head>
 <body>
   <div class="shell">
-    <aside class="sidebar">
+    <header class="sidebar site-header">
       <a class="brand" href="/home" aria-label="Alchimista Home">
-        <span class="brand-mark">A</span>
-        <span><strong>Alchimista</strong><small>Private knowledge</small></span>
+        <img class="brand-logo" src="/static/images/logo/logo-dark.png" alt="">
+        <span><strong>Alchimista</strong><small>Governance locale</small></span>
       </a>
       <nav id="nav" aria-label="Navigazione principale">
         <a href="/home" data-route="home"><span>⌂</span>Home</a>
@@ -28,18 +28,19 @@
         <span class="status-dot" id="global-status"></span>
         <span><small>Workspace</small><strong id="workspace-label">default</strong></span>
       </div>
-    </aside>
+    </header>
     <section class="workspace">
       <header class="topbar">
-        <button class="icon-button menu-button" id="menu-button" aria-label="Apri navigazione">☰</button>
-        <div><p class="eyebrow" id="page-eyebrow">Workspace locale</p><h1 id="page-title">Home</h1></div>
-        <div class="top-actions"><span class="local-pill">● Solo locale</span><button class="icon-button" id="refresh" aria-label="Aggiorna">↻</button></div>
+        <button class="icon-button menu-button" id="menu-button" aria-label="Apri navigazione" aria-controls="nav">☰</button>
+        <div><p class="eyebrow" id="page-eyebrow">Alchimista locale</p><h1 id="page-title">Workspace</h1></div>
+        <div class="top-actions"><span class="local-pill"><span>●</span> Runtime locale</span><button class="icon-button" id="refresh" aria-label="Aggiorna">↻</button></div>
       </header>
       <main id="app" tabindex="-1"><div class="loading-card"><span class="spinner"></span>Caricamento…</div></main>
     </section>
   </div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <dialog id="evidence-modal"><button class="modal-close" aria-label="Chiudi">×</button><div id="evidence-content"></div></dialog>
-  <script src="/static/js/product.js" defer></script>
+  <dialog id="document-delete-modal"><button class="modal-close" aria-label="Chiudi">×</button><div id="document-delete-content"></div></dialog>
+  <script src="/static/js/product.js?v=alchimista-ink-5" defer></script>
 </body>
 </html>

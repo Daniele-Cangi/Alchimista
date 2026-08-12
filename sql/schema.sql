@@ -15,6 +15,24 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE INDEX IF NOT EXISTS idx_documents_tenant_created_at
   ON documents (tenant, created_at DESC);
 
+-- A deletion receipt intentionally keeps no filename, source URI, extracted
+-- text or PII. It proves that the governed lifecycle completed without
+-- preserving the document material itself.
+CREATE TABLE IF NOT EXISTS document_deletions (
+  tombstone_id TEXT PRIMARY KEY,
+  tenant TEXT NOT NULL,
+  doc_id TEXT NOT NULL,
+  storage_deleted BOOLEAN NOT NULL,
+  deletion_reason TEXT NOT NULL,
+  deleted_by TEXT NOT NULL,
+  trace_id TEXT NOT NULL,
+  deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (tenant, doc_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_deletions_tenant_deleted_at
+  ON document_deletions (tenant, deleted_at DESC);
+
 CREATE TABLE IF NOT EXISTS jobs (
   job_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   doc_id TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
