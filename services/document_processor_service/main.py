@@ -4,6 +4,8 @@ import base64
 import json
 import os
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from io import BytesIO
 from uuid import uuid4
 
@@ -146,12 +148,27 @@ def _process_with_backpressure(message: IngestMessage) -> ProcessResponse:
 
 
 def _process_ingest_message(message: IngestMessage) -> ProcessResponse:
+    with _privacy_runtime(message.tenant) as (
+        active_privacy_policy,
+        active_mapping_enabled,
+    ):
+        return _process_ingest_message_with_snapshot(
+            message,
+            active_privacy_policy=active_privacy_policy,
+            active_mapping_enabled=active_mapping_enabled,
+        )
+
+
+def _process_ingest_message_with_snapshot(
+    message: IngestMessage,
+    *,
+    active_privacy_policy: PrivacyPolicy,
+    active_mapping_enabled: bool,
+) -> ProcessResponse:
     trace_id = message.trace_id or str(uuid4())
     process_job_id: str | None = None
     started_at = utcnow()
     t0 = time.perf_counter()
-    active_privacy_policy, active_mapping_enabled = _privacy_runtime(message.tenant)
-
     with get_connection(config.database_url) as conn:
         with conn.cursor() as cur:
             process_job_id = upsert_process_job(
@@ -403,12 +420,10 @@ def _apply_document_privacy(
     return index_text, result.findings, metadata
 
 
-def _privacy_runtime(tenant: str) -> tuple[PrivacyPolicy, bool]:
-    try:
-        selected = runtime_settings_store.get(tenant)
-        return PrivacyPolicy(selected.privacy_policy), selected.privacy_mapping_enabled
-    except Exception as exc:
-        raise RuntimeError("Unable to load workspace privacy settings") from exc
+@contextmanager
+def _privacy_runtime(tenant: str) -> Iterator[tuple[PrivacyPolicy, bool]]:
+    with runtime_settings_store.processing_snapshot(tenant) as selected:
+        yield PrivacyPolicy(selected.privacy_policy), selected.privacy_mapping_enabled
 
 
 def _sync_vector_index(*, tenant: str, chunk_records: list[dict], existing_chunk_ids: list[str]) -> None:

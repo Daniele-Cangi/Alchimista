@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -83,6 +85,36 @@ class RuntimeSettingsStore:
         if row is None:  # pragma: no cover - database invariant
             raise RuntimeError("Unable to load runtime settings")
         return _from_row(row)
+
+    @contextmanager
+    def processing_snapshot(self, workspace: str) -> Iterator[PrivacyRuntimeSettings]:
+        """Hold a shared row lock so one operation sees one settings snapshot."""
+        normalized = _normalize_workspace(workspace)
+        # Bootstrap in its own committed transaction. Otherwise privacy-service
+        # could wait on this operation's still-uncommitted unique row insert.
+        self.get(normalized)
+        with get_connection(self.database_url) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT workspace, privacy_policy, privacy_detector, privacy_mapping_enabled
+                    FROM runtime_settings
+                    WHERE workspace = %s
+                    FOR SHARE
+                    """,
+                    (normalized,),
+                )
+                row = cur.fetchone()
+            if row is None:  # pragma: no cover - database invariant
+                conn.rollback()
+                raise RuntimeError("Unable to load runtime settings snapshot")
+            try:
+                yield _from_row(row)
+            except BaseException:
+                conn.rollback()
+                raise
+            else:
+                conn.commit()
 
     def update(
         self,

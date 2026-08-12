@@ -81,6 +81,7 @@ from services.shared.privacy import (
     PrivacyPseudonymizeRequest,
     PrivacyServiceError,
 )
+from services.shared.runtime_settings import RuntimeSettingsStore
 from services.shared.storage import build_storage_client, parse_gs_uri, parse_storage_uri, safe_object_name
 
 
@@ -89,7 +90,6 @@ app = FastAPI(title="ingestion-api-service", version="0.1.0")
 storage_client = build_storage_client(config)
 publisher = build_publisher(config)
 subscriber = build_subscriber(config)
-privacy_policy = PrivacyPolicy(config.privacy_policy)
 privacy_client = (
     PrivacyClient(
         base_url=config.privacy_service_url,
@@ -98,6 +98,12 @@ privacy_client = (
     )
     if config.privacy_service_url and config.privacy_service_token
     else None
+)
+runtime_settings_store = RuntimeSettingsStore(
+    config.database_url,
+    default_policy=config.privacy_policy,
+    default_detector=config.privacy_detector,
+    default_mapping_enabled=config.privacy_mapping_enabled,
 )
 _ai_schema_lock = threading.Lock()
 _ai_schema_initialized = False
@@ -2069,38 +2075,40 @@ def _validate_context_chunks(
 
 
 def _protect_decision_evidence(payload: AIDecisionIngestRequest) -> AIDecisionIngestRequest:
-    if privacy_client is None:
-        if privacy_policy == PrivacyPolicy.OFF:
-            return payload
-        raise HTTPException(status_code=503, detail="Privacy policy enforcement is unavailable")
     try:
-        selected = privacy_client.settings(payload.tenant)
-        if selected.privacy_policy == PrivacyPolicy.OFF:
-            return payload
-        protected_input = privacy_client.pseudonymize(
-            PrivacyPseudonymizeRequest(
-                text=payload.input,
-                tenant=payload.tenant,
-                doc_id=f"decision:{payload.decision_id}:input",
-                reversible=False,
-                persist_mapping=False,
+        with runtime_settings_store.processing_snapshot(payload.tenant) as selected:
+            selected_policy = PrivacyPolicy(selected.privacy_policy)
+            if selected_policy == PrivacyPolicy.OFF:
+                return payload
+            if privacy_client is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Privacy policy enforcement is unavailable",
+                )
+            protected_input = privacy_client.pseudonymize(
+                PrivacyPseudonymizeRequest(
+                    text=payload.input,
+                    tenant=payload.tenant,
+                    doc_id=f"decision:{payload.decision_id}:input",
+                    reversible=False,
+                    persist_mapping=False,
+                )
             )
-        )
-        protected_output = privacy_client.pseudonymize(
-            PrivacyPseudonymizeRequest(
-                text=payload.output,
-                tenant=payload.tenant,
-                doc_id=f"decision:{payload.decision_id}:output",
-                reversible=False,
-                persist_mapping=False,
+            protected_output = privacy_client.pseudonymize(
+                PrivacyPseudonymizeRequest(
+                    text=payload.output,
+                    tenant=payload.tenant,
+                    doc_id=f"decision:{payload.decision_id}:output",
+                    reversible=False,
+                    persist_mapping=False,
+                )
             )
-        )
     except PrivacyServiceError as exc:
         raise HTTPException(status_code=503, detail="Privacy policy enforcement failed") from exc
 
     metadata = dict(payload.metadata or {})
     metadata["_decision_privacy"] = {
-        "privacy_policy": selected.privacy_policy.value,
+        "privacy_policy": selected_policy.value,
         "pii_detected": protected_input.pii_count + protected_output.pii_count,
         "pii_types": sorted(set(protected_input.pii_types).union(protected_output.pii_types)),
         "privacy_engine": protected_input.engine.name,

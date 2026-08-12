@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import importlib
-from pathlib import Path
 import sys
+from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
@@ -27,14 +28,17 @@ class _SettingsStore:
         self.settings = settings
         self.workspaces: list[str] = []
 
-    def get(self, workspace: str) -> PrivacyRuntimeSettings:
+    @contextmanager
+    def processing_snapshot(self, workspace: str):
         self.workspaces.append(workspace)
-        return self.settings
+        yield self.settings
 
 
 class _UnavailableSettingsStore:
-    def get(self, workspace: str) -> PrivacyRuntimeSettings:
+    @contextmanager
+    def processing_snapshot(self, workspace: str):
         raise OSError(f"settings unavailable for {workspace}")
+        yield  # pragma: no cover
 
 
 def test_processor_uses_persisted_workspace_policy_without_privacy_client(
@@ -53,10 +57,10 @@ def test_processor_uses_persisted_workspace_policy_without_privacy_client(
     monkeypatch.setattr(processor, "runtime_settings_store", store)
     monkeypatch.setattr(processor, "privacy_client", None)
 
-    policy, mapping_enabled = processor._privacy_runtime("matter-a")
+    with processor._privacy_runtime("matter-a") as (policy, mapping_enabled):
+        assert policy == PrivacyPolicy.STRICT
+        assert mapping_enabled is False
 
-    assert policy == PrivacyPolicy.STRICT
-    assert mapping_enabled is False
     assert store.workspaces == ["matter-a"]
 
 
@@ -70,5 +74,6 @@ def test_processor_never_falls_back_to_global_off_when_settings_are_unavailable(
 
     assert processor.config.privacy_policy == PrivacyPolicy.OFF.value
     assert processor.config.privacy_fail_closed is False
-    with pytest.raises(RuntimeError, match="Unable to load workspace privacy settings"):
-        processor._privacy_runtime("protected-workspace")
+    with pytest.raises(OSError, match="settings unavailable"):
+        with processor._privacy_runtime("protected-workspace"):
+            pass

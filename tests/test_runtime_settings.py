@@ -9,9 +9,10 @@ from services.shared.runtime_settings import RuntimeSettingsStore
 
 
 class FakeCursor:
-    def __init__(self, rows, history):
+    def __init__(self, rows, history, queries):
         self.rows = rows
         self.history = history
+        self.queries = queries
         self.result = None
 
     def __enter__(self):
@@ -22,6 +23,7 @@ class FakeCursor:
 
     def execute(self, query, params):
         normalized = " ".join(query.split())
+        self.queries.append(normalized)
         if normalized.startswith("SELECT workspace"):
             self.result = self.rows.get(params[0])
         elif "INSERT INTO runtime_settings_history" in normalized:
@@ -55,13 +57,18 @@ class FakeConnection:
     def __init__(self, rows, history):
         self.rows = rows
         self.history = history
+        self.queries = []
         self.commits = 0
+        self.rollbacks = 0
 
     def cursor(self):
-        return FakeCursor(self.rows, self.history)
+        return FakeCursor(self.rows, self.history, self.queries)
 
     def commit(self):
         self.commits += 1
+
+    def rollback(self):
+        self.rollbacks += 1
 
 
 def test_runtime_settings_persist_policy_detector_and_mapping(monkeypatch) -> None:
@@ -91,6 +98,42 @@ def test_runtime_settings_persist_policy_detector_and_mapping(monkeypatch) -> No
     assert updated.privacy_policy == "strict"
     assert store.get("matter-a") == updated
     assert history[-1] == ("matter-a", "strict", "rizzo_http", False, "test")
+
+
+def test_processing_snapshot_holds_transaction_until_operation_finishes(monkeypatch) -> None:
+    rows = {
+        "matter-a": {
+            "workspace": "matter-a",
+            "privacy_policy": "strict",
+            "privacy_detector": "rizzo_http",
+            "privacy_mapping_enabled": False,
+        }
+    }
+    history, connections = [], []
+
+    @contextmanager
+    def fake_connection(database_url):
+        assert database_url == "postgresql://settings"
+        connection = FakeConnection(rows, history)
+        connections.append(connection)
+        yield connection
+
+    monkeypatch.setattr(module, "get_connection", fake_connection)
+    store = RuntimeSettingsStore(
+        "postgresql://settings",
+        default_policy="off",
+        default_detector="rizzo_regex",
+        default_mapping_enabled=True,
+    )
+
+    with store.processing_snapshot("matter-a") as selected:
+        assert selected.privacy_policy == "strict"
+        assert selected.privacy_detector == "rizzo_http"
+        assert connections[-1].commits == 0
+
+    assert connections[-1].commits == 1
+    assert connections[-1].rollbacks == 0
+    assert any(query.endswith("FOR SHARE") for query in connections[-1].queries)
 
 
 @pytest.mark.parametrize("field,value", [("privacy_policy", "unknown"), ("privacy_detector", "fallback")])

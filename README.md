@@ -173,6 +173,9 @@ Workspace privacy configuration is persisted in PostgreSQL. Environment
 variables bootstrap the first row only. Changing policy or detector affects
 new processing deterministically; existing `document_privacy` rows retain the
 policy and detector actually applied until an explicit reprocess.
+An in-flight document or decision holds one transactional settings snapshot;
+an update waits for that operation to finish rather than changing detector or
+mapping behavior partway through it.
 
 ## Privacy policies
 
