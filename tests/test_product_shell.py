@@ -38,9 +38,13 @@ def test_localhost_root_is_product_shell_without_auth_fields() -> None:
     assert "Rimozione governata" in script
     assert "#document-delete-modal" in script
     assert 'data-delete-doc="${esc(d.doc_id)}"' in script
-    assert "<th>Azioni</th>" in script
-    assert "if (event.target.closest(\"[data-delete-doc]\")) return" in script
+    assert 'class="document-card"' in script
+    assert 'class="document-grid"' in script
+    assert 'event.target.closest("[data-delete-doc]")' in script
+    assert 'event.key==="Enter"' in script
     assert ".dropzone {" in stylesheet
+    assert ".documents-stage {" in stylesheet
+    assert ".ask-orbit {" in stylesheet
     assert "width: 100%;" in stylesheet
     assert "display: flex;" in stylesheet
 
