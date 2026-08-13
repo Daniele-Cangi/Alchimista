@@ -49,6 +49,17 @@ to loopback by default:
 | `8014` | privacy API |
 | `5432` | PostgreSQL |
 
+The Documents workspace keeps ingestion, persistent library state, historical
+privacy evidence, and governed removal in one local surface:
+
+<p align="center">
+  <strong>Documents — persistent private library</strong><br>
+  <img src="docs/screenshots/alchimista-documents.png" width="100%" alt="Alchimista document library showing the synthetic Mercury dossier processed under STRICT privacy">
+</p>
+
+> This screenshot uses the fully synthetic Mercury demo dossier. No real
+> personal or company data is shown.
+
 The generated `.env` contains the local bearer token, admin key, internal
 privacy/model tokens, audit signing key, PostgreSQL password, and a URL-safe 256-bit
 privacy vault keyring. It is git-ignored. Treat it as secret material and back it
@@ -106,6 +117,14 @@ curl -fsS -X POST http://127.0.0.1:8013/v1/query \
   -H "Content-Type: application/json" \
   -d '{"tenant":"default","query":"What does the evidence say?","top_k":3,"doc_ids":["example-001"]}'
 ```
+
+The same retrieval flow is available through Ask, with explicit document scope,
+confidence, and evidence that opens back to the indexed source:
+
+<p align="center">
+  <strong>Ask — cross-document answers with clickable evidence</strong><br>
+  <img src="docs/screenshots/alchimista-ask.png" width="100%" alt="Alchimista answering a question about the synthetic Mercury dossier with confidence and clickable citations">
+</p>
 
 ## Local runtime topology
 
