@@ -7,6 +7,9 @@ legal advice.
 
 Alchimista incorporates `src/app/detectors.py` from Rizzo-PII revision
 `42d4a40ecfe31acbbe3e1d78cf4d79d38cd8c3f5`.
+That revision descends from application release `v2.0.0` at
+`aa7d13367766639666bca0b293956013b5ed782d`; the detector has the same Git
+blob (`8f4b8bb061c3a6633e3b535001ec352611ccadcb`) at both revisions.
 
 - Copyright (c) 2026 Simone Rizzo — Rizzo AI Academy
 - License: MIT

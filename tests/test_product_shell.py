@@ -42,6 +42,8 @@ def test_localhost_root_is_product_shell_without_auth_fields() -> None:
     assert 'class="document-grid"' in script
     assert 'event.target.closest("[data-delete-doc]")' in script
     assert 'event.key==="Enter"' in script
+    assert "Motore 2.0 · regex + checksum" in script
+    assert "La versione del motore e quella del modello sono indipendenti" in script
     assert ".dropzone {" in stylesheet
     assert ".documents-stage {" in stylesheet
     assert ".ask-orbit {" in stylesheet

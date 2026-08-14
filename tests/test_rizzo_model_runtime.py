@@ -9,9 +9,11 @@ from services.rizzo_model_service.runtime import (
     MANIFEST_NAME,
     MODEL_COMMIT,
     MODEL_DIRECTORY_NAME,
+    MODEL_REVISION,
     ModelRuntime,
     ModelState,
 )
+from third_party.rizzo_pii.provenance import UPSTREAM_APP_VERSION
 
 
 def _wait(runtime: ModelRuntime, expected: ModelState) -> dict:
@@ -42,7 +44,10 @@ class FakePipeline:
 
 def test_model_runtime_install_load_analyze_unload_and_restart(tmp_path) -> None:
     runtime = ModelRuntime(tmp_path, snapshot_download=_download, pipeline_loader=lambda path: FakePipeline())
-    assert runtime.status()["state"] == "NOT_INSTALLED"
+    initial = runtime.status()
+    assert initial["state"] == "NOT_INSTALLED"
+    assert initial["upstream_app_version"] == UPSTREAM_APP_VERSION
+    assert initial["revision"] == MODEL_REVISION
     with pytest.raises(RuntimeError, match="not loaded"):
         runtime.analyze("Mario Rossi")
 

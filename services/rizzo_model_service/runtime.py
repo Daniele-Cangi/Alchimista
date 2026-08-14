@@ -12,12 +12,16 @@ from pathlib import Path
 from typing import Any, Callable
 
 from third_party.rizzo_pii.detectors import SOFT_REGEX_LABELS, detect_regex
+from third_party.rizzo_pii.provenance import (
+    MODEL_COMMIT,
+    MODEL_REPOSITORY,
+    MODEL_REVISION,
+    UPSTREAM_APP_VERSION,
+    UPSTREAM_SOURCE_REVISION,
+)
 
 
-MODEL_REPOSITORY = "rizzoaiacademy/rizzo-pii-0.3B"
-MODEL_REVISION = "v1.5.0"
-MODEL_COMMIT = "a1c3c83827eca22e9675e30c1111c4641caf5901"
-SOURCE_REVISION = "42d4a40ecfe31acbbe3e1d78cf4d79d38cd8c3f5"
+SOURCE_REVISION = UPSTREAM_SOURCE_REVISION
 MODEL_DIRECTORY_NAME = "rizzo-pii-0.3B-v1.5.0"
 MANIFEST_NAME = "alchimista-manifest.json"
 ALLOWED_PATTERNS = ("*.json", "*.safetensors", "*.txt", "*.model")
@@ -62,6 +66,7 @@ class ModelRuntime:
                 "repository": MODEL_REPOSITORY,
                 "revision": MODEL_REVISION,
                 "model_commit": MODEL_COMMIT,
+                "upstream_app_version": UPSTREAM_APP_VERSION,
                 "source_revision": SOURCE_REVISION,
                 "installed": self._state in {ModelState.INSTALLED, ModelState.LOADING, ModelState.READY},
                 "loaded": self._state == ModelState.READY and self._pipeline is not None,

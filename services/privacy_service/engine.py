@@ -12,10 +12,15 @@ from urllib.request import Request, urlopen
 from services.privacy_service.vault import PiiVaultRepository, VaultCipher
 from services.shared.privacy import PrivacyEngineMetadata, PrivacyFinding
 from third_party.rizzo_pii.detectors import SOFT_REGEX_LABELS, detect_regex
+from third_party.rizzo_pii.provenance import (
+    MODEL_REVISION,
+    REGEX_ENGINE_VERSION,
+    UPSTREAM_SOURCE_REVISION,
+)
 
 
-RIZZO_SOURCE_REVISION = "42d4a40ecfe31acbbe3e1d78cf4d79d38cd8c3f5"
-RIZZO_ENGINE_VERSION = "2.0.0-regex-snapshot"
+RIZZO_SOURCE_REVISION = UPSTREAM_SOURCE_REVISION
+RIZZO_ENGINE_VERSION = REGEX_ENGINE_VERSION
 RIZZO_HTTP_MAX_REQUEST_CHARS = 1_000_000
 RIZZO_HTTP_OVERLAP_CHARS = 4_096
 
@@ -66,7 +71,7 @@ class RizzoHttpDetector:
         self._overlap_chars = overlap_chars
         self.metadata = PrivacyEngineMetadata(
             name="rizzo-pii",
-            version="model-v1.5.0",
+            version=f"model-{MODEL_REVISION}",
             source_revision=RIZZO_SOURCE_REVISION,
             mode="ml_plus_regex",
         )

@@ -281,13 +281,24 @@ regex/checksum detector. It does not copy the Rizzo UI, PDF parser, desktop
 application, or PyMuPDF dependency.
 
 - Upstream: `Rizzo-AI-Academy/rizzo-pii`
+- Upstream application release represented: `v2.0.0`
+- Release revision: `aa7d13367766639666bca0b293956013b5ed782d`
 - Pinned source revision: `42d4a40ecfe31acbbe3e1d78cf4d79d38cd8c3f5`
+- Detector blob shared by the release and pinned revision: `8f4b8bb061c3a6633e3b535001ec352611ccadcb`
 - Model revision used by the managed full engine: `v1.5.0`
 - Resolved immutable model commit: `a1c3c83827eca22e9675e30c1111c4641caf5901`
 - Incorporated source license: MIT
 - Original copyright and license: `third_party/rizzo_pii/`
 
-The pinned upstream revision was rechecked before this integration. The normal
+Rizzo versions its application and model independently: application `v2.0.0`
+uses model `v1.5.0`. Alchimista is aligned with both. Its pinned source revision
+is nine commits after the release tag, but `src/app/detectors.py` has the same
+Git blob at both revisions; those later commits only affect upstream packaging,
+documentation, and licensing. See
+[`docs/rizzo-pii-2.0-alignment.md`](docs/rizzo-pii-2.0-alignment.md) for the
+feature-by-feature adoption decision.
+
+The normal
 `compose.yaml` includes a dedicated, unexposed CPU model runtime. It starts
 without weights and without loading the 0.3B model. From the Privacy page the
 user can install, load, activate, switch back to Lightweight, and unload Full

@@ -1,0 +1,13 @@
+"""Immutable provenance for the Rizzo components used by Alchimista."""
+
+UPSTREAM_REPOSITORY = "Rizzo-AI-Academy/rizzo-pii"
+UPSTREAM_APP_VERSION = "2.0.0"
+UPSTREAM_RELEASE_REVISION = "aa7d13367766639666bca0b293956013b5ed782d"
+UPSTREAM_SOURCE_REVISION = "42d4a40ecfe31acbbe3e1d78cf4d79d38cd8c3f5"
+UPSTREAM_DETECTOR_BLOB = "8f4b8bb061c3a6633e3b535001ec352611ccadcb"
+
+REGEX_ENGINE_VERSION = "2.0.0-regex-snapshot"
+
+MODEL_REPOSITORY = "rizzoaiacademy/rizzo-pii-0.3B"
+MODEL_REVISION = "v1.5.0"
+MODEL_COMMIT = "a1c3c83827eca22e9675e30c1111c4641caf5901"
